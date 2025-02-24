@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Expense Tracker Docker Setup with Environment Variables
 
 ## Configuration
@@ -73,3 +74,6 @@ Open your browser and navigate to:
 - Ensure \`.env\` file is properly formatted
 - Check Docker logs for configuration errors
 - Verify all required environment variables are set
+=======
+# dollardollar
+>>>>>>> 61738fe497921c9d21cc02c45b1d9541b302fb1d
