@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('groups') }}">Groups</a></li>
+                    <li class="breadcrumb-item active">{{ group.name }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">{{ group.name }}</h4>
+                </div>
+                <div class="card-body">
+                    {% if group.description %}
+                    <p>{{ group.description }}</p>
+                    {% endif %}
+                    <p class="text-muted">
+                        Created by: {{ group.creator.name }}<br>
+                        Created on: {{ group.created_at.strftime('%Y-%m-%d') }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Members</h5>
+                    {% if current_user == group.creator %}
+                    <button id="toggleMemberForm" class="btn btn-sm btn-primary">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    {% endif %}
+                </div>
+                
+                <!-- Add Member Form (Hidden by default) -->
+                {% if current_user == group.creator %}
+                <div id="memberFormContainer" class="card-body border-bottom" style="display: none;">
+                    <form action="{{ url_for('add_group_member', group_id=group.id) }}" method="POST">
+                        <div class="mb-3">
+                            <label for="user_id" class="form-label">Select User</label>
+                            <select class="form-select bg-dark text-light" id="user_id" name="user_id" required>
+                                <option value="">Select a user</option>
+                                {% for user in users %}
+                                    {% if user != current_user and user not in group.members %}
+                                        <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button type="button" class="btn btn-secondary me-2" onclick="toggleMemberForm()">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Add Member</button>
+                        </div>
+                    </form>
+                </div>
+                {% endif %}
+                
+                <div class="card-body">
+                    <ul class="list-group list-group-flush bg-dark">
+                        {% for member in group.members %}
+                        <li class="list-group-item bg-dark d-flex justify-content-between align-items-center">
+                            <div>
+                                {{ member.name }} 
+                                <small class="text-muted">({{ member.id }})</small>
+                            </div>
+                            {% if current_user == group.creator and member != group.creator %}
+                            <form action="{{ url_for('remove_group_member', group_id=group.id, member_id=member.id) }}" method="POST" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-danger">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Group Expenses</h5>
+                    <button id="toggleExpenseForm" class="btn btn-sm btn-primary">
+                        <i class="fas fa-plus me-1"></i> Add Group Expense
+                    </button>
+                </div>
+                
+                <!-- Add Expense Form (Hidden by default) -->
+                <div id="expenseFormContainer" class="card-body border-bottom" style="display: none;">
+                    <form method="POST" action="{{ url_for('add_expense') }}">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="description" class="form-label">Description</label>
+                                <input type="text" class="form-control bg-dark text-light" id="description" name="description" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="amount" class="form-label">Amount ($)</label>
+                                <input type="number" step="0.01" class="form-control bg-dark text-light" id="amount" name="amount" required>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="date" class="form-label">Date</label>
+                                <input type="date" class="form-control bg-dark text-light" id="date" name="date" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="card_used" class="form-label">Card Used</label>
+                                <input type="text" class="form-control bg-dark text-light" id="card_used" name="card_used" required>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="paid_by" class="form-label">Paid By</label>
+                                <select class="form-select bg-dark text-light" id="paid_by" name="paid_by" required>
+                                    {% for member in group.members %}
+                                        <option value="{{ member.id }}" {% if member == current_user %}selected{% endif %}>
+                                            {{ member.name }} ({{ member.id }})
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="split_method" class="form-label">Split Method</label>
+                                <select class="form-select bg-dark text-light" id="split_method" name="split_method" required onchange="toggleSplitValue()">
+                                    <option value="half">50/50 Split</option>
+                                    <option value="amount">Split by Amount</option>
+                                    <option value="percentage">Split by Percentage</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3" id="split_value_container" style="display: none;">
+                            <label for="split_value" class="form-label">Split Value</label>
+                            <input type="number" step="0.01" class="form-control bg-dark text-light" id="split_value" name="split_value">
+                            <small class="text-muted">For amount: enter first person's amount. For percentage: enter first person's percentage.</small>
+                        </div>
+                        
+                        <!-- Hidden Group ID -->
+                        <input type="hidden" name="group_id" value="{{ group.id }}">
+                        
+                        <div class="d-flex justify-content-end">
+                            <button type="button" class="btn btn-secondary me-2" onclick="toggleExpenseForm()">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Add Group Expense</button>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Description</th>
+                                    <th>Amount</th>
+                                    <th>Paid By</th>
+                                    <th>Card Used</th>
+                                    <th>Split Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if expenses %}
+                                    {% for expense in expenses %}
+                                    {% set splits = expense.calculate_splits() %}
+                                    <tr>
+                                        <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                                        <td>{{ expense.description }}</td>
+                                        <td>${{ "%.2f"|format(expense.amount) }}</td>
+                                        <td>{{ expense.user.name }}</td>
+                                        <td>{{ expense.card_used }}</td>
+                                        <td>
+                                            <small class="d-block">Method: {{ expense.split_method }}</small>
+                                            <small class="d-block">Person 1: ${{ "%.2f"|format(splits.person1) }}</small>
+                                            <small class="d-block">Person 2: ${{ "%.2f"|format(splits.person2) }}</small>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="6" class="text-center">No expenses yet for this group</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize today's date
+        const today = new Date().toISOString().split('T')[0];
+        const dateInput = document.querySelector('#date');
+        if (dateInput) {
+            dateInput.value = today;
+        }
+        
+        // Add event listeners for toggle buttons
+        const toggleMemberBtn = document.getElementById('toggleMemberForm');
+        if (toggleMemberBtn) {
+            toggleMemberBtn.addEventListener('click', toggleMemberForm);
+        }
+        
+        const toggleExpenseBtn = document.getElementById('toggleExpenseForm');
+        if (toggleExpenseBtn) {
+            toggleExpenseBtn.addEventListener('click', toggleExpenseForm);
+        }
+        
+        // Initialize split value visibility
+        const splitMethodSelect = document.querySelector('#split_method');
+        if (splitMethodSelect) {
+            toggleSplitValue();
+            splitMethodSelect.addEventListener('change', toggleSplitValue);
+        }
+    });
+    
+    function toggleMemberForm() {
+        const form = document.getElementById('memberFormContainer');
+        const button = document.getElementById('toggleMemberForm');
+        
+        if (form.style.display === 'none') {
+            form.style.display = 'block';
+            button.innerHTML = '<i class="fas fa-times"></i>';
+            button.classList.replace('btn-primary', 'btn-secondary');
+        } else {
+            form.style.display = 'none';
+            button.innerHTML = '<i class="fas fa-plus"></i>';
+            button.classList.replace('btn-secondary', 'btn-primary');
+        }
+    }
+    
+    function toggleExpenseForm() {
+        const form = document.getElementById('expenseFormContainer');
+        const button = document.getElementById('toggleExpenseForm');
+        
+        if (form.style.display === 'none') {
+            form.style.display = 'block';
+            button.innerHTML = '<i class="fas fa-times me-1"></i> Cancel';
+            button.classList.replace('btn-primary', 'btn-secondary');
+        } else {
+            form.style.display = 'none';
+            button.innerHTML = '<i class="fas fa-plus me-1"></i> Add Group Expense';
+            button.classList.replace('btn-secondary', 'btn-primary');
+        }
+    }
+    
+    function toggleSplitValue() {
+        const splitMethod = document.querySelector('#split_method').value;
+        const splitValueContainer = document.querySelector('#split_value_container');
+        const splitValue = document.querySelector('#split_value');
+        
+        if (splitMethod === 'half') {
+            splitValueContainer.style.display = 'none';
+            splitValue.removeAttribute('required');
+        } else {
+            splitValueContainer.style.display = 'block';
+            splitValue.setAttribute('required', 'required');
+            
+            if (splitMethod === 'percentage') {
+                splitValue.setAttribute('max', '100');
+                splitValue.setAttribute('step', '0.1');
+                splitValue.placeholder = 'Enter percentage (0-100)';
+            } else {
+                splitValue.removeAttribute('max');
+                splitValue.setAttribute('step', '0.01');
+                splitValue.placeholder = 'Enter amount';
+            }
+        }
+    }
+</script>
+{% endblock %}

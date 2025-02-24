@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: expense-tracker
+    ports:
+      - "5001:5001"
+    volumes:
+      - .:/app
+      - ./instance:/app/instance
+      - ./.env:/app/.env  # Mount .env file
+    env_file:
+      - .env  # Load environment variables from .env file
+    restart: unless-stopped

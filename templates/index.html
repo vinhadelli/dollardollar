@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Monthly Summaries</h2>
+{% for month, data in monthly_totals.items() %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h3>{{ month }}</h3>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <h5>Total: ${{ "%.2f"|format(data.total) }}</h5>
+                <p>Person 1 owes: ${{ "%.2f"|format(data.person1) }}</p>
+                <p>Person 2 owes: ${{ "%.2f"|format(data.person2) }}</p>
+            </div>
+            <div class="col-md-8">
+                <h5>Expenses by Card:</h5>
+                <ul>
+                    {% for card, amount in data.by_card.items() %}
+                    <li>{{ card }}: ${{ "%.2f"|format(amount) }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<h2>Recent Expenses</h2>
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Card Used</th>
+                <th>Split Method</th>
+                <th>Person 1 Pays</th>
+                <th>Person 2 Pays</th>
+                <th>Paid By</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for expense in expenses %}
+            {% set splits = expense.calculate_splits() %}
+            <tr>
+                <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                <td>{{ expense.description }}</td>
+                <td>${{ "%.2f"|format(expense.amount) }}</td>
+                <td>{{ expense.card_used }}</td>
+                <td>
+                    {{ expense.split_method }}
+                    {% if expense.split_method != 'half' %}
+                    ({{ "%.2f"|format(expense.split_value) }}{% if expense.split_method == 'percentage' %}%{% endif %})
+                    {% endif %}
+                </td>
+                <td>${{ "%.2f"|format(splits.person1) }}</td>
+                <td>${{ "%.2f"|format(splits.person2) }}</td>
+                <td>{{ expense.paid_by }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: expense-tracker-dev
+    ports:
+      - "5001:5001"
+    volumes:
+      - .:/app
+      - ./instance:/app/instance
+    environment:
+      - FLASK_ENV=development
+      - FLASK_APP=app.py
+      - FLASK_DEBUG=1
+    command: flask run --host=0.0.0.0 --port=5001
+    restart: always
