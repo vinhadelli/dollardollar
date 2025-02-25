@@ -9,6 +9,9 @@ import calendar
 from functools import wraps
 import logging
 
+from sqlalchemy import func, or_, and_
+import json
+
 # Load environment variables
 load_dotenv()
 
@@ -68,6 +71,19 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+class Settlement(db.Model):
+    __tablename__ = 'settlements'
+    id = db.Column(db.Integer, primary_key=True)
+    payer_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False)
+    receiver_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    description = db.Column(db.String(200), nullable=True, default="Settlement")
+    
+    # Relationships
+    payer = db.relationship('User', foreign_keys=[payer_id], backref=db.backref('settlements_paid', lazy=True))
+    receiver = db.relationship('User', foreign_keys=[receiver_id], backref=db.backref('settlements_received', lazy=True))
 
 class Expense(db.Model):
     __tablename__ = 'expenses'
@@ -360,73 +376,97 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('login'))
-
 @app.route('/dashboard')
 @login_required_dev
 def dashboard():
     now = datetime.now()
-    
-    # Get expenses where user is the creator OR is included in split_with
-    user_expenses = db.session.query(Expense).filter(
-        db.or_(
-            Expense.user_id == current_user.id,  # User created the expense
-            Expense.split_with.like(f'%{current_user.id}%')  # User is in split_with
-        )
-    ).order_by(Expense.date.desc()).all()
-    
-    # Also get expenses from groups the user belongs to
-    user_groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
-    group_ids = [group.id for group in user_groups]
-    
-    group_expenses = []
-    if group_ids:
-        group_expenses = Expense.query.filter(Expense.group_id.in_(group_ids)).order_by(Expense.date.desc()).all()
-    
-    # Combine both expense lists without duplicates
-    expenses = []
-    expense_ids = set()
-    
-    for expense in user_expenses + group_expenses:
-        if expense.id not in expense_ids:
-            expenses.append(expense)
-            expense_ids.add(expense.id)
-    
-    # Sort combined expenses by date
-    expenses.sort(key=lambda x: x.date, reverse=True)
-    
+    # Get expenses created by the logged-in user
+    expenses = Expense.query.filter_by(user_id=current_user.id).order_by(Expense.date.desc()).all()
     users = User.query.all()
+    groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
+    
+    # Calculate balances
+    balances = calculate_balances(current_user.id)
+    
+    # Format balances for IOU display
+    iou_data = {
+        'owes_me': {},
+        'i_owe': {},
+        'net_balance': 0
+    }
+    
+    for balance in balances:
+        if balance['amount'] > 0:
+            # Others owe me
+            iou_data['owes_me'][balance['user_id']] = {
+                'name': balance['name'],
+                'amount': balance['amount']
+            }
+        elif balance['amount'] < 0:
+            # I owe others
+            iou_data['i_owe'][balance['user_id']] = {
+                'name': balance['name'],
+                'amount': abs(balance['amount'])
+            }
+    
+    # Calculate net balance
+    iou_data['net_balance'] = sum(balance['amount'] for balance in balances)
+    
+    # Calculate monthly totals and the logged-in user's portion
     monthly_totals = {}
+    current_user_total = 0
     
-    # Calculate IOUs - who owes what to whom
-    iou_data = calculate_iou_balances(expenses, current_user.id)
+    # Get all expenses where the current user is involved (as payer or in split)
+    all_user_expenses = Expense.query.filter(
+        or_(
+            Expense.paid_by == current_user.id,
+            Expense.split_with.like(f'%{current_user.id}%')
+        )
+    ).all()
     
-    # Calculate monthly totals for all accessible expenses
-    for expense in expenses:
+    for expense in all_user_expenses:
         month_key = expense.date.strftime('%Y-%m')
         if month_key not in monthly_totals:
             monthly_totals[month_key] = {
                 'total': 0.0,
                 'by_card': {}
             }
-
+        
+        # Add full expense amount to monthly total
+        monthly_totals[month_key]['total'] += expense.amount
+        
+        # Add card totals
+        if expense.card_used not in monthly_totals[month_key]['by_card']:
+            monthly_totals[month_key]['by_card'][expense.card_used] = 0
+        monthly_totals[month_key]['by_card'][expense.card_used] += expense.amount
+        
+        # Calculate current user's portion for this expense
         splits = expense.calculate_splits()
         
-        # Only add to totals if current user is involved in the expense
-        if expense.user_id == current_user.id or current_user.id in (expense.split_with or '').split(',') or expense.group_id in group_ids:
-            monthly_totals[month_key]['total'] += expense.amount
-            
-            # Add card totals
-            if expense.card_used not in monthly_totals[month_key]['by_card']:
-                monthly_totals[month_key]['by_card'][expense.card_used] = 0
-            monthly_totals[month_key]['by_card'][expense.card_used] += expense.amount
+        if expense.paid_by == current_user.id:
+            # If current user paid, add their portion
+            current_user_total += splits['payer']['amount']
+        else:
+            # If someone else paid, check if current user is in splits
+            for split in splits['splits']:
+                if split['email'] == current_user.id:
+                    current_user_total += split['amount']
+                    break
+    
+    # Get current month's total
+    current_month_key = now.strftime('%Y-%m')
+    current_month_total = monthly_totals.get(current_month_key, {}).get('total', 0)
 
     return render_template('dashboard.html', 
                          expenses=expenses, 
                          monthly_totals=monthly_totals,
                          users=users,
-                         groups=user_groups,
+                         groups=groups,
                          now=now,
-                         iou_data=iou_data)
+                         iou_data=iou_data,
+                         total_expenses=current_user_total,
+                         current_month_total=current_month_total,
+                         current_user_id=current_user.id)  # Add this line
 
 def calculate_iou_balances(expenses, current_user_id):
     """
@@ -721,6 +761,177 @@ def admin_reset_password():
         
     return redirect(url_for('admin'))
 
+
+
+@app.route('/settlements')
+@login_required_dev
+def settlements():
+    # Get all settlements involving the current user
+    settlements = Settlement.query.filter(
+        or_(
+            Settlement.payer_id == current_user.id,
+            Settlement.receiver_id == current_user.id
+        )
+    ).order_by(Settlement.date.desc()).all()
+    
+    # Get all users
+    users = User.query.all()
+    
+    # Calculate balances between users
+    balances = calculate_balances(current_user.id)
+    
+    # Split balances into "you owe" and "you are owed" categories
+    you_owe = []
+    you_are_owed = []
+    
+    for balance in balances:
+        if balance['amount'] < 0:
+            # Current user owes money
+            you_owe.append({
+                'id': balance['user_id'],
+                'name': balance['name'],
+                'email': balance['email'],
+                'amount': abs(balance['amount'])
+            })
+        elif balance['amount'] > 0:
+            # Current user is owed money
+            you_are_owed.append({
+                'id': balance['user_id'],
+                'name': balance['name'],
+                'email': balance['email'],
+                'amount': balance['amount']
+            })
+    
+    return render_template('settlements.html', 
+                          settlements=settlements,
+                          users=users,
+                          you_owe=you_owe,
+                          you_are_owed=you_are_owed,
+                          current_user_id=current_user.id)
+
+@app.route('/add_settlement', methods=['POST'])
+@login_required_dev
+def add_settlement():
+    try:
+        # Parse date with error handling
+        try:
+            settlement_date = datetime.strptime(request.form['date'], '%Y-%m-%d')
+        except ValueError:
+            flash('Invalid date format. Please use YYYY-MM-DD format.')
+            return redirect(url_for('settlements'))
+        
+        # Create settlement record
+        settlement = Settlement(
+            payer_id=request.form['payer_id'],
+            receiver_id=request.form['receiver_id'],
+            amount=float(request.form['amount']),
+            date=settlement_date,
+            description=request.form.get('description', 'Settlement')
+        )
+        
+        db.session.add(settlement)
+        db.session.commit()
+        flash('Settlement recorded successfully!')
+        
+    except Exception as e:
+        flash(f'Error: {str(e)}')
+        
+    return redirect(url_for('settlements'))
+def calculate_balances(user_id):
+    """Calculate balances between the current user and all other users"""
+    balances = {}
+    
+    # Step 1: Calculate balances from expenses
+    expenses = Expense.query.filter(
+        or_(
+            Expense.paid_by == user_id,
+            Expense.split_with.like(f'%{user_id}%')
+        )
+    ).all()
+    
+    for expense in expenses:
+        splits = expense.calculate_splits()
+        
+        # If current user paid for the expense
+        if expense.paid_by == user_id:
+            # Add what others owe to current user
+            for split in splits['splits']:
+                other_user_id = split['email']
+                if other_user_id != user_id:
+                    if other_user_id not in balances:
+                        other_user = User.query.filter_by(id=other_user_id).first()
+                        balances[other_user_id] = {
+                            'user_id': other_user_id,
+                            'name': other_user.name if other_user else 'Unknown',
+                            'email': other_user_id,
+                            'amount': 0
+                        }
+                    balances[other_user_id]['amount'] += split['amount']
+        else:
+            # If someone else paid and current user owes them
+            payer_id = expense.paid_by
+            
+            # Find current user's portion
+            current_user_portion = 0
+            
+            # Check if current user is in the splits
+            for split in splits['splits']:
+                if split['email'] == user_id:
+                    current_user_portion = split['amount']
+                    break
+            
+            if current_user_portion > 0:
+                if payer_id not in balances:
+                    payer = User.query.filter_by(id=payer_id).first()
+                    balances[payer_id] = {
+                        'user_id': payer_id,
+                        'name': payer.name if payer else 'Unknown',
+                        'email': payer_id,
+                        'amount': 0
+                    }
+                balances[payer_id]['amount'] -= current_user_portion
+    
+    # Step 2: Adjust balances based on settlements
+    settlements = Settlement.query.filter(
+        or_(
+            Settlement.payer_id == user_id,
+            Settlement.receiver_id == user_id
+        )
+    ).all()
+    
+    for settlement in settlements:
+        if settlement.payer_id == user_id:
+            # Current user paid money to someone else
+            other_user_id = settlement.receiver_id
+            if other_user_id not in balances:
+                other_user = User.query.filter_by(id=other_user_id).first()
+                balances[other_user_id] = {
+                    'user_id': other_user_id,
+                    'name': other_user.name if other_user else 'Unknown',
+                    'email': other_user_id,
+                    'amount': 0
+                }
+            # FIX: When current user pays someone, it INCREASES how much they owe the current user
+            # Change from -= to += 
+            balances[other_user_id]['amount'] += settlement.amount
+            
+        elif settlement.receiver_id == user_id:
+            # Current user received money from someone else
+            other_user_id = settlement.payer_id
+            if other_user_id not in balances:
+                other_user = User.query.filter_by(id=other_user_id).first()
+                balances[other_user_id] = {
+                    'user_id': other_user_id,
+                    'name': other_user.name if other_user else 'Unknown',
+                    'email': other_user_id,
+                    'amount': 0
+                }
+            # FIX: When current user receives money, it DECREASES how much they're owed
+            # Change from += to -=
+            balances[other_user_id]['amount'] -= settlement.amount
+    
+    # Return only non-zero balances
+    return [balance for balance in balances.values() if abs(balance['amount']) > 0.01]
 
 
 # Database initialization at application startup

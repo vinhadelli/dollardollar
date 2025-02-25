@@ -8,6 +8,7 @@ services:
       - SECRET_KEY=your_production_secret_key
       - SQLALCHEMY_DATABASE_URI=postgresql://postgres:postgres@db:5432/dollardollar
       - DEVELOPMENT_MODE=False
+      - DISABLE_SIGNUPS=True  # Set to True to disable signups
     depends_on:
       db:
         condition: service_healthy

@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container">
     <!-- Add Expense Button -->
-    <div class="mb-4">
+    <div class="mb-4 d-flex justify-content-end">
         <button id="toggleExpenseForm" class="btn btn-primary">
             <i class="fas fa-plus me-2"></i>Add New Expense
         </button>
@@ -117,56 +117,51 @@
         </form>
     </div>
 
+
     <!-- Summary Cards -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title text-muted mb-3">Total Expenses</h5>
-                    {% set total_expenses = 0 %}
-                    {% for month_data in monthly_totals.values() %}
-                        {% set total_expenses = total_expenses + month_data.total %}
-                    {% endfor %}
-                    <h2 class="mb-0">${{ "%.2f"|format(total_expenses) }}</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title text-muted mb-3">This Month</h5>
-                    {% set current_month_total = 0 %}
-                    {% set current_month_key = now.strftime('%Y-%m') %}
-                    {% if current_month_key in monthly_totals %}
-                        {% set current_month_total = monthly_totals[current_month_key].total %}
-                    {% endif %}
-                    <h2 class="mb-0">${{ "%.2f"|format(current_month_total) }}</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title text-muted mb-3">Active Cards</h5>
-                    {% set unique_cards = [] %}
-                    {% for expense in expenses %}
-                        {% if expense.card_used not in unique_cards %}
-                            {% set _ = unique_cards.append(expense.card_used) %}
-                        {% endif %}
-                    {% endfor %}
-                    <h2 class="mb-0">{{ unique_cards|length }}</h2>
-                </div>
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title text-muted mb-3">Total Expenses</h5>
+                <h2 class="mb-0">${{ "%.2f"|format(total_expenses) }}</h2>
             </div>
         </div>
     </div>
-    <!-- Add this section after the Summary Cards row in dashboard.html -->
-    
-<!-- IOU Summary Cards -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title text-muted mb-3">This Month</h5>
+                <h2 class="mb-0">${{ "%.2f"|format(current_month_total) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title text-muted mb-3">Active Cards</h5>
+                {% set unique_cards = [] %}
+                {% for expense in expenses %}
+                    {% if expense.card_used not in unique_cards %}
+                        {% set _ = unique_cards.append(expense.card_used) %}
+                    {% endif %}
+                {% endfor %}
+                <h2 class="mb-0">{{ unique_cards|length }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- IOU Summary Cards -->
 <div class="row mb-4">
     <div class="col-md-12">
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">💸 Money Owed</h5>
+                <a href="{{ url_for('settlements') }}" class="btn btn-sm btn-outline-light">
+                    <i class="fas fa-exchange-alt me-1"></i>View All Settlements
+                </a>
             </div>
             <div class="card-body">
                 <div class="row">
@@ -183,8 +178,12 @@
                                     <div>
                                         <span class="badge bg-secondary me-2">{{ data.name }}</span>
                                     </div>
-                                    <div>
-                                        <span class="badge bg-success">${{ "%.2f"|format(data.amount) }}</span>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-success me-2">${{ "%.2f"|format(data.amount) }}</span>
+                                        <button class="btn btn-secondary btn-sm" 
+                                            onclick="prepareSettlement('{{ user_id }}', '{{ data.name }}', {{ data.amount }}, false)">
+                                            <i class="fas fa-check me-1"></i>Record
+                                        </button>
                                     </div>
                                 </div>
                                 {% endfor %}
@@ -207,8 +206,12 @@
                                     <div>
                                         <span class="badge bg-secondary me-2">{{ data.name }}</span>
                                     </div>
-                                    <div>
-                                        <span class="badge bg-danger">${{ "%.2f"|format(data.amount) }}</span>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-danger me-2">${{ "%.2f"|format(data.amount) }}</span>
+                                        <button class="btn btn-success btn-sm"
+                                            onclick="prepareSettlement('{{ user_id }}', '{{ data.name }}', {{ data.amount }}, true)">
+                                            <i class="fas fa-money-bill-wave me-1"></i>Pay
+                                        </button>
                                     </div>
                                 </div>
                                 {% endfor %}
@@ -245,6 +248,50 @@
     </div>
 </div>
 
+<<!-- Replace the modal with this hidden form section -->
+<div id="settlementFormContainer" class="expense-form mb-4" style="display: none;">
+    <h4 class="mb-3">Record a Settlement</h4>
+    <form method="POST" action="{{ url_for('add_settlement') }}">
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="payer_id" class="form-label">Who Paid</label>
+                <select class="form-select bg-dark text-light" id="payer_id" name="payer_id" required>
+                    <option value="">Select person who paid</option>
+                    {% for user in users %}
+                        <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="receiver_id" class="form-label">Who Received</label>
+                <select class="form-select bg-dark text-light" id="receiver_id" name="receiver_id" required>
+                    <option value="">Select person who received</option>
+                    {% for user in users %}
+                        <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="amount" class="form-label">Amount ($)</label>
+                <input type="number" step="0.01" class="form-control bg-dark text-light" id="settlement_amount" name="amount" required>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="date" class="form-label">Date</label>
+                <input type="date" class="form-control bg-dark text-light" id="settlement_date" name="date" required>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="description" class="form-label">Description (Optional)</label>
+                <input type="text" class="form-control bg-dark text-light" id="settlement_description" name="description" placeholder="e.g., Venmo payment">
+            </div>
+        </div>
+        <div class="d-flex justify-content-end">
+            <button type="button" class="btn btn-secondary me-2" onclick="toggleSettlementForm()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Record Settlement</button>
+        </div>
+    </form>
+</div>
     <!-- Monthly Breakdown -->
     <div class="row mb-4">
         <div class="col-md-12">
@@ -532,6 +579,73 @@
         }
     }
     
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize today's date
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('date').value = today;
+        document.getElementById('modal_date').value = today;
+        
+        // Toggle expense form visibility
+        document.getElementById('toggleExpenseForm').addEventListener('click', toggleExpenseForm);
+        
+        // Initialize multiselect dropdown for split_with
+        initializeMultiSelect();
+        
+        // Handle amount field changes
+        document.getElementById('amount').addEventListener('input', updateSplitValues);
+        
+        // Handle paid_by changes
+        document.getElementById('paid_by').addEventListener('change', updateSplitValues);
+        
+        // Listen for split_with changes from the multiselect
+        document.getElementById('split_with').addEventListener('change', updateSplitValues);
+        
+        // Handle form submission to ensure split values are calculated and included
+        document.querySelector('form[action*="add_expense"]').addEventListener('submit', function(e) {
+            // Ensure the hidden split_details field is updated before submission
+            const splitMethod = document.getElementById('split_method').value;
+            if (splitMethod !== 'equal') {
+                // Trigger input event on the first split value input to update the hidden field
+                const firstInput = document.querySelector('.split-value-input');
+                if (firstInput) {
+                    firstInput.dispatchEvent(new Event('input'));
+                }
+                
+                // Validate totals
+                const splitStatus = document.getElementById('split_status').textContent;
+                if (splitStatus !== 'Balanced') {
+                    e.preventDefault();
+                    alert('Your split values must balance with the expense amount before saving.');
+                    return false;
+                }
+            }
+            return true;
+        });
+    });
+    
+    // Function to prepare settlement form
+    function prepareSettlement(userId, userName, amount, youArePaying) {
+        // Pre-fill the settlement form
+        if (youArePaying) {
+            // You are paying them
+            document.getElementById('modal_payer_id').value = '{{ current_user.id }}';
+            document.getElementById('modal_receiver_id').value = userId;
+        } else {
+            // They are paying you
+            document.getElementById('modal_payer_id').value = userId;
+            document.getElementById('modal_receiver_id').value = '{{ current_user.id }}';
+        }
+        
+        document.getElementById('modal_amount').value = amount.toFixed(2);
+        document.getElementById('modal_description').value = 'Settlement with ' + userName;
+        
+        // Show the modal
+        var settlementModal = new bootstrap.Modal(document.getElementById('settlementModal'));
+        settlementModal.show();
+    }
+    
+
+
     // Function to update split values UI
     function updateSplitValues() {
         const splitMethod = document.getElementById('split_method').value;

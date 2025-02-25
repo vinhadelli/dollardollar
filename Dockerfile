@@ -5,27 +5,29 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+# Add environment variables for app configuration
+ENV SECRET_KEY=your_production_secret_key
+ENV DEVELOPMENT_MODE=False
+ENV DISABLE_SIGNUPS=True
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the current directory contents into the container at /app
-COPY . /app
-
-
-
-# Create the instance directory during image build
-RUN mkdir -p /app/instance && chmod 777 /app/instance
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt /app/
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy .env file (optional, can also be mounted)
-COPY .env /app/.env
+# Create the instance directory during image build
+RUN mkdir -p /app/instance && chmod 777 /app/instance
+
+# Copy the application code
+COPY . /app/
 
 # Expose the port the app runs on
 EXPOSE 5001

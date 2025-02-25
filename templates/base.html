@@ -193,12 +193,13 @@
         }
         
         footer {
-            position: fixed;
-            bottom: 1.5rem;
             width: 100%;
             text-align: center;
             color: rgba(255, 255, 255, 0.6);
             font-size: 0.875rem;
+            padding: 1.5rem 0;
+            margin-top: 2rem;
+            position: relative; /* Change from fixed to relative */
             z-index: 1;
         }
     </style>
@@ -227,6 +228,7 @@
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end bg-dark" aria-labelledby="navDropdown">
                                 <li><a class="dropdown-item text-light" href="{{ url_for('dashboard') }}"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</a></li>
+                                <li><a class="dropdown-item text-light" href="{{ url_for('settlements') }}"><i class="fas fa-money-bill-wave me-2"></i>Settle Up</a></li>
                                 <li><a class="dropdown-item text-light" href="{{ url_for('groups') }}"><i class="fas fa-users me-2"></i>Groups</a></li>
                                 {% if current_user.is_admin %}
                                     <li><a class="dropdown-item text-light" href="{{ url_for('admin') }}"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
