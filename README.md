@@ -71,11 +71,14 @@ To disable development mode, set `DEVELOPMENT_MODE=False` in your `.env` file.
 For production use:
 1. Set `DEVELOPMENT_MODE=False` in `.env`
 2. Generate a strong random secret key
-3. Consider using a production-ready database like PostgreSQL
+3. The First signed User will become an Admin
 
 ## Screenshots
 
 (Coming soon)
+1. Email to added user feature
+2. Settle up 
+3. Generate reports and export transactions 
 
 ## License
 
