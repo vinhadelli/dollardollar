@@ -43,7 +43,7 @@
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-striped">
+                <table class="table table-striped text-white">
                     <thead>
                         <tr>
                             <th>Name</th>
@@ -54,9 +54,9 @@
                     </thead>
                     <tbody>
                         {% for user in users %}
-                        <tr>
-                            <td>{{ user.name }}</td>
-                            <td>{{ user.id }}</td>
+                        <tr id="user-row-{{ user.id|replace('@', '-at-')|replace('.', '-dot-') }}">
+                            <td class="text-white">{{ user.name }}</td>
+                            <td class="text-white">{{ user.id }}</td>
                             <td>
                                 {% if user.is_admin %}
                                     <span class="badge bg-success">Admin</span>
@@ -66,12 +66,60 @@
                             </td>
                             <td>
                                 {% if user.id != current_user.id %}
-                                <form method="POST" action="{{ url_for('admin_delete_user', user_id=user.id) }}" style="display: inline;">
-                                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this user?')">Delete</button>
-                                </form>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-warning btn-sm" 
+                                           onclick="togglePasswordReset('{{ user.id|replace('@', '-at-')|replace('.', '-dot-') }}')">
+                                        Reset Password
+                                    </button>
+                                    <form method="POST" action="{{ url_for('admin_delete_user', user_id=user.id) }}" style="display: inline;">
+                                        <button type="submit" class="btn btn-danger btn-sm ms-1" onclick="return confirm('Are you sure you want to delete this user?')">Delete</button>
+                                    </form>
+                                </div>
                                 {% endif %}
                             </td>
                         </tr>
+                        <!-- Inline password reset form (hidden by default) -->
+                        {% if user.id != current_user.id %}
+                        <tr id="password-reset-{{ user.id|replace('@', '-at-')|replace('.', '-dot-') }}" class="bg-dark" style="display: none;">
+                            <td colspan="4">
+                                <form method="POST" action="{{ url_for('admin_reset_password') }}" class="p-3 border border-warning rounded">
+                                    <h5 class="mb-3">Reset Password for {{ user.name }}</h5>
+                                    <input type="hidden" name="user_id" value="{{ user.id }}">
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label for="new_password_{{ user.id|replace('@', '-at-')|replace('.', '-dot-') }}" class="form-label">New Password</label>
+                                            <input type="password" class="form-control" 
+                                                   id="new_password_{{ user.id|replace('@', '-at-')|replace('.', '-dot-') }}" 
+                                                   name="new_password" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="confirm_password_{{ user.id|replace('@', '-at-')|replace('.', '-dot-') }}" class="form-label">Confirm Password</label>
+                                            <input type="password" class="form-control" 
+                                                   id="confirm_password_{{ user.id|replace('@', '-at-')|replace('.', '-dot-') }}" 
+                                                   name="confirm_password" required 
+                                                   oninput="validatePasswords('{{ user.id|replace('@', '-at-')|replace('.', '-dot-') }}')">
+                                            <div id="password-error-{{ user.id|replace('@', '-at-')|replace('.', '-dot-') }}" 
+                                                 class="text-danger mt-1" style="display: none;">
+                                                Passwords do not match
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="d-flex justify-content-end">
+                                        <button type="button" class="btn btn-secondary me-2" 
+                                                onclick="togglePasswordReset('{{ user.id|replace('@', '-at-')|replace('.', '-dot-') }}')">
+                                            Cancel
+                                        </button>
+                                        <button type="submit" class="btn btn-warning" 
+                                                id="submit-btn-{{ user.id|replace('@', '-at-')|replace('.', '-dot-') }}">
+                                            Reset Password
+                                        </button>
+                                    </div>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>
@@ -79,4 +127,38 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function togglePasswordReset(userId) {
+        const resetRow = document.getElementById('password-reset-' + userId);
+        if (resetRow.style.display === 'none') {
+            resetRow.style.display = 'table-row';
+            // Clear password fields when showing the form
+            document.getElementById('new_password_' + userId).value = '';
+            document.getElementById('confirm_password_' + userId).value = '';
+            document.getElementById('password-error-' + userId).style.display = 'none';
+        } else {
+            resetRow.style.display = 'none';
+        }
+    }
+    
+    function validatePasswords(userId) {
+        const newPassword = document.getElementById('new_password_' + userId).value;
+        const confirmPassword = document.getElementById('confirm_password_' + userId).value;
+        const errorElement = document.getElementById('password-error-' + userId);
+        const submitButton = document.getElementById('submit-btn-' + userId);
+        
+        if (confirmPassword && newPassword !== confirmPassword) {
+            errorElement.style.display = 'block';
+            submitButton.disabled = true;
+            return false;
+        } else {
+            errorElement.style.display = 'none';
+            submitButton.disabled = false;
+            return true;
+        }
+    }
+</script>
 {% endblock %}

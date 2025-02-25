@@ -20,6 +20,8 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback_secret_key_change_i
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///instance/expenses.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['DEVELOPMENT_MODE'] = os.getenv('DEVELOPMENT_MODE', 'True').lower() == 'true'
+app.config['DISABLE_SIGNUPS'] = os.environ.get('DISABLE_SIGNUPS', 'False').lower() == 'true'  # Default to allowing signups
+
 
 # Logging configuration
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
@@ -29,8 +31,6 @@ logging.basicConfig(level=getattr(logging, log_level))
 DEV_USER_EMAIL = os.getenv('DEV_USER_EMAIL', 'dev@example.com')
 DEV_USER_PASSWORD = os.getenv('DEV_USER_PASSWORD', 'dev')
 
-# Rest of the app remains the same as in the previous implementation...
-
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -38,23 +38,25 @@ login_manager.login_view = 'login'
 
 # Group-User Association Table
 group_users = db.Table('group_users',
-    db.Column('group_id', db.Integer, db.ForeignKey('group.id'), primary_key=True),
-    db.Column('user_id', db.String(120), db.ForeignKey('user.id'), primary_key=True)
+    db.Column('group_id', db.Integer, db.ForeignKey('groups.id'), primary_key=True),
+    db.Column('user_id', db.String(120), db.ForeignKey('users.id'), primary_key=True)
 )
 
 class Group(db.Model):
+    __tablename__ = 'groups'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    created_by = db.Column(db.String(120), db.ForeignKey('user.id'), nullable=False)
+    created_by = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False)
     members = db.relationship('User', secondary=group_users, lazy='subquery',
         backref=db.backref('groups', lazy=True))
     expenses = db.relationship('Expense', backref='group', lazy=True)
 
 class User(UserMixin, db.Model):
+    __tablename__ = 'users'
     id = db.Column(db.String(120), primary_key=True)  # Using email as ID
-    password_hash = db.Column(db.String(128))
+    password_hash = db.Column(db.String(256))
     name = db.Column(db.String(100))
     is_admin = db.Column(db.Boolean, default=False)
     expenses = db.relationship('Expense', backref='user', lazy=True)
@@ -68,6 +70,7 @@ class User(UserMixin, db.Model):
         return check_password_hash(self.password_hash, password)
 
 class Expense(db.Model):
+    __tablename__ = 'expenses'
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String(200), nullable=False)
     amount = db.Column(db.Float, nullable=False)
@@ -76,8 +79,8 @@ class Expense(db.Model):
     split_method = db.Column(db.String(20), nullable=False)  # 'equal', 'custom', 'percentage'
     split_value = db.Column(db.Float)  # deprecated - kept for backward compatibility
     paid_by = db.Column(db.String(50), nullable=False)
-    user_id = db.Column(db.String(120), db.ForeignKey('user.id'), nullable=False)
-    group_id = db.Column(db.Integer, db.ForeignKey('group.id'), nullable=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False)
+    group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=True)
     split_with = db.Column(db.String(500), nullable=True)  # Comma-separated list of user IDs
     split_details = db.Column(db.Text, nullable=True)  # JSON string storing custom split values for each user
 
@@ -294,6 +297,11 @@ def home():
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
+     # Check if signups are disabled
+    if app.config['DISABLE_SIGNUPS'] and not app.config['DEVELOPMENT_MODE']:
+        flash('New account registration is currently disabled.')
+        return redirect(url_for('login'))
+    
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
         
@@ -344,7 +352,8 @@ def login():
             return redirect(url_for('dashboard'))
         
         flash('Invalid email or password')
-    return render_template('login.html')
+    # Pass the signup status to the template
+    return render_template('login.html', signups_disabled=app.config['DISABLE_SIGNUPS'])
 
 @app.route('/logout')
 @login_required_dev
@@ -356,29 +365,55 @@ def logout():
 @login_required_dev
 def dashboard():
     now = datetime.now()
-    expenses = Expense.query.filter_by(user_id=current_user.id).order_by(Expense.date.desc()).all()
+    
+    # Get expenses where user is the creator OR is included in split_with
+    user_expenses = db.session.query(Expense).filter(
+        db.or_(
+            Expense.user_id == current_user.id,  # User created the expense
+            Expense.split_with.like(f'%{current_user.id}%')  # User is in split_with
+        )
+    ).order_by(Expense.date.desc()).all()
+    
+    # Also get expenses from groups the user belongs to
+    user_groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
+    group_ids = [group.id for group in user_groups]
+    
+    group_expenses = []
+    if group_ids:
+        group_expenses = Expense.query.filter(Expense.group_id.in_(group_ids)).order_by(Expense.date.desc()).all()
+    
+    # Combine both expense lists without duplicates
+    expenses = []
+    expense_ids = set()
+    
+    for expense in user_expenses + group_expenses:
+        if expense.id not in expense_ids:
+            expenses.append(expense)
+            expense_ids.add(expense.id)
+    
+    # Sort combined expenses by date
+    expenses.sort(key=lambda x: x.date, reverse=True)
+    
     users = User.query.all()
-    groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
     monthly_totals = {}
     
-    # Initialize monthly_totals with zero values
-    if expenses:
-        for expense in expenses:
-            month_key = expense.date.strftime('%Y-%m')
-            if month_key not in monthly_totals:
-                monthly_totals[month_key] = {
-                    'total': 0.0,
-                    'by_card': {}
-                }
+    # Calculate IOUs - who owes what to whom
+    iou_data = calculate_iou_balances(expenses, current_user.id)
+    
+    # Calculate monthly totals for all accessible expenses
+    for expense in expenses:
+        month_key = expense.date.strftime('%Y-%m')
+        if month_key not in monthly_totals:
+            monthly_totals[month_key] = {
+                'total': 0.0,
+                'by_card': {}
+            }
 
-            splits = expense.calculate_splits()
+        splits = expense.calculate_splits()
+        
+        # Only add to totals if current user is involved in the expense
+        if expense.user_id == current_user.id or current_user.id in (expense.split_with or '').split(',') or expense.group_id in group_ids:
             monthly_totals[month_key]['total'] += expense.amount
-            
-            # Add person's portions to monthly totals
-            # Use the proper format from calculate_splits()
-            total_split_amount = 0
-            for split in splits['splits']:
-                total_split_amount += split['amount']
             
             # Add card totals
             if expense.card_used not in monthly_totals[month_key]['by_card']:
@@ -389,9 +424,86 @@ def dashboard():
                          expenses=expenses, 
                          monthly_totals=monthly_totals,
                          users=users,
-                         groups=groups,
-                         now=now)
+                         groups=user_groups,
+                         now=now,
+                         iou_data=iou_data)
 
+def calculate_iou_balances(expenses, current_user_id):
+    """
+    Calculate who owes money to whom based on all expenses.
+    Returns a dictionary with users who owe money to the current user and users 
+    the current user owes money to.
+    """
+    # Initialize balances dictionary
+    balances = {}  # {user_id: net_balance}
+    
+    for expense in expenses:
+        splits = expense.calculate_splits()
+        payer_id = expense.paid_by
+        payer = splits['payer']
+        
+        # If current user paid for this expense
+        if payer_id == current_user_id:
+            # Current user should be paid back by others
+            for split in splits['splits']:
+                debtor_id = split['email']
+                amount = split['amount']
+                
+                if debtor_id not in balances:
+                    balances[debtor_id] = 0
+                
+                # Others owe money to current user (positive value)
+                balances[debtor_id] += amount
+        
+        # If someone else paid and current user owes money
+        elif current_user_id in [split['email'] for split in splits['splits']]:
+            # Find how much current user owes
+            for split in splits['splits']:
+                if split['email'] == current_user_id:
+                    amount = split['amount']
+                    
+                    if payer_id not in balances:
+                        balances[payer_id] = 0
+                    
+                    # Current user owes money to others (negative value)
+                    balances[payer_id] -= amount
+        
+        # If current user paid but also owes a portion
+        if payer_id == current_user_id and current_user_id in [split['email'] for split in splits['splits']]:
+            # Adjust the balance by removing current user's own portion
+            for split in splits['splits']:
+                if split['email'] == current_user_id:
+                    # This portion the user pays to themselves, so remove it from calculations
+                    pass
+    
+    # Format results into two categories: "owes_me" and "i_owe"
+    owes_me = {}
+    i_owe = {}
+    
+    # Get user names for display
+    users = {user.id: user.name for user in User.query.all()}
+    
+    for user_id, balance in balances.items():
+        user_name = users.get(user_id, "Unknown User")
+        
+        if balance > 0:
+            # Others owe current user
+            owes_me[user_id] = {
+                'name': user_name,
+                'amount': round(balance, 2)
+            }
+        elif balance < 0:
+            # Current user owes others
+            i_owe[user_id] = {
+                'name': user_name,
+                'amount': round(abs(balance), 2)
+            }
+    
+    return {
+        'owes_me': owes_me,
+        'i_owe': i_owe,
+        'net_balance': round(sum(balances.values()), 2)
+    }
 @app.route('/add_expense', methods=['GET', 'POST'])
 @login_required_dev
 def add_expense():
@@ -583,6 +695,43 @@ def admin_delete_user(user_id):
     
     return redirect(url_for('admin'))
 
+@app.route('/admin/reset_password', methods=['POST'])
+@login_required_dev
+def admin_reset_password():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
+    
+    user_id = request.form.get('user_id')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+    
+    # Validate passwords match
+    if new_password != confirm_password:
+        flash('Passwords do not match!')
+        return redirect(url_for('admin'))
+    
+    user = User.query.filter_by(id=user_id).first()
+    if user:
+        user.set_password(new_password)
+        db.session.commit()
+        flash(f'Password reset successful for {user.name}!')
+    else:
+        flash('User not found.')
+        
+    return redirect(url_for('admin'))
+
+
+
+# Database initialization at application startup
+with app.app_context():
+    try:
+        print("Creating database tables...")
+        db.create_all()
+        print("Tables created successfully")
+        # Rest of code...
+    except Exception as e:
+        print(f"ERROR CREATING TABLES: {str(e)}")
+
 if __name__ == '__main__':
-    init_db()  # This will also create dev user if in development mode
-    app.run(debug=True, port=5002)
+    app.run(debug=True, port=5001)

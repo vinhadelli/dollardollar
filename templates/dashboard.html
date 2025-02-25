@@ -159,6 +159,91 @@
             </div>
         </div>
     </div>
+    <!-- Add this section after the Summary Cards row in dashboard.html -->
+    
+<!-- IOU Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">💸 Money Owed</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Left column: People who owe me -->
+                    <div class="col-md-6 border-end">
+                        <h6 class="text-success mb-3">
+                            <i class="fas fa-arrow-circle-right me-2"></i>People who owe me
+                        </h6>
+                        
+                        {% if iou_data.owes_me %}
+                            <div class="list-group">
+                                {% for user_id, data in iou_data.owes_me.items() %}
+                                <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="badge bg-secondary me-2">{{ data.name }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="badge bg-success">${{ "%.2f"|format(data.amount) }}</span>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-muted">Nobody owes you money</p>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Right column: People I owe -->
+                    <div class="col-md-6">
+                        <h6 class="text-danger mb-3">
+                            <i class="fas fa-arrow-circle-left me-2"></i>People I owe
+                        </h6>
+                        
+                        {% if iou_data.i_owe %}
+                            <div class="list-group">
+                                {% for user_id, data in iou_data.i_owe.items() %}
+                                <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="badge bg-secondary me-2">{{ data.name }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="badge bg-danger">${{ "%.2f"|format(data.amount) }}</span>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-muted">You don't owe anyone money</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Net Balance -->
+                <div class="text-center mt-4">
+                    <h6>Your Net Balance</h6>
+                    <span class="badge {% if iou_data.net_balance >= 0 %}bg-success{% else %}bg-danger{% endif %} p-2">
+                        {% if iou_data.net_balance >= 0 %}
+                            <i class="fas fa-plus-circle me-1"></i>
+                        {% else %}
+                            <i class="fas fa-minus-circle me-1"></i>
+                        {% endif %}
+                        ${{ "%.2f"|format(iou_data.net_balance|abs) }}
+                    </span>
+                    <p class="small text-muted mt-2">
+                        {% if iou_data.net_balance > 0 %}
+                            You're owed more money than you owe
+                        {% elif iou_data.net_balance < 0 %}
+                            You owe more money than you're owed
+                        {% else %}
+                            All settled up!
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
     <!-- Monthly Breakdown -->
     <div class="row mb-4">

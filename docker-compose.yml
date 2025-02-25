@@ -1,18 +1,32 @@
-version: '3.8'
-
+version: '3'
 services:
-  web:
+  app:
     build: .
-    container_name: Dollar Dollar
     ports:
       - "5001:5001"
+    environment:
+      - SECRET_KEY=your_production_secret_key
+      - SQLALCHEMY_DATABASE_URI=postgresql://postgres:postgres@db:5432/dollardollar
+      - DEVELOPMENT_MODE=False
+    depends_on:
+      db:
+        condition: service_healthy
+
+    command: gunicorn --bind 0.0.0.0:5001 app:app
+
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=dollardollar
     volumes:
-      - .:/app  # For development - mount code
-      - db_data:/app/instance  # Use named volume for database
-      - ./.env:/app/.env  # Mount .env file
-    env_file:
-      - .env  # Load environment variables from .env file
-    restart: unless-stopped
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U postgres"]
+        interval: 5s
+        timeout: 5s
+        retries: 5
 
 volumes:
-  db_data:  # Define named volume for database persistence
+  postgres_data:
