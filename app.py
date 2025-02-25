@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -5,17 +7,29 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import calendar
 from functools import wraps
+import logging
+
+# Load environment variables
+load_dotenv()
 
 # Development mode configuration
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///expenses.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['DEVELOPMENT_MODE'] = True  # Development mode flag
 
-# Development user credentials
-DEV_USER_EMAIL = 'dev@example.com'
-DEV_USER_PASSWORD = 'dev'
+# Configure from environment variables with sensible defaults
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback_secret_key_change_in_production')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///instance/expenses.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['DEVELOPMENT_MODE'] = os.getenv('DEVELOPMENT_MODE', 'True').lower() == 'true'
+
+# Logging configuration
+log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(level=getattr(logging, log_level))
+
+# Development user credentials from environment
+DEV_USER_EMAIL = os.getenv('DEV_USER_EMAIL', 'dev@example.com')
+DEV_USER_PASSWORD = os.getenv('DEV_USER_PASSWORD', 'dev')
+
+# Rest of the app remains the same as in the previous implementation...
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -571,4 +585,4 @@ def admin_delete_user(user_id):
 
 if __name__ == '__main__':
     init_db()  # This will also create dev user if in development mode
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=5002)

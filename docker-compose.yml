@@ -7,9 +7,12 @@ services:
     ports:
       - "5001:5001"
     volumes:
-      - .:/app
-      - ./instance:/app/instance
+      - .:/app  # For development - mount code
+      - db_data:/app/instance  # Use named volume for database
       - ./.env:/app/.env  # Mount .env file
     env_file:
       - .env  # Load environment variables from .env file
     restart: unless-stopped
+
+volumes:
+  db_data:  # Define named volume for database persistence
