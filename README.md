@@ -1,79 +1,82 @@
-<<<<<<< HEAD
-# Expense Tracker Docker Setup with Environment Variables
+# 💵 DollarDollar Bill Y'all
 
-## Configuration
+A sleek, easy-to-use expense tracker and bill-splitting app built with Flask.
 
-### Environment Variables
-Create a `.env` file in the project root with the following template:
+## What is this?
 
-\`\`\`env
-# Flask Configuration
-FLASK_APP=app.py
-FLASK_ENV=development
-SECRET_KEY=your_super_secret_key_here_change_me
+DollarDollar helps you track expenses, split bills with friends or roommates, and manage shared costs through customizable groups. Perfect for:
 
-# Database Configuration
-DATABASE_PATH=instance/expenses.db
-SQLALCHEMY_DATABASE_URI=sqlite:///instance/expenses.db
+- Roommates sharing household expenses
+- Friends splitting vacation costs
+- Couples managing shared finances
+- Groups organizing events with shared costs
 
-# Development Mode
-DEVELOPMENT_MODE=True
+## Features
 
-# Development User Credentials (for dev mode)
-DEV_USER_EMAIL=dev@example.com
-DEV_USER_PASSWORD=dev
+- **Expense Tracking**: Log expenses with detailed information
+- **Flexible Splitting**: Split costs equally, by percentage, or custom amounts
+- **Group Management**: Create groups for organizing shared expenses
+- **Monthly Summaries**: View spending breakdowns by month
+- **Multiple Payment Methods**: Track which cards were used for purchases
+- **User Management**: Admin controls for managing users
 
-# Logging Configuration
-LOG_LEVEL=INFO
+## Quick Start with Docker
 
-# Additional Configuration Options
-DEBUG=False
-\`\`\`
-
-### Important Environment Variables
-- \`SECRET_KEY\`: Change this to a unique, random string in production
-- \`DEVELOPMENT_MODE\`: Set to \`True\` for development, \`False\` for production
-- \`DEV_USER_EMAIL\` and \`DEV_USER_PASSWORD\`: Credentials for development mode
-- \`LOG_LEVEL\`: Set logging verbosity (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-
-## Prerequisites
+### Prerequisites
 - Docker
 - Docker Compose
 
-## Quick Start
+### Setup & Run
 
-### 1. Clone the Repository
-\`\`\`bash
-git clone <your-repo-url>
-cd expense-tracker
-\`\`\`
+1. **Clone the repository**
+   ```
+   git clone https://github.com/yourusername/dollardollar.git
+   cd dollardollar
+   ```
 
-### 2. Create .env File
-Copy the example environment configuration above and customize as needed.
+2. **Create an environment file**
+   
+   Create a `.env` file with the following:
+   ```
+   # App configuration
+   SECRET_KEY=your_secret_key_change_me
+   DEVELOPMENT_MODE=True
+   
+   # Development user (for quick testing)
+   DEV_USER_EMAIL=dev@example.com
+   DEV_USER_PASSWORD=dev
+   ```
 
-### 3. Build and Run
-\`\`\`bash
-docker-compose up --build
-\`\`\`
+3. **Build and run with Docker**
+   ```
+   docker-compose up --build
+   ```
 
-### 4. Access the Application
-Open your browser and navigate to:
-- http://localhost:5001
+4. **Access the app**
+   
+   Open your browser and go to:
+   - http://localhost:5001
 
-## Security Recommendations
-- Never commit your \`.env\` file to version control
-- Use different \`.env\` files for development and production
-- Generate a strong, unique \`SECRET_KEY\`
-- Use environment-specific configurations
+## Development Mode
 
-## Switching Between Environments
-- For development: Use \`DEVELOPMENT_MODE=True\`
-- For production: Use \`DEVELOPMENT_MODE=False\`
+In development mode:
+- The app automatically creates a development user
+- You'll be logged in automatically as the dev user
+- The database is reset on each restart
 
-## Troubleshooting
-- Ensure \`.env\` file is properly formatted
-- Check Docker logs for configuration errors
-- Verify all required environment variables are set
-=======
-# dollardollar
->>>>>>> 61738fe497921c9d21cc02c45b1d9541b302fb1d
+To disable development mode, set `DEVELOPMENT_MODE=False` in your `.env` file.
+
+## Production Setup
+
+For production use:
+1. Set `DEVELOPMENT_MODE=False` in `.env`
+2. Generate a strong random secret key
+3. Consider using a production-ready database like PostgreSQL
+
+## Screenshots
+
+(Coming soon)
+
+## License
+
+MIT License

@@ -3,7 +3,7 @@ version: '3.8'
 services:
   web:
     build: .
-    container_name: expense-tracker
+    container_name: Dollar Dollar
     ports:
       - "5001:5001"
     volumes:
