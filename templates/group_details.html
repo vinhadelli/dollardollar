@@ -184,8 +184,16 @@
                                         <td>{{ expense.card_used }}</td>
                                         <td>
                                             <small class="d-block">Method: {{ expense.split_method }}</small>
-                                            <small class="d-block">Person 1: ${{ "%.2f"|format(splits.person1) }}</small>
-                                            <small class="d-block">Person 2: ${{ "%.2f"|format(splits.person2) }}</small>
+                                            
+                                            <!-- Payer's portion -->
+                                            {% if splits.payer.amount > 0 %}
+                                            <small class="d-block mb-1">{{ splits.payer.name }}: ${{ "%.2f"|format(splits.payer.amount) }}</small>
+                                            {% endif %}
+                                            
+                                            <!-- Everyone else's portion -->
+                                            {% for split in splits.splits %}
+                                            <small class="d-block mb-1">{{ split.name }}: ${{ "%.2f"|format(split.amount) }}</small>
+                                            {% endfor %}
                                         </td>
                                     </tr>
                                     {% endfor %}

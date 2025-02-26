@@ -248,7 +248,7 @@
     </div>
 </div>
 
-<<!-- Replace the modal with this hidden form section -->
+<!-- Replace the modal with this hidden form section -->
 <div id="settlementFormContainer" class="expense-form mb-4" style="display: none;">
     <h4 class="mb-3">Record a Settlement</h4>
     <form method="POST" action="{{ url_for('add_settlement') }}">
@@ -490,13 +490,18 @@
     </div>
 </div>
 {% endblock %}
-
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize today's date
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('date').value = today;
+        
+        // Initialize settlement date if it exists
+        const settlementDateInput = document.getElementById('settlement_date');
+        if (settlementDateInput) {
+            settlementDateInput.value = today;
+        }
         
         // Toggle expense form visibility
         document.getElementById('toggleExpenseForm').addEventListener('click', toggleExpenseForm);
@@ -579,73 +584,44 @@
         }
     }
     
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize today's date
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('date').value = today;
-        document.getElementById('modal_date').value = today;
+    function toggleSettlementForm() {
+        const form = document.getElementById('settlementFormContainer');
         
-        // Toggle expense form visibility
-        document.getElementById('toggleExpenseForm').addEventListener('click', toggleExpenseForm);
-        
-        // Initialize multiselect dropdown for split_with
-        initializeMultiSelect();
-        
-        // Handle amount field changes
-        document.getElementById('amount').addEventListener('input', updateSplitValues);
-        
-        // Handle paid_by changes
-        document.getElementById('paid_by').addEventListener('change', updateSplitValues);
-        
-        // Listen for split_with changes from the multiselect
-        document.getElementById('split_with').addEventListener('change', updateSplitValues);
-        
-        // Handle form submission to ensure split values are calculated and included
-        document.querySelector('form[action*="add_expense"]').addEventListener('submit', function(e) {
-            // Ensure the hidden split_details field is updated before submission
-            const splitMethod = document.getElementById('split_method').value;
-            if (splitMethod !== 'equal') {
-                // Trigger input event on the first split value input to update the hidden field
-                const firstInput = document.querySelector('.split-value-input');
-                if (firstInput) {
-                    firstInput.dispatchEvent(new Event('input'));
-                }
-                
-                // Validate totals
-                const splitStatus = document.getElementById('split_status').textContent;
-                if (splitStatus !== 'Balanced') {
-                    e.preventDefault();
-                    alert('Your split values must balance with the expense amount before saving.');
-                    return false;
-                }
-            }
-            return true;
-        });
-    });
+        if (form.style.display === 'none') {
+            form.style.display = 'block';
+        } else {
+            form.style.display = 'none';
+        }
+    }
     
     // Function to prepare settlement form
     function prepareSettlement(userId, userName, amount, youArePaying) {
+        // Show the settlement form
+        const form = document.getElementById('settlementFormContainer');
+        form.style.display = 'block';
+        
         // Pre-fill the settlement form
         if (youArePaying) {
             // You are paying them
-            document.getElementById('modal_payer_id').value = '{{ current_user.id }}';
-            document.getElementById('modal_receiver_id').value = userId;
+            document.getElementById('payer_id').value = '{{ current_user.id }}';
+            document.getElementById('receiver_id').value = userId;
         } else {
             // They are paying you
-            document.getElementById('modal_payer_id').value = userId;
-            document.getElementById('modal_receiver_id').value = '{{ current_user.id }}';
+            document.getElementById('payer_id').value = userId;
+            document.getElementById('receiver_id').value = '{{ current_user.id }}';
         }
         
-        document.getElementById('modal_amount').value = amount.toFixed(2);
-        document.getElementById('modal_description').value = 'Settlement with ' + userName;
+        document.getElementById('settlement_amount').value = amount.toFixed(2);
+        document.getElementById('settlement_description').value = 'Settlement with ' + userName;
         
-        // Show the modal
-        var settlementModal = new bootstrap.Modal(document.getElementById('settlementModal'));
-        settlementModal.show();
+        // Set today's date
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('settlement_date').value = today;
+        
+        // Scroll to the form
+        form.scrollIntoView({ behavior: 'smooth' });
     }
     
-
-
     // Function to update split values UI
     function updateSplitValues() {
         const splitMethod = document.getElementById('split_method').value;

@@ -376,11 +376,11 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
 @app.route('/dashboard')
 @login_required_dev
 def dashboard():
     now = datetime.now()
-    # Get expenses created by the logged-in user
     expenses = Expense.query.filter_by(user_id=current_user.id).order_by(Expense.date.desc()).all()
     users = User.query.all()
     groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
@@ -388,7 +388,7 @@ def dashboard():
     # Calculate balances
     balances = calculate_balances(current_user.id)
     
-    # Format balances for IOU display
+    # Format balances for IOU display (existing code)
     iou_data = {
         'owes_me': {},
         'i_owe': {},
@@ -412,11 +412,15 @@ def dashboard():
     # Calculate net balance
     iou_data['net_balance'] = sum(balance['amount'] for balance in balances)
     
-    # Calculate monthly totals and the logged-in user's portion
+    # Calculate monthly totals for display
     monthly_totals = {}
-    current_user_total = 0
     
-    # Get all expenses where the current user is involved (as payer or in split)
+    # Calculate user's personal portion totals
+    current_user_total = 0
+    current_month_total = 0
+    current_month_key = now.strftime('%Y-%m')
+    
+    # Get all expenses where the current user is involved
     all_user_expenses = Expense.query.filter(
         or_(
             Expense.paid_by == current_user.id,
@@ -426,13 +430,15 @@ def dashboard():
     
     for expense in all_user_expenses:
         month_key = expense.date.strftime('%Y-%m')
+        
+        # Initialize monthly data structure if needed
         if month_key not in monthly_totals:
             monthly_totals[month_key] = {
                 'total': 0.0,
                 'by_card': {}
             }
         
-        # Add full expense amount to monthly total
+        # Add full expense amount to the monthly tracking (for the table display)
         monthly_totals[month_key]['total'] += expense.amount
         
         # Add card totals
@@ -440,22 +446,26 @@ def dashboard():
             monthly_totals[month_key]['by_card'][expense.card_used] = 0
         monthly_totals[month_key]['by_card'][expense.card_used] += expense.amount
         
-        # Calculate current user's portion for this expense
+        # Calculate current user's personal portion for this expense
         splits = expense.calculate_splits()
+        user_portion = 0
         
         if expense.paid_by == current_user.id:
             # If current user paid, add their portion
-            current_user_total += splits['payer']['amount']
+            user_portion = splits['payer']['amount']
         else:
             # If someone else paid, check if current user is in splits
             for split in splits['splits']:
                 if split['email'] == current_user.id:
-                    current_user_total += split['amount']
+                    user_portion = split['amount']
                     break
-    
-    # Get current month's total
-    current_month_key = now.strftime('%Y-%m')
-    current_month_total = monthly_totals.get(current_month_key, {}).get('total', 0)
+        
+        # Add to total expenses
+        current_user_total += user_portion
+        
+        # If this expense is from the current month, add to current month total
+        if month_key == current_month_key:
+            current_month_total += user_portion
 
     return render_template('dashboard.html', 
                          expenses=expenses, 
@@ -466,7 +476,7 @@ def dashboard():
                          iou_data=iou_data,
                          total_expenses=current_user_total,
                          current_month_total=current_month_total,
-                         current_user_id=current_user.id)  # Add this line
+                         current_user_id=current_user.id)
 
 def calculate_iou_balances(expenses, current_user_id):
     """
