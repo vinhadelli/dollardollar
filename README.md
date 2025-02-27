@@ -68,7 +68,6 @@ DollarDollar helps you track expenses, split bills with friends or roommates, an
 - **Local Hosting**: Complete control over your financial data
 - **Open Source**: Transparent and community-driven development
 
-[... rest of the previous README content remains the same ...]
 
 ## AI and Open Source
 
