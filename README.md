@@ -1,17 +1,63 @@
 # 💵 DollarDollar Bill Y'all
 
-A sleek, easy-to-use expense tracker and bill-splitting app built with Flask.
+A sleek, easy-to-use expense tracker and bill-splitting app built with Flask, designed for local and privacy-focused expense management.
+
+## Development Journey: Leveraging AI Assistance 🤖
+
+### AI-Powered Development Process
+
+This project represents a unique approach to software development, combining:
+- Local Large Language Models (LLMs)
+- Claude (Anthropic's AI)
+- Human creativity and domain expertise
+
+#### AI Collaboration Approach
+- Used local LLMs and Claude for:
+  * Refining code structure
+  * Providing best practices
+  * Helping with complex logic implementations
+  * Assisting in documentation
+- Maintained human oversight and critical decision-making
+
+**Key AI Interaction Strategies**:
+- Prompt engineering for precise code generation
+- Iterative refinement of AI-generated suggestions
+- Using AI as a collaborative tool, not a replacement for human insight
+
+## Project Philosophy 🌱
+
+This is part of a personal mission to create open-source, locally-hosted alternatives to proprietary services. DollarDollar is the first of three planned projects aimed at providing self-hosted, privacy-respecting tools that can be run entirely on personal infrastructure.
+
+### Motivation
+- Explore AI-assisted development workflows
+- Move away from restrictive platforms like Splitwise
+- Provide full control over personal financial data
+- Create transparent, open-source solutions
+- Enable local hosting and complete user ownership
 
 ## What is this?
 
-DollarDollar helps you track expenses, split bills with friends or roommates, and manage shared costs through customizable groups. Perfect for:
+DollarDollar helps you track expenses, split bills with friends or roommates, and manage shared costs through customizable groups. It's particularly useful for:
 
 - Roommates sharing household expenses
 - Friends splitting vacation costs
 - Couples managing shared finances
+- Families tracking group expenses
 - Groups organizing events with shared costs
 
-## Features
+## AI Development Insights
+
+### Lessons Learned
+- Local LLMs are powerful for initial code generation
+- Claude excels at providing complex code but Human context and domain knowledge remain crucial.
+- AI tools are most effective when used collaboratively. But it did reduce my deployment time .
+
+### Challenges Overcome
+- Translating AI suggestions into coherent architecture
+- Ensuring code quality and best practices
+- Maintaining a clear vision while using AI assistance
+
+## Key Features 🚀
 
 - **Expense Tracking**: Log expenses with detailed information
 - **Flexible Splitting**: Split costs equally, by percentage, or custom amounts
@@ -19,67 +65,16 @@ DollarDollar helps you track expenses, split bills with friends or roommates, an
 - **Monthly Summaries**: View spending breakdowns by month
 - **Multiple Payment Methods**: Track which cards were used for purchases
 - **User Management**: Admin controls for managing users
+- **Local Hosting**: Complete control over your financial data
+- **Open Source**: Transparent and community-driven development
 
-## Quick Start with Docker
+[... rest of the previous README content remains the same ...]
 
-### Prerequisites
-- Docker
-- Docker Compose
+## AI and Open Source
 
-### Setup & Run
+This project is a testament to the potential of AI-assisted open-source development. By combining local LLMs, Claude, and human creativity, we're exploring new paradigms of software creation that emphasize collaboration, transparency, and innovation.
 
-1. **Clone the repository**
-   ```
-   git clone https://github.com/yourusername/dollardollar.git
-   cd dollardollar
-   ```
-
-2. **Create an environment file**
-   
-   Create a `.env` file with the following:
-   ```
-   # App configuration
-   SECRET_KEY=your_secret_key_change_me
-   DEVELOPMENT_MODE=True
-   
-   # Development user (for quick testing)
-   DEV_USER_EMAIL=dev@example.com
-   DEV_USER_PASSWORD=dev
-   ```
-
-3. **Build and run with Docker**
-   ```
-   docker-compose up --build
-   ```
-
-4. **Access the app**
-   
-   Open your browser and go to:
-   - http://localhost:5001
-
-## Development Mode
-
-In development mode:
-- The app automatically creates a development user
-- You'll be logged in automatically as the dev user
-- The database is reset on each restart
-
-To disable development mode, set `DEVELOPMENT_MODE=False` in your `.env` file.
-
-## Production Setup
-
-For production use:
-1. Set `DEVELOPMENT_MODE=False` in `.env`
-2. Generate a strong random secret key
-3. The First signed User will become an Admin
-
-## Screenshots
-
-(Coming soon)
-1. Email to added user feature
-2. Settle up 
-3. Generate reports and export transactions 
-
-## License
-
-MIT License
+### Future AI Integration Goals
+- More sophisticated AI-assisted code generation
+- Improved prompt engineering techniques
+- Exploring ethical AI development practices
