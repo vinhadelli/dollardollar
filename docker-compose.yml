@@ -1,33 +1,56 @@
 version: '3'
+
 services:
   app:
     build: .
     ports:
       - "5001:5001"
+    env_file:
+      - .env.production
     environment:
-      - SECRET_KEY=your_production_secret_key
-      - SQLALCHEMY_DATABASE_URI=postgresql://postgres:postgres@db:5432/dollardollar
+      - SQLALCHEMY_DATABASE_URI=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/dollardollar
       - DEVELOPMENT_MODE=False
-      - DISABLE_SIGNUPS=True  # Set to True to disable signups
+      - DISABLE_SIGNUPS=True
     depends_on:
       db:
         condition: service_healthy
-
-    command: gunicorn --bind 0.0.0.0:5001 app:app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - app-network
+    volumes:
+      - ./logs:/app/logs
+    command: >
+      bash -c "flask db upgrade &&
+              gunicorn --bind 0.0.0.0:5001 --workers=3 --timeout=120 app:app"
 
   db:
     image: postgres:13
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=dollardollar
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-dollardollar}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
     healthcheck:
-        test: ["CMD-SHELL", "pg_isready -U postgres"]
-        interval: 5s
-        timeout: 5s
-        retries: 5
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - app-network
+    ports:
+      - "5432:5432"
 
 volumes:
   postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
