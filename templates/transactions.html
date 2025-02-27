@@ -2,11 +2,96 @@
 
 {% block content %}
 <div class="container">
-    <!-- Add Expense Button -->
-    <div class="mb-4 d-flex justify-content-end">
-        <button id="toggleExpenseForm" class="btn btn-primary">
-            <i class="fas fa-plus me-2"></i>Add New Expense
-        </button>
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>All Transactions</h2>
+                <button id="toggleExpenseForm" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>Add New Expense
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filters Bar -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Filters</h5>
+        </div>
+        <div class="card-body">
+            <form id="filterForm">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Date Range</label>
+                        <div class="input-group">
+                            <input type="date" class="form-control bg-dark text-light" id="startDate" name="startDate">
+                            <span class="input-group-text bg-dark text-light">to</span>
+                            <input type="date" class="form-control bg-dark text-light" id="endDate" name="endDate">
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Paid By</label>
+                        <select class="form-select bg-dark text-light" id="paidByFilter" name="paidBy">
+                            <option value="all">All Users</option>
+                            {% for user in users %}
+                                <option value="{{ user.id }}">{{ user.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Card Used</label>
+                        <select class="form-select bg-dark text-light" id="cardFilter" name="cardUsed">
+                            <option value="all">All Cards</option>
+                            {% set unique_cards = [] %}
+                            {% for expense in expenses %}
+                                {% if expense.card_used not in unique_cards %}
+                                    {% set _ = unique_cards.append(expense.card_used) %}
+                                    <option value="{{ expense.card_used }}">{{ expense.card_used }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Group</label>
+                        <select class="form-select bg-dark text-light" id="groupFilter" name="groupId">
+                            <option value="all">All Groups</option>
+                            <option value="none">No Group</option>
+                            {% for group in current_user.groups %}
+                                <option value="{{ group.id }}">{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Amount Range</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark text-light">$</span>
+                            <input type="number" class="form-control bg-dark text-light" placeholder="Min" id="minAmount" name="minAmount" step="0.01">
+                            <span class="input-group-text bg-dark text-light">to</span>
+                            <input type="number" class="form-control bg-dark text-light" placeholder="Max" id="maxAmount" name="maxAmount" step="0.01">
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-control bg-dark text-light" id="descriptionSearch" name="description" placeholder="Search description...">
+                    </div>
+                    <div class="col-md-6 mb-3 d-flex align-items-end">
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-primary" id="applyFilters">
+                                <i class="fas fa-filter me-2"></i>Apply Filters
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="clearFilters">
+                                <i class="fas fa-eraser me-2"></i>Clear Filters
+                            </button>
+                            <button type="button" class="btn btn-success" id="exportData">
+                                <i class="fas fa-file-export me-2"></i>Export
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
     </div>
     
     <!-- Add Expense Form (Hidden by default) -->
@@ -117,289 +202,112 @@
         </form>
     </div>
 
-
-    <!-- Summary Cards -->
-<!-- Summary Cards -->
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title text-muted mb-3">Total Expenses</h5>
-                <h2 class="mb-0">${{ "%.2f"|format(total_expenses) }}</h2>
+    <!-- All Expenses Table -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Transaction History</h5>
+            <div>
+                <span class="badge bg-secondary" id="resultCount">{{ expenses|length }} transactions</span>
             </div>
         </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title text-muted mb-3">This Month</h5>
-                <h2 class="mb-0">${{ "%.2f"|format(current_month_total) }}</h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title text-muted mb-3">Active Cards</h5>
-                <h2 class="mb-0">{{ unique_cards|length }}</h2>
-            </div>
-        </div>
-    </div>
-</div>
-
-    <!-- IOU Summary Cards -->
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">💸 Money Owed</h5>
-                <a href="{{ url_for('settlements') }}" class="btn btn-sm btn-outline-light">
-                    <i class="fas fa-exchange-alt me-1"></i>View All Settlements
-                </a>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <!-- Left column: People who owe me -->
-                    <div class="col-md-6 border-end">
-                        <h6 class="text-success mb-3">
-                            <i class="fas fa-arrow-circle-right me-2"></i>People who owe me
-                        </h6>
-                        
-                        {% if iou_data.owes_me %}
-                            <div class="list-group">
-                                {% for user_id, data in iou_data.owes_me.items() %}
-                                <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <span class="badge bg-secondary me-2">{{ data.name }}</span>
-                                    </div>
-                                    <div class="d-flex align-items-center">
-                                        <span class="badge bg-success me-2">${{ "%.2f"|format(data.amount) }}</span>
-                                        <button class="btn btn-secondary btn-sm" 
-                                            onclick="prepareSettlement('{{ user_id }}', '{{ data.name }}', {{ data.amount }}, false)">
-                                            <i class="fas fa-check me-1"></i>Record
-                                        </button>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <p class="text-muted">Nobody owes you money</p>
-                        {% endif %}
-                    </div>
-                    
-                    <!-- Right column: People I owe -->
-                    <div class="col-md-6">
-                        <h6 class="text-danger mb-3">
-                            <i class="fas fa-arrow-circle-left me-2"></i>People I owe
-                        </h6>
-                        
-                        {% if iou_data.i_owe %}
-                            <div class="list-group">
-                                {% for user_id, data in iou_data.i_owe.items() %}
-                                <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <span class="badge bg-secondary me-2">{{ data.name }}</span>
-                                    </div>
-                                    <div class="d-flex align-items-center">
-                                        <span class="badge bg-danger me-2">${{ "%.2f"|format(data.amount) }}</span>
-                                        <button class="btn btn-success btn-sm"
-                                            onclick="prepareSettlement('{{ user_id }}', '{{ data.name }}', {{ data.amount }}, true)">
-                                            <i class="fas fa-money-bill-wave me-1"></i>Pay
-                                        </button>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <p class="text-muted">You don't owe anyone money</p>
-                        {% endif %}
-                    </div>
-                </div>
-                
-                <!-- Net Balance -->
-                <div class="text-center mt-4">
-                    <h6>Your Net Balance</h6>
-                    <span class="badge {% if iou_data.net_balance >= 0 %}bg-success{% else %}bg-danger{% endif %} p-2">
-                        {% if iou_data.net_balance >= 0 %}
-                            <i class="fas fa-plus-circle me-1"></i>
-                        {% else %}
-                            <i class="fas fa-minus-circle me-1"></i>
-                        {% endif %}
-                        ${{ "%.2f"|format(iou_data.net_balance|abs) }}
-                    </span>
-                    <p class="small text-muted mt-2">
-                        {% if iou_data.net_balance > 0 %}
-                            You're owed more money than you owe
-                        {% elif iou_data.net_balance < 0 %}
-                            You owe more money than you're owed
-                        {% else %}
-                            All settled up!
-                        {% endif %}
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Replace the modal with this hidden form section -->
-<div id="settlementFormContainer" class="expense-form mb-4" style="display: none;">
-    <h4 class="mb-3">Record a Settlement</h4>
-    <form method="POST" action="{{ url_for('add_settlement') }}">
-        <div class="row">
-            <div class="col-md-6 mb-3">
-                <label for="payer_id" class="form-label">Who Paid</label>
-                <select class="form-select bg-dark text-light" id="payer_id" name="payer_id" required>
-                    <option value="">Select person who paid</option>
-                    {% for user in users %}
-                        <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-6 mb-3">
-                <label for="receiver_id" class="form-label">Who Received</label>
-                <select class="form-select bg-dark text-light" id="receiver_id" name="receiver_id" required>
-                    <option value="">Select person who received</option>
-                    {% for user in users %}
-                        <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col-md-4 mb-3">
-                <label for="amount" class="form-label">Amount ($)</label>
-                <input type="number" step="0.01" class="form-control bg-dark text-light" id="settlement_amount" name="amount" required>
-            </div>
-            <div class="col-md-4 mb-3">
-                <label for="date" class="form-label">Date</label>
-                <input type="date" class="form-control bg-dark text-light" id="settlement_date" name="date" required>
-            </div>
-            <div class="col-md-4 mb-3">
-                <label for="description" class="form-label">Description (Optional)</label>
-                <input type="text" class="form-control bg-dark text-light" id="settlement_description" name="description" placeholder="e.g., Venmo payment">
-            </div>
-        </div>
-        <div class="d-flex justify-content-end">
-            <button type="button" class="btn btn-secondary me-2" onclick="toggleSettlementForm()">Cancel</button>
-            <button type="submit" class="btn btn-primary">Record Settlement</button>
-        </div>
-    </form>
-</div>
-    <!-- Monthly Breakdown -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Monthly Spending Breakdown</h5>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Month</th>
-                                    <th>Total</th>
-                                    <th>Contributors</th>
-                                    <th>Cards Used</th>
-                                    <th>Details</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for month, data in monthly_totals.items()|sort(reverse=true) %}
-                                <tr>
-                                    <td>{{ month }}</td>
-                                    <td>${{ "%.2f"|format(data.total) }}</td>
-                                    <td>
-                                        <!-- Contributors with amounts -->
-                                        {% for user_id, amount in data.contributors.items() %}
+        
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table" id="expensesTable">
+                    <thead>
+                        <tr>
+                            <th>Date <i class="fas fa-sort"></i></th>
+                            <th>Description <i class="fas fa-sort"></i></th>
+                            <th>Amount <i class="fas fa-sort"></i></th>
+                            <th>Card Used <i class="fas fa-sort"></i></th>
+                            <th>Group <i class="fas fa-sort"></i></th>
+                            <th>Split Details</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if expenses %}
+                            {% for expense in expenses %}
+                            {% set splits = expense_splits[expense.id] %}
+                            <tr>
+                                <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ expense.description }}</td>
+                                <td>${{ "%.2f"|format(expense.amount) }}</td>
+                                <td>{{ expense.card_used }}</td>
+                                <td>{{ expense.group.name if expense.group else "-" }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-light" type="button" 
+                                            data-bs-toggle="collapse" data-bs-target="#split{{ expense.id }}" 
+                                            aria-expanded="false">
+                                        <i class="fas fa-chevron-down"></i> View Split
+                                    </button>
+                                    <div class="collapse mt-2" id="split{{ expense.id }}">
+                                        <div class="card card-body bg-dark border-secondary">
+                                            <small class="d-block mb-1">Method: {{ expense.split_method }}</small>
+                                            
+                                            <!-- Payer's share -->
+                                            {% if splits.payer.amount > 0 %}
                                             <div class="mb-1">
-                                                {% for user in users %}
-                                                    {% if user.id == user_id %}
-                                                        <span class="badge bg-primary">{{ user.name }}</span>
-                                                    {% endif %}
-                                                {% endfor %}
-                                                <span class="badge bg-success">${{ "%.2f"|format(amount) }}</span>
+                                                <span class="badge bg-primary">{{ splits.payer.name }}</span>
+                                                <span class="badge bg-success">${{ "%.2f"|format(splits.payer.amount) }}</span>
                                             </div>
-                                        {% endfor %}
-                                    </td>
-                                    <td>
-                                        <!-- Cards used this month -->
-                                        {% for card, amount in data.by_card.items() %}
+                                            {% endif %}
+                                            
+                                            <!-- Everyone else's share -->
+                                            {% for split in splits.splits %}
                                             <div class="mb-1">
-                                                <span class="badge bg-secondary">{{ card }}</span>
-                                                <span class="badge bg-info">${{ "%.2f"|format(amount) }}</span>
+                                                <span class="badge bg-primary">{{ split.name }}</span>
+                                                <span class="badge bg-success">${{ "%.2f"|format(split.amount) }}</span>
                                             </div>
-                                        {% endfor %}
-                                    </td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-light" type="button" 
-                                                data-bs-toggle="collapse" data-bs-target="#month{{ month|replace('-', '') }}" 
-                                                aria-expanded="false">
-                                            <i class="fas fa-chevron-down"></i> View
-                                        </button>
-                                    </td>
-                                </tr>
-                                <!-- Collapsible Details Row -->
-                                <tr class="bg-dark">
-                                    <td colspan="5" class="p-0">
-                                        <div class="collapse" id="month{{ month|replace('-', '') }}">
-                                            <div class="p-3">
-                                                <h6 class="mb-3">Expense Details for {{ month }}</h6>
-                                                <div class="table-responsive">
-                                                    <table class="table table-sm">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>Date</th>
-                                                                <th>Description</th>
-                                                                <th>Amount</th>
-                                                                <th>Paid By</th>
-                                                                <th>Card</th>
-                                                                <th>Split</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {% for expense in expenses %}
-                                                                {% if expense.date.strftime('%Y-%m') == month %}
-                                                                    {% set splits = expense_splits[expense.id] %}
-                                                                    <tr>
-                                                                        <td>{{ expense.date.strftime('%d') }}</td>
-                                                                        <td>{{ expense.description }}</td>
-                                                                        <td>${{ "%.2f"|format(expense.amount) }}</td>
-                                                                        <td>{{ splits.payer.name }}</td>
-                                                                        <td>{{ expense.card_used }}</td>
-                                                                        <td>
-                                                                            <!-- Payer's portion -->
-                                                                            {% if splits.payer.amount > 0 %}
-                                                                                <small class="d-block mb-1">{{ splits.payer.name }}: ${{ "%.2f"|format(splits.payer.amount) }}</small>
-                                                                            {% endif %}
-                                                                            
-                                                                            <!-- Others' portions -->
-                                                                            {% for split in splits.splits %}
-                                                                                <small class="d-block mb-1">{{ split.name }}: ${{ "%.2f"|format(split.amount) }}</small>
-                                                                            {% endfor %}
-                                                                        </td>
-                                                                    </tr>
-                                                                {% endif %}
-                                                            {% endfor %}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
+                                            {% endfor %}
                                         </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" id="actionDropdown{{ expense.id }}" data-bs-toggle="dropdown" aria-expanded="false">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end bg-dark" aria-labelledby="actionDropdown{{ expense.id }}">
+                                            <li><a class="dropdown-item text-light" href="#"><i class="fas fa-edit me-2"></i>Edit</a></li>
+                                            <li><a class="dropdown-item text-light" href="#"><i class="fas fa-copy me-2"></i>Duplicate</a></li>
+                                            <li><hr class="dropdown-divider border-secondary"></li>
+                                            <li><a class="dropdown-item text-danger" href="#" onclick="deleteExpense({{ expense.id }})"><i class="fas fa-trash-alt me-2"></i>Delete</a></li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center">No transactions found</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
             </div>
         </div>
+        
+        <!-- Pagination -->
+        <div class="card-footer">
+            <nav aria-label="Transaction pagination">
+                <ul class="pagination justify-content-center mb-0">
+                    <li class="page-item disabled">
+                        <a class="page-link bg-dark border-secondary" href="#" tabindex="-1" aria-disabled="true">Previous</a>
+                    </li>
+                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link bg-dark border-secondary" href="#">2</a></li>
+                    <li class="page-item"><a class="page-link bg-dark border-secondary" href="#">3</a></li>
+                    <li class="page-item">
+                        <a class="page-link bg-dark border-secondary" href="#">Next</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
     </div>
-    
 </div>
 {% endblock %}
+
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -407,14 +315,19 @@
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('date').value = today;
         
-        // Initialize settlement date if it exists
-        const settlementDateInput = document.getElementById('settlement_date');
-        if (settlementDateInput) {
-            settlementDateInput.value = today;
-        }
+        // Set default date range for filters (last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+        document.getElementById('endDate').value = today;
         
         // Toggle expense form visibility
         document.getElementById('toggleExpenseForm').addEventListener('click', toggleExpenseForm);
+        
+        // Filter handlers
+        document.getElementById('applyFilters').addEventListener('click', applyFilters);
+        document.getElementById('clearFilters').addEventListener('click', clearFilters);
+        document.getElementById('exportData').addEventListener('click', exportTransactions);
         
         // Initialize multiselect dropdown for split_with
         initializeMultiSelect();
@@ -427,6 +340,15 @@
         
         // Listen for split_with changes from the multiselect
         document.getElementById('split_with').addEventListener('change', updateSplitValues);
+        
+        // Make table headers sortable
+        const tableHeaders = document.querySelectorAll('#expensesTable th');
+        tableHeaders.forEach(header => {
+            if (header.querySelector('.fa-sort')) {
+                header.style.cursor = 'pointer';
+                header.addEventListener('click', () => sortTable(header));
+            }
+        });
         
         // Handle form submission to ensure split values are calculated and included
         document.querySelector('form[action*="add_expense"]').addEventListener('submit', function(e) {
@@ -450,6 +372,173 @@
             return true;
         });
     });
+    
+    // Table sorting function
+    function sortTable(header) {
+        const table = document.getElementById('expensesTable');
+        const index = Array.from(header.parentNode.children).indexOf(header);
+        const sortIcon = header.querySelector('i');
+        const isAscending = sortIcon.classList.contains('fa-sort') || sortIcon.classList.contains('fa-sort-down');
+        
+        // Update sort icons
+        document.querySelectorAll('#expensesTable th i').forEach(icon => {
+            icon.className = 'fas fa-sort';
+        });
+        
+        sortIcon.className = isAscending ? 'fas fa-sort-up' : 'fas fa-sort-down';
+        
+        // Get rows and sort
+        const rows = Array.from(table.querySelectorAll('tbody tr'));
+        
+        rows.sort((a, b) => {
+            let aValue = a.cells[index].textContent.trim();
+            let bValue = b.cells[index].textContent.trim();
+            
+            // Handle date sorting
+            if (index === 0) {
+                return isAscending ? 
+                    new Date(bValue) - new Date(aValue) : 
+                    new Date(aValue) - new Date(bValue);
+            }
+            
+            // Handle amount sorting
+            if (index === 2) {
+                aValue = parseFloat(aValue.replace('$', ''));
+                bValue = parseFloat(bValue.replace('$', ''));
+                return isAscending ? bValue - aValue : aValue - bValue;
+            }
+            
+            // Default string comparison
+            return isAscending ? 
+                bValue.localeCompare(aValue) : 
+                aValue.localeCompare(bValue);
+        });
+        
+        // Reorder rows
+        const tbody = table.querySelector('tbody');
+        rows.forEach(row => tbody.appendChild(row));
+    }
+    
+    // Filter transactions
+    function applyFilters() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    const paidBy = document.getElementById('paidByFilter').value;
+    const cardUsed = document.getElementById('cardFilter').value;
+    const groupId = document.getElementById('groupFilter').value;
+    const minAmount = document.getElementById('minAmount').value;
+    const maxAmount = document.getElementById('maxAmount').value;
+    const description = document.getElementById('descriptionSearch').value.toLowerCase();
+    
+    let visibleCount = 0;
+    
+    // Get all rows
+    const rows = document.querySelectorAll('#expensesTable tbody tr');
+    
+    rows.forEach(row => {
+        // Only process rows that aren't the "No transactions found" row
+        if (row.cells.length < 7) return;
+        
+        const rowDate = row.cells[0].textContent.trim();
+        const rowDescription = row.cells[1].textContent.trim().toLowerCase();
+        const rowAmount = parseFloat(row.cells[2].textContent.trim().replace('$', '').replace(',', ''));
+        const rowCard = row.cells[3].textContent.trim();
+        const rowGroup = row.cells[4].textContent.trim();
+        
+        let visible = true;
+        
+        // Date filter - convert to comparable format
+        if (startDate && new Date(rowDate) < new Date(startDate)) visible = false;
+        if (endDate && new Date(rowDate) > new Date(endDate)) visible = false;
+        
+        // Card filter
+        if (cardUsed !== 'all' && rowCard !== cardUsed) visible = false;
+        
+        // Group filter
+        if (groupId === 'none' && rowGroup !== '-') visible = false;
+        if (groupId !== 'all' && groupId !== 'none' && rowGroup !== groupId) visible = false;
+        
+        // Amount filter
+        if (minAmount && !isNaN(parseFloat(minAmount)) && rowAmount < parseFloat(minAmount)) visible = false;
+        if (maxAmount && !isNaN(parseFloat(maxAmount)) && rowAmount > parseFloat(maxAmount)) visible = false;
+        
+        // Description filter - case insensitive
+        if (description && !rowDescription.includes(description)) visible = false;
+        
+        // Show/hide row
+        row.style.display = visible ? '' : 'none';
+        if (visible) visibleCount++;
+    });
+    
+    // Update result count
+    document.getElementById('resultCount').textContent = `${visibleCount} transaction${visibleCount !== 1 ? 's' : ''}`;
+    
+    // Show/hide the "no results" message
+    const noResultsRow = document.querySelector('#expensesTable tbody tr td[colspan="7"]');
+    if (noResultsRow) {
+        const parentRow = noResultsRow.parentElement;
+        if (visibleCount === 0 && rows.length > 1) {
+            // If we have rows but none are visible, show the "no results" message
+            parentRow.style.display = '';
+            noResultsRow.textContent = 'No transactions match your filters';
+        } else {
+            // If we have visible rows, hide the "no results" message
+            parentRow.style.display = 'none';
+        }
+    }
+}
+    
+    // Clear all filters
+    function clearFilters() {
+    // Reset form fields
+    document.getElementById('filterForm').reset();
+    
+    // Set default date range (last 30 days)
+    const today = new Date().toISOString().split('T')[0];
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+    document.getElementById('endDate').value = today;
+    
+    // Show all rows except the "No transactions match your filters" row
+    const rows = document.querySelectorAll('#expensesTable tbody tr');
+    let actualRowCount = 0;
+    
+    rows.forEach(row => {
+        // Skip the "no results" row
+        if (row.cells.length === 1 && row.cells[0].getAttribute('colspan') === '7') {
+            row.style.display = 'none';
+        } else {
+            row.style.display = '';
+            actualRowCount++;
+        }
+    });
+    
+    // Update result count
+    document.getElementById('resultCount').textContent = `${actualRowCount} transaction${actualRowCount !== 1 ? 's' : ''}`;
+    
+    // Restore original "No transactions found" message if there are no transactions
+    const noResultsRow = document.querySelector('#expensesTable tbody tr td[colspan="7"]');
+    if (noResultsRow && actualRowCount === 0) {
+        noResultsRow.parentElement.style.display = '';
+        noResultsRow.textContent = 'No transactions found';
+    }
+}
+    
+    // Export transactions
+    function exportTransactions() {
+        // This would need backend integration
+        alert('Export functionality would be implemented with backend support.');
+    }
+    
+    // Delete expense
+    function deleteExpense(expenseId) {
+        if (confirm('Are you sure you want to delete this expense?')) {
+            // This would need backend integration
+            console.log('Would delete expense ID:', expenseId);
+            alert('Delete functionality would be implemented with backend support.');
+        }
+    }
     
     // Handle split method changes
     function toggleSplitOptions() {
@@ -492,44 +581,6 @@
             button.innerHTML = '<i class="fas fa-plus me-2"></i>Add New Expense';
             button.classList.replace('btn-secondary', 'btn-primary');
         }
-    }
-    
-    function toggleSettlementForm() {
-        const form = document.getElementById('settlementFormContainer');
-        
-        if (form.style.display === 'none') {
-            form.style.display = 'block';
-        } else {
-            form.style.display = 'none';
-        }
-    }
-    
-    // Function to prepare settlement form
-    function prepareSettlement(userId, userName, amount, youArePaying) {
-        // Show the settlement form
-        const form = document.getElementById('settlementFormContainer');
-        form.style.display = 'block';
-        
-        // Pre-fill the settlement form
-        if (youArePaying) {
-            // You are paying them
-            document.getElementById('payer_id').value = '{{ current_user.id }}';
-            document.getElementById('receiver_id').value = userId;
-        } else {
-            // They are paying you
-            document.getElementById('payer_id').value = userId;
-            document.getElementById('receiver_id').value = '{{ current_user.id }}';
-        }
-        
-        document.getElementById('settlement_amount').value = amount.toFixed(2);
-        document.getElementById('settlement_description').value = 'Settlement with ' + userName;
-        
-        // Set today's date
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('settlement_date').value = today;
-        
-        // Scroll to the form
-        form.scrollIntoView({ behavior: 'smooth' });
     }
     
     // Function to update split values UI
@@ -703,6 +754,7 @@
                 input.dispatchEvent(new Event('input'));
             });
         }
+    }
     }
     
     function initializeMultiSelect() {

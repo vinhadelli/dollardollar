@@ -8,9 +8,17 @@ from datetime import datetime
 import calendar
 from functools import wraps
 import logging
-
 from sqlalchemy import func, or_, and_
 import json
+import secrets
+from datetime import timedelta
+from flask_mail import Mail, Message
+from flask_migrate import Migrate
+
+
+#--------------------
+# SETUP AND CONFIGURATION
+#--------------------
 
 # Load environment variables
 load_dotenv()
@@ -26,6 +34,20 @@ app.config['DEVELOPMENT_MODE'] = os.getenv('DEVELOPMENT_MODE', 'True').lower() =
 app.config['DISABLE_SIGNUPS'] = os.environ.get('DISABLE_SIGNUPS', 'False').lower() == 'true'  # Default to allowing signups
 
 
+# Email configuration from environment variables
+app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'True').lower() == 'true'
+app.config['MAIL_USE_SSL'] = os.getenv('MAIL_USE_SSL', 'False').lower() == 'true'
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', os.getenv('MAIL_USERNAME'))
+
+
+
+mail = Mail(app)
+
+
 # Logging configuration
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
 logging.basicConfig(level=getattr(logging, log_level))
@@ -38,6 +60,12 @@ db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+
+migrate = Migrate(app, db)
+#--------------------
+# DATABASE MODELS
+#--------------------
 
 # Group-User Association Table
 group_users = db.Table('group_users',
@@ -62,6 +90,8 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256))
     name = db.Column(db.String(100))
     is_admin = db.Column(db.Boolean, default=False)
+    reset_token = db.Column(db.String(100), nullable=True)
+    reset_token_expiry = db.Column(db.DateTime, nullable=True)
     expenses = db.relationship('Expense', backref='user', lazy=True)
     created_groups = db.relationship('Group', backref='creator', lazy=True,
         foreign_keys=[Group.created_by])
@@ -71,6 +101,25 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+        
+    def generate_reset_token(self):
+        """Generate a password reset token that expires in 1 hour"""
+        self.reset_token = secrets.token_urlsafe(32)
+        self.reset_token_expiry = datetime.utcnow() + timedelta(hours=1)
+        return self.reset_token
+        
+    def verify_reset_token(self, token):
+        """Verify if the provided token is valid and not expired"""
+        if not self.reset_token or self.reset_token != token:
+            return False
+        if not self.reset_token_expiry or self.reset_token_expiry < datetime.utcnow():
+            return False
+        return True
+        
+    def clear_reset_token(self):
+        """Clear the reset token and expiry after use"""
+        self.reset_token = None
+        self.reset_token_expiry = None
 
 class Settlement(db.Model):
     __tablename__ = 'settlements'
@@ -257,6 +306,10 @@ class Expense(db.Model):
         
         return result
 
+#--------------------
+# AUTH AND UTILITIES
+#--------------------
+
 def login_required_dev(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -303,550 +356,53 @@ def init_db():
             db.session.commit()
             print("Development user created:", DEV_USER_EMAIL)
 
-@app.route('/')
-def home():
-    if app.config['DEVELOPMENT_MODE']:
-        return redirect(url_for('dashboard'))
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
+#--------------------
+# BUSINESS LOGIC FUNCTIONS
+#--------------------
 
-@app.route('/signup', methods=['GET', 'POST'])
-def signup():
-     # Check if signups are disabled
-    if app.config['DISABLE_SIGNUPS'] and not app.config['DEVELOPMENT_MODE']:
-        flash('New account registration is currently disabled.')
-        return redirect(url_for('login'))
-    
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-        
-    if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-        name = request.form.get('name')
-        
-        if User.query.filter_by(id=email).first():
-            flash('Email already registered')
-            return redirect(url_for('signup'))
-        
-        user = User(id=email, name=name)
-        user.set_password(password)
-        
-        # Make first user admin
-        if User.query.count() == 0:
-            user.is_admin = True
-        
-        db.session.add(user)
-        db.session.commit()
-        
-        login_user(user)
-        flash('Account created successfully!')
-        return redirect(url_for('dashboard'))
-    
-    return render_template('signup.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if app.config['DEVELOPMENT_MODE']:
-        # In development mode, auto-login as dev user
-        dev_user = User.query.filter_by(id=DEV_USER_EMAIL).first()
-        if dev_user:
-            login_user(dev_user)
-            return redirect(url_for('dashboard'))
-    
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-        
-    if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-        user = User.query.filter_by(id=email).first()
-        
-        if user and user.check_password(password):
-            login_user(user)
-            return redirect(url_for('dashboard'))
-        
-        flash('Invalid email or password')
-    # Pass the signup status to the template
-    return render_template('login.html', signups_disabled=app.config['DISABLE_SIGNUPS'])
-
-@app.route('/logout')
-@login_required_dev
-def logout():
-    logout_user()
-    return redirect(url_for('login'))
-
-@app.route('/dashboard')
-@login_required_dev
-def dashboard():
-    now = datetime.now()
-    expenses = Expense.query.filter_by(user_id=current_user.id).order_by(Expense.date.desc()).all()
-    users = User.query.all()
-    groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
+def calculate_iou_data(expenses, users):
+    """Calculate who owes whom money based on expenses"""
+    # Initialize data structure
+    iou_data = {
+        'owes_me': {},  # People who owe current user
+        'i_owe': {},    # People current user owes
+        'net_balance': 0  # Overall balance (positive if owed money)
+    }
     
     # Calculate balances
-    balances = calculate_balances(current_user.id)
-    
-    # Format balances for IOU display (existing code)
-    iou_data = {
-        'owes_me': {},
-        'i_owe': {},
-        'net_balance': 0
-    }
-    
-    for balance in balances:
-        if balance['amount'] > 0:
-            # Others owe me
-            iou_data['owes_me'][balance['user_id']] = {
-                'name': balance['name'],
-                'amount': balance['amount']
-            }
-        elif balance['amount'] < 0:
-            # I owe others
-            iou_data['i_owe'][balance['user_id']] = {
-                'name': balance['name'],
-                'amount': abs(balance['amount'])
-            }
-    
-    # Calculate net balance
-    iou_data['net_balance'] = sum(balance['amount'] for balance in balances)
-    
-    # Calculate monthly totals for display
-    monthly_totals = {}
-    
-    # Calculate user's personal portion totals
-    current_user_total = 0
-    current_month_total = 0
-    current_month_key = now.strftime('%Y-%m')
-    
-    # Get all expenses where the current user is involved
-    all_user_expenses = Expense.query.filter(
-        or_(
-            Expense.paid_by == current_user.id,
-            Expense.split_with.like(f'%{current_user.id}%')
-        )
-    ).all()
-    
-    for expense in all_user_expenses:
-        month_key = expense.date.strftime('%Y-%m')
-        
-        # Initialize monthly data structure if needed
-        if month_key not in monthly_totals:
-            monthly_totals[month_key] = {
-                'total': 0.0,
-                'by_card': {}
-            }
-        
-        # Add full expense amount to the monthly tracking (for the table display)
-        monthly_totals[month_key]['total'] += expense.amount
-        
-        # Add card totals
-        if expense.card_used not in monthly_totals[month_key]['by_card']:
-            monthly_totals[month_key]['by_card'][expense.card_used] = 0
-        monthly_totals[month_key]['by_card'][expense.card_used] += expense.amount
-        
-        # Calculate current user's personal portion for this expense
-        splits = expense.calculate_splits()
-        user_portion = 0
-        
-        if expense.paid_by == current_user.id:
-            # If current user paid, add their portion
-            user_portion = splits['payer']['amount']
-        else:
-            # If someone else paid, check if current user is in splits
-            for split in splits['splits']:
-                if split['email'] == current_user.id:
-                    user_portion = split['amount']
-                    break
-        
-        # Add to total expenses
-        current_user_total += user_portion
-        
-        # If this expense is from the current month, add to current month total
-        if month_key == current_month_key:
-            current_month_total += user_portion
-
-    return render_template('dashboard.html', 
-                         expenses=expenses, 
-                         monthly_totals=monthly_totals,
-                         users=users,
-                         groups=groups,
-                         now=now,
-                         iou_data=iou_data,
-                         total_expenses=current_user_total,
-                         current_month_total=current_month_total,
-                         current_user_id=current_user.id)
-
-def calculate_iou_balances(expenses, current_user_id):
-    """
-    Calculate who owes money to whom based on all expenses.
-    Returns a dictionary with users who owe money to the current user and users 
-    the current user owes money to.
-    """
-    # Initialize balances dictionary
-    balances = {}  # {user_id: net_balance}
-    
     for expense in expenses:
         splits = expense.calculate_splits()
-        payer_id = expense.paid_by
         payer = splits['payer']
+        payer_id = payer['email']
+        payer_name = payer['name']
         
-        # If current user paid for this expense
-        if payer_id == current_user_id:
-            # Current user should be paid back by others
+        # If current user paid
+        if payer_id == current_user.id:
+            # Track what others owe current user
             for split in splits['splits']:
-                debtor_id = split['email']
+                user_id = split['email']
+                user_name = split['name']
                 amount = split['amount']
                 
-                if debtor_id not in balances:
-                    balances[debtor_id] = 0
+                if user_id not in iou_data['owes_me']:
+                    iou_data['owes_me'][user_id] = {'name': user_name, 'amount': 0}
+                iou_data['owes_me'][user_id]['amount'] += amount
                 
-                # Others owe money to current user (positive value)
-                balances[debtor_id] += amount
-        
-        # If someone else paid and current user owes money
-        elif current_user_id in [split['email'] for split in splits['splits']]:
-            # Find how much current user owes
+        # If someone else paid
+        else:
+            # Find current user's split if they're involved
             for split in splits['splits']:
-                if split['email'] == current_user_id:
-                    amount = split['amount']
-                    
-                    if payer_id not in balances:
-                        balances[payer_id] = 0
-                    
-                    # Current user owes money to others (negative value)
-                    balances[payer_id] -= amount
-        
-        # If current user paid but also owes a portion
-        if payer_id == current_user_id and current_user_id in [split['email'] for split in splits['splits']]:
-            # Adjust the balance by removing current user's own portion
-            for split in splits['splits']:
-                if split['email'] == current_user_id:
-                    # This portion the user pays to themselves, so remove it from calculations
-                    pass
+                if split['email'] == current_user.id:
+                    if payer_id not in iou_data['i_owe']:
+                        iou_data['i_owe'][payer_id] = {'name': payer_name, 'amount': 0}
+                    iou_data['i_owe'][payer_id]['amount'] += split['amount']
     
-    # Format results into two categories: "owes_me" and "i_owe"
-    owes_me = {}
-    i_owe = {}
+    # Calculate net balance
+    total_owed = sum(data['amount'] for data in iou_data['owes_me'].values())
+    total_owing = sum(data['amount'] for data in iou_data['i_owe'].values())
+    iou_data['net_balance'] = total_owed - total_owing
     
-    # Get user names for display
-    users = {user.id: user.name for user in User.query.all()}
-    
-    for user_id, balance in balances.items():
-        user_name = users.get(user_id, "Unknown User")
-        
-        if balance > 0:
-            # Others owe current user
-            owes_me[user_id] = {
-                'name': user_name,
-                'amount': round(balance, 2)
-            }
-        elif balance < 0:
-            # Current user owes others
-            i_owe[user_id] = {
-                'name': user_name,
-                'amount': round(abs(balance), 2)
-            }
-    
-    return {
-        'owes_me': owes_me,
-        'i_owe': i_owe,
-        'net_balance': round(sum(balances.values()), 2)
-    }
-@app.route('/add_expense', methods=['GET', 'POST'])
-@login_required_dev
-def add_expense():
-    print("Request method:", request.method)
-    if request.method == 'POST':
-        print("Form data:", request.form)
-        
-        try:
-            # Handle multi-select for split_with
-            split_with_ids = request.form.getlist('split_with')
-            split_with_str = ','.join(split_with_ids) if split_with_ids else None
-            
-            # Parse date with error handling
-            try:
-                expense_date = datetime.strptime(request.form['date'], '%Y-%m-%d')
-            except ValueError:
-                flash('Invalid date format. Please use YYYY-MM-DD format.')
-                return redirect(url_for('dashboard'))
-            
-            # Process split details if provided
-            split_details = None
-            if request.form.get('split_details'):
-                import json
-                split_details = request.form.get('split_details')
-            
-            # Get form data
-            expense = Expense(
-                description=request.form['description'],
-                amount=float(request.form['amount']),
-                date=expense_date,
-                card_used=request.form['card_used'],
-                split_method=request.form['split_method'],
-                split_value=float(request.form.get('split_value', 0)) if request.form.get('split_value') else 0,
-                paid_by=request.form['paid_by'],
-                user_id=current_user.id,
-                group_id=request.form.get('group_id') if request.form.get('group_id') else None,
-                split_with=split_with_str,  # Store as comma-separated string
-                split_details=split_details  # Store the JSON string
-            )
-            
-            db.session.add(expense)
-            db.session.commit()
-            flash('Expense added successfully!')
-            print("Expense added successfully")
-            
-        except Exception as e:
-            print("Error adding expense:", str(e))
-            flash(f'Error: {str(e)}')
-            
-    return redirect(url_for('dashboard'))
-
-@app.route('/groups')
-@login_required_dev
-def groups():
-    groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
-    all_users = User.query.all()
-    return render_template('groups.html', groups=groups, users=all_users)
-
-@app.route('/groups/create', methods=['POST'])
-@login_required_dev
-def create_group():
-    try:
-        name = request.form.get('name')
-        description = request.form.get('description')
-        member_ids = request.form.getlist('members')
-        
-        group = Group(
-            name=name,
-            description=description,
-            created_by=current_user.id
-        )
-        
-        # Add creator as a member
-        group.members.append(current_user)
-        
-        # Add selected members
-        for member_id in member_ids:
-            user = User.query.filter_by(id=member_id).first()
-            if user and user != current_user:
-                group.members.append(user)
-        
-        db.session.add(group)
-        db.session.commit()
-        flash('Group created successfully!')
-    except Exception as e:
-        flash(f'Error creating group: {str(e)}')
-    
-    return redirect(url_for('groups'))
-
-@app.route('/groups/<int:group_id>')
-@login_required_dev
-def group_details(group_id):
-    group = Group.query.get_or_404(group_id)
-    # Check if user is member of group
-    if current_user not in group.members:
-        flash('Access denied. You are not a member of this group.')
-        return redirect(url_for('groups'))
-    
-    expenses = Expense.query.filter_by(group_id=group_id).order_by(Expense.date.desc()).all()
-    all_users = User.query.all()
-    return render_template('group_details.html', group=group, expenses=expenses, users=all_users)
-
-@app.route('/groups/<int:group_id>/add_member', methods=['POST'])
-@login_required_dev
-def add_group_member(group_id):
-    group = Group.query.get_or_404(group_id)
-    if current_user != group.creator:
-        flash('Only group creator can add members')
-        return redirect(url_for('group_details', group_id=group_id))
-    
-    member_id = request.form.get('user_id')
-    user = User.query.filter_by(id=member_id).first()
-    
-    if user and user not in group.members:
-        group.members.append(user)
-        db.session.commit()
-        flash(f'{user.name} added to group!')
-    
-    return redirect(url_for('group_details', group_id=group_id))
-
-@app.route('/groups/<int:group_id>/remove_member/<member_id>', methods=['POST'])
-@login_required_dev
-def remove_group_member(group_id, member_id):
-    group = Group.query.get_or_404(group_id)
-    if current_user != group.creator:
-        flash('Only group creator can remove members')
-        return redirect(url_for('group_details', group_id=group_id))
-    
-    user = User.query.filter_by(id=member_id).first()
-    if user and user in group.members and user != group.creator:
-        group.members.remove(user)
-        db.session.commit()
-        flash(f'{user.name} removed from group!')
-    
-    return redirect(url_for('group_details', group_id=group_id))
-
-@app.route('/admin')
-@login_required_dev
-def admin():
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.')
-        return redirect(url_for('dashboard'))
-    
-    users = User.query.all()
-    return render_template('admin.html', users=users)
-
-@app.route('/admin/add_user', methods=['POST'])
-@login_required_dev
-def admin_add_user():
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.')
-        return redirect(url_for('dashboard'))
-    
-    email = request.form.get('email')
-    password = request.form.get('password')
-    name = request.form.get('name')
-    is_admin = request.form.get('is_admin') == 'on'
-    
-    if User.query.filter_by(id=email).first():
-        flash('Email already registered')
-        return redirect(url_for('admin'))
-    
-    user = User(id=email, name=name, is_admin=is_admin)
-    user.set_password(password)
-    db.session.add(user)
-    db.session.commit()
-    
-    flash('User added successfully!')
-    return redirect(url_for('admin'))
-
-@app.route('/admin/delete_user/<user_id>', methods=['POST'])
-@login_required_dev
-def admin_delete_user(user_id):
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.')
-        return redirect(url_for('dashboard'))
-    
-    if user_id == current_user.id:
-        flash('Cannot delete your own admin account!')
-        return redirect(url_for('admin'))
-    
-    user = User.query.filter_by(id=user_id).first()
-    if user:
-        # Delete associated expenses first
-        Expense.query.filter_by(user_id=user_id).delete()
-        db.session.delete(user)
-        db.session.commit()
-        flash('User deleted successfully!')
-    
-    return redirect(url_for('admin'))
-
-@app.route('/admin/reset_password', methods=['POST'])
-@login_required_dev
-def admin_reset_password():
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.')
-        return redirect(url_for('dashboard'))
-    
-    user_id = request.form.get('user_id')
-    new_password = request.form.get('new_password')
-    confirm_password = request.form.get('confirm_password')
-    
-    # Validate passwords match
-    if new_password != confirm_password:
-        flash('Passwords do not match!')
-        return redirect(url_for('admin'))
-    
-    user = User.query.filter_by(id=user_id).first()
-    if user:
-        user.set_password(new_password)
-        db.session.commit()
-        flash(f'Password reset successful for {user.name}!')
-    else:
-        flash('User not found.')
-        
-    return redirect(url_for('admin'))
-
-
-
-@app.route('/settlements')
-@login_required_dev
-def settlements():
-    # Get all settlements involving the current user
-    settlements = Settlement.query.filter(
-        or_(
-            Settlement.payer_id == current_user.id,
-            Settlement.receiver_id == current_user.id
-        )
-    ).order_by(Settlement.date.desc()).all()
-    
-    # Get all users
-    users = User.query.all()
-    
-    # Calculate balances between users
-    balances = calculate_balances(current_user.id)
-    
-    # Split balances into "you owe" and "you are owed" categories
-    you_owe = []
-    you_are_owed = []
-    
-    for balance in balances:
-        if balance['amount'] < 0:
-            # Current user owes money
-            you_owe.append({
-                'id': balance['user_id'],
-                'name': balance['name'],
-                'email': balance['email'],
-                'amount': abs(balance['amount'])
-            })
-        elif balance['amount'] > 0:
-            # Current user is owed money
-            you_are_owed.append({
-                'id': balance['user_id'],
-                'name': balance['name'],
-                'email': balance['email'],
-                'amount': balance['amount']
-            })
-    
-    return render_template('settlements.html', 
-                          settlements=settlements,
-                          users=users,
-                          you_owe=you_owe,
-                          you_are_owed=you_are_owed,
-                          current_user_id=current_user.id)
-
-@app.route('/add_settlement', methods=['POST'])
-@login_required_dev
-def add_settlement():
-    try:
-        # Parse date with error handling
-        try:
-            settlement_date = datetime.strptime(request.form['date'], '%Y-%m-%d')
-        except ValueError:
-            flash('Invalid date format. Please use YYYY-MM-DD format.')
-            return redirect(url_for('settlements'))
-        
-        # Create settlement record
-        settlement = Settlement(
-            payer_id=request.form['payer_id'],
-            receiver_id=request.form['receiver_id'],
-            amount=float(request.form['amount']),
-            date=settlement_date,
-            description=request.form.get('description', 'Settlement')
-        )
-        
-        db.session.add(settlement)
-        db.session.commit()
-        flash('Settlement recorded successfully!')
-        
-    except Exception as e:
-        flash(f'Error: {str(e)}')
-        
-    return redirect(url_for('settlements'))
+    return iou_data
 def calculate_balances(user_id):
     """Calculate balances between the current user and all other users"""
     balances = {}
@@ -943,6 +499,643 @@ def calculate_balances(user_id):
     # Return only non-zero balances
     return [balance for balance in balances.values() if abs(balance['amount']) > 0.01]
 
+#--------------------
+# ROUTES: AUTHENTICATION
+#--------------------
+
+@app.route('/')
+def home():
+    if app.config['DEVELOPMENT_MODE']:
+        return redirect(url_for('dashboard'))
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+     # Check if signups are disabled
+    if app.config['DISABLE_SIGNUPS'] and not app.config['DEVELOPMENT_MODE']:
+        flash('New account registration is currently disabled.')
+        return redirect(url_for('login'))
+    
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+        
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        name = request.form.get('name')
+        
+        if User.query.filter_by(id=email).first():
+            flash('Email already registered')
+            return redirect(url_for('signup'))
+        
+        user = User(id=email, name=name)
+        user.set_password(password)
+        
+        # Make first user admin
+        if User.query.count() == 0:
+            user.is_admin = True
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        login_user(user)
+        flash('Account created successfully!')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('signup.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if app.config['DEVELOPMENT_MODE']:
+        # In development mode, auto-login as dev user
+        dev_user = User.query.filter_by(id=DEV_USER_EMAIL).first()
+        if dev_user:
+            login_user(dev_user)
+            return redirect(url_for('dashboard'))
+    
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+        
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        user = User.query.filter_by(id=email).first()
+        
+        if user and user.check_password(password):
+            login_user(user)
+            return redirect(url_for('dashboard'))
+        
+        flash('Invalid email or password')
+    # Pass the signup status to the template
+    return render_template('login.html', signups_disabled=app.config['DISABLE_SIGNUPS'])
+
+@app.route('/logout')
+@login_required_dev
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+#--------------------
+# ROUTES: DASHBOARD
+#--------------------
+@app.route('/dashboard')
+@login_required_dev
+def dashboard():
+    now = datetime.now()
+    expenses = Expense.query.filter_by(user_id=current_user.id).order_by(Expense.date.desc()).all()
+    users = User.query.all()
+    groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
+    
+    # Calculate monthly totals with contributors
+    monthly_totals = {}
+    if expenses:
+        for expense in expenses:
+            month_key = expense.date.strftime('%Y-%m')
+            if month_key not in monthly_totals:
+                monthly_totals[month_key] = {
+                    'total': 0.0,
+                    'by_card': {},
+                    'contributors': {}
+                }
+            
+            # Add to total
+            monthly_totals[month_key]['total'] += expense.amount
+            
+            # Add to card totals
+            if expense.card_used not in monthly_totals[month_key]['by_card']:
+                monthly_totals[month_key]['by_card'][expense.card_used] = 0
+            monthly_totals[month_key]['by_card'][expense.card_used] += expense.amount
+            
+            # Calculate splits and add to contributors
+            splits = expense.calculate_splits()
+            
+            # Add payer's portion
+            if splits['payer']['amount'] > 0:
+                payer_email = splits['payer']['email']
+                if payer_email not in monthly_totals[month_key]['contributors']:
+                    monthly_totals[month_key]['contributors'][payer_email] = 0
+                monthly_totals[month_key]['contributors'][payer_email] += splits['payer']['amount']
+            
+            # Add other contributors' portions
+            for split in splits['splits']:
+                if split['email'] not in monthly_totals[month_key]['contributors']:
+                    monthly_totals[month_key]['contributors'][split['email']] = 0
+                monthly_totals[month_key]['contributors'][split['email']] += split['amount']
+    
+    # Calculate total expenses
+    total_expenses = sum(data['total'] for data in monthly_totals.values())
+    
+    # Calculate current month total
+    current_month_key = now.strftime('%Y-%m')
+    current_month_total = monthly_totals.get(current_month_key, {}).get('total', 0)
+    
+    # Get unique cards
+    unique_cards = set(expense.card_used for expense in expenses)
+    
+    # Calculate IOUs
+    iou_data = calculate_iou_data(expenses, users)
+    
+    # Pre-calculate expense splits to avoid repeated calculations in template
+    expense_splits = {}
+    for expense in expenses:
+        expense_splits[expense.id] = expense.calculate_splits()
+    
+    return render_template('dashboard.html', 
+                         expenses=expenses,
+                         expense_splits=expense_splits,
+                         monthly_totals=monthly_totals,
+                         total_expenses=total_expenses,
+                         current_month_total=current_month_total,
+                         unique_cards=unique_cards,
+                         users=users,
+                         groups=groups,
+                         iou_data=iou_data,
+                         now=now)
+
+@app.route('/add_expense', methods=['GET', 'POST'])
+@login_required_dev
+def add_expense():
+    print("Request method:", request.method)
+    if request.method == 'POST':
+        print("Form data:", request.form)
+        
+        try:
+            # Handle multi-select for split_with
+            split_with_ids = request.form.getlist('split_with')
+            split_with_str = ','.join(split_with_ids) if split_with_ids else None
+            
+            # Parse date with error handling
+            try:
+                expense_date = datetime.strptime(request.form['date'], '%Y-%m-%d')
+            except ValueError:
+                flash('Invalid date format. Please use YYYY-MM-DD format.')
+                return redirect(url_for('dashboard'))
+            
+            # Process split details if provided
+            split_details = None
+            if request.form.get('split_details'):
+                import json
+                split_details = request.form.get('split_details')
+            
+            # Get form data
+            expense = Expense(
+                description=request.form['description'],
+                amount=float(request.form['amount']),
+                date=expense_date,
+                card_used=request.form['card_used'],
+                split_method=request.form['split_method'],
+                split_value=float(request.form.get('split_value', 0)) if request.form.get('split_value') else 0,
+                paid_by=request.form['paid_by'],
+                user_id=current_user.id,
+                group_id=request.form.get('group_id') if request.form.get('group_id') else None,
+                split_with=split_with_str,  # Store as comma-separated string
+                split_details=split_details  # Store the JSON string
+            )
+            
+            db.session.add(expense)
+            db.session.commit()
+            flash('Expense added successfully!')
+            print("Expense added successfully")
+            
+        except Exception as e:
+            print("Error adding expense:", str(e))
+            flash(f'Error: {str(e)}')
+            
+    return redirect(url_for('dashboard'))
+
+#--------------------
+# ROUTES: GROUPS
+#--------------------
+
+@app.route('/groups')
+@login_required_dev
+def groups():
+    groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
+    all_users = User.query.all()
+    return render_template('groups.html', groups=groups, users=all_users)
+
+@app.route('/groups/create', methods=['POST'])
+@login_required_dev
+def create_group():
+    try:
+        name = request.form.get('name')
+        description = request.form.get('description')
+        member_ids = request.form.getlist('members')
+        
+        group = Group(
+            name=name,
+            description=description,
+            created_by=current_user.id
+        )
+        
+        # Add creator as a member
+        group.members.append(current_user)
+        
+        # Add selected members
+        for member_id in member_ids:
+            user = User.query.filter_by(id=member_id).first()
+            if user and user != current_user:
+                group.members.append(user)
+        
+        db.session.add(group)
+        db.session.commit()
+        flash('Group created successfully!')
+    except Exception as e:
+        flash(f'Error creating group: {str(e)}')
+    
+    return redirect(url_for('groups'))
+
+@app.route('/groups/<int:group_id>')
+@login_required_dev
+def group_details(group_id):
+    group = Group.query.get_or_404(group_id)
+    # Check if user is member of group
+    if current_user not in group.members:
+        flash('Access denied. You are not a member of this group.')
+        return redirect(url_for('groups'))
+    
+    expenses = Expense.query.filter_by(group_id=group_id).order_by(Expense.date.desc()).all()
+    all_users = User.query.all()
+    return render_template('group_details.html', group=group, expenses=expenses, users=all_users)
+
+@app.route('/groups/<int:group_id>/add_member', methods=['POST'])
+@login_required_dev
+def add_group_member(group_id):
+    group = Group.query.get_or_404(group_id)
+    if current_user != group.creator:
+        flash('Only group creator can add members')
+        return redirect(url_for('group_details', group_id=group_id))
+    
+    member_id = request.form.get('user_id')
+    user = User.query.filter_by(id=member_id).first()
+    
+    if user and user not in group.members:
+        group.members.append(user)
+        db.session.commit()
+        flash(f'{user.name} added to group!')
+    
+    return redirect(url_for('group_details', group_id=group_id))
+
+@app.route('/groups/<int:group_id>/remove_member/<member_id>', methods=['POST'])
+@login_required_dev
+def remove_group_member(group_id, member_id):
+    group = Group.query.get_or_404(group_id)
+    if current_user != group.creator:
+        flash('Only group creator can remove members')
+        return redirect(url_for('group_details', group_id=group_id))
+    
+    user = User.query.filter_by(id=member_id).first()
+    if user and user in group.members and user != group.creator:
+        group.members.remove(user)
+        db.session.commit()
+        flash(f'{user.name} removed from group!')
+    
+    return redirect(url_for('group_details', group_id=group_id))
+
+#--------------------
+# ROUTES: ADMIN
+#--------------------
+
+@app.route('/admin')
+@login_required_dev
+def admin():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
+    
+    users = User.query.all()
+    return render_template('admin.html', users=users)
+
+@app.route('/admin/add_user', methods=['POST'])
+@login_required_dev
+def admin_add_user():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
+    
+    email = request.form.get('email')
+    password = request.form.get('password')
+    name = request.form.get('name')
+    is_admin = request.form.get('is_admin') == 'on'
+    
+    if User.query.filter_by(id=email).first():
+        flash('Email already registered')
+        return redirect(url_for('admin'))
+    
+    user = User(id=email, name=name, is_admin=is_admin)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    
+    flash('User added successfully!')
+    return redirect(url_for('admin'))
+
+@app.route('/admin/delete_user/<user_id>', methods=['POST'])
+@login_required_dev
+def admin_delete_user(user_id):
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
+    
+    if user_id == current_user.id:
+        flash('Cannot delete your own admin account!')
+        return redirect(url_for('admin'))
+    
+    user = User.query.filter_by(id=user_id).first()
+    if user:
+        # Delete associated expenses first
+        Expense.query.filter_by(user_id=user_id).delete()
+        db.session.delete(user)
+        db.session.commit()
+        flash('User deleted successfully!')
+    
+    return redirect(url_for('admin'))
+
+@app.route('/admin/reset_password', methods=['POST'])
+@login_required_dev
+def admin_reset_password():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.')
+        return redirect(url_for('dashboard'))
+    
+    user_id = request.form.get('user_id')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+    
+    # Validate passwords match
+    if new_password != confirm_password:
+        flash('Passwords do not match!')
+        return redirect(url_for('admin'))
+    
+    user = User.query.filter_by(id=user_id).first()
+    if user:
+        user.set_password(new_password)
+        db.session.commit()
+        flash(f'Password reset successful for {user.name}!')
+    else:
+        flash('User not found.')
+        
+    return redirect(url_for('admin'))
+
+#--------------------
+# ROUTES: SETTLEMENTS
+#--------------------
+
+@app.route('/settlements')
+@login_required_dev
+def settlements():
+    # Get all settlements involving the current user
+    settlements = Settlement.query.filter(
+        or_(
+            Settlement.payer_id == current_user.id,
+            Settlement.receiver_id == current_user.id
+        )
+    ).order_by(Settlement.date.desc()).all()
+    
+    # Get all users
+    users = User.query.all()
+    
+    # Calculate balances between users
+    balances = calculate_balances(current_user.id)
+    
+    # Split balances into "you owe" and "you are owed" categories
+    you_owe = []
+    you_are_owed = []
+    
+    for balance in balances:
+        if balance['amount'] < 0:
+            # Current user owes money
+            you_owe.append({
+                'id': balance['user_id'],
+                'name': balance['name'],
+                'email': balance['email'],
+                'amount': abs(balance['amount'])
+            })
+        elif balance['amount'] > 0:
+            # Current user is owed money
+            you_are_owed.append({
+                'id': balance['user_id'],
+                'name': balance['name'],
+                'email': balance['email'],
+                'amount': balance['amount']
+            })
+    
+    return render_template('settlements.html', 
+                          settlements=settlements,
+                          users=users,
+                          you_owe=you_owe,
+                          you_are_owed=you_are_owed,
+                          current_user_id=current_user.id)
+
+@app.route('/add_settlement', methods=['POST'])
+@login_required_dev
+def add_settlement():
+    try:
+        # Parse date with error handling
+        try:
+            settlement_date = datetime.strptime(request.form['date'], '%Y-%m-%d')
+        except ValueError:
+            flash('Invalid date format. Please use YYYY-MM-DD format.')
+            return redirect(url_for('settlements'))
+        
+        # Create settlement record
+        settlement = Settlement(
+            payer_id=request.form['payer_id'],
+            receiver_id=request.form['receiver_id'],
+            amount=float(request.form['amount']),
+            date=settlement_date,
+            description=request.form.get('description', 'Settlement')
+        )
+        
+        db.session.add(settlement)
+        db.session.commit()
+        flash('Settlement recorded successfully!')
+        
+    except Exception as e:
+        flash(f'Error: {str(e)}')
+        
+    return redirect(url_for('settlements'))
+# Add this route to your app.py file
+
+@app.route('/transactions')
+@login_required_dev
+def transactions():
+    """Display all transactions with filtering capabilities"""
+    expenses = Expense.query.filter_by(user_id=current_user.id).order_by(Expense.date.desc()).all()
+    users = User.query.all()
+    
+    # Pre-calculate all expense splits to avoid repeated calculations
+    expense_splits = {}
+    for expense in expenses:
+        expense_splits[expense.id] = expense.calculate_splits()
+    
+    # Calculate monthly totals for statistics
+    monthly_totals = {}
+    total_expenses = 0
+    current_month_total = 0
+    current_month_key = datetime.now().strftime('%Y-%m')
+    unique_cards = set()
+    
+    for expense in expenses:
+        month_key = expense.date.strftime('%Y-%m')
+        if month_key not in monthly_totals:
+            monthly_totals[month_key] = {
+                'total': 0.0,
+                'by_card': {},
+                'contributors': {}
+            }
+            
+        # Add to monthly totals
+        monthly_totals[month_key]['total'] += expense.amount
+        total_expenses += expense.amount
+        
+        # Add card to total
+        if expense.card_used not in monthly_totals[month_key]['by_card']:
+            monthly_totals[month_key]['by_card'][expense.card_used] = 0
+        monthly_totals[month_key]['by_card'][expense.card_used] += expense.amount
+        
+        # Track unique cards
+        unique_cards.add(expense.card_used)
+        
+        # Track current month total
+        if month_key == current_month_key:
+            current_month_total += expense.amount
+            
+        # Add contributors' data
+        splits = expense_splits[expense.id]
+        
+        # Add payer's portion
+        if splits['payer']['amount'] > 0:
+            user_id = splits['payer']['email']
+            if user_id not in monthly_totals[month_key]['contributors']:
+                monthly_totals[month_key]['contributors'][user_id] = 0
+            monthly_totals[month_key]['contributors'][user_id] += splits['payer']['amount']
+        
+        # Add other contributors' portions
+        for split in splits['splits']:
+            user_id = split['email']
+            if user_id not in monthly_totals[month_key]['contributors']:
+                monthly_totals[month_key]['contributors'][user_id] = 0
+            monthly_totals[month_key]['contributors'][user_id] += split['amount']
+    
+    return render_template('transactions.html', 
+                        expenses=expenses,
+                        expense_splits=expense_splits,
+                        monthly_totals=monthly_totals,
+                        total_expenses=total_expenses,
+                        current_month_total=current_month_total,
+                        unique_cards=unique_cards,
+                        users=users)
+
+
+
+#--------------------
+# # Password reset routes
+#--------------------
+
+
+@app.route('/reset_password_request', methods=['GET', 'POST'])
+def reset_password_request():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+        
+    if request.method == 'POST':
+        email = request.form['email']
+        user = User.query.filter_by(id=email).first()
+        
+        if user:
+            token = user.generate_reset_token()
+            db.session.commit()
+            
+            # Generate the reset password URL
+            reset_url = url_for('reset_password', token=token, email=email, _external=True)
+            
+            # Prepare the email
+            subject = "Password Reset Request"
+            body_text = f'''
+                    To reset your password, please visit the following link:
+                    {reset_url}
+
+                    If you did not make this request, please ignore this email.
+
+                    This link will expire in 1 hour.
+                    '''
+            body_html = f'''
+                    <p>To reset your password, please click the link below:</p>
+                    <p><a href="{reset_url}">Reset Your Password</a></p>
+                    <p>If you did not make this request, please ignore this email.</p>
+                    <p>This link will expire in 1 hour.</p>
+                    '''
+            
+            try:
+                msg = Message(
+                    subject=subject,
+                    recipients=[email],
+                    body=body_text,
+                    html=body_html
+                )
+                mail.send(msg)
+                app.logger.info(f"Password reset email sent to {email}")
+                
+                # Success message (don't reveal if email exists or not for security)
+                flash("If your email address exists in our database, you will receive a password reset link shortly.")
+            except Exception as e:
+                app.logger.error(f"Error sending password reset email: {str(e)}")
+                flash("An error occurred while sending the password reset email. Please try again later.")
+        else:
+            # Still show success message even if email not found (security)
+            flash("If your email address exists in our database, you will receive a password reset link shortly.")
+            app.logger.info(f"Password reset requested for non-existent email: {email}")
+        
+        return redirect(url_for('login'))
+    
+    return render_template('reset_password.html')
+
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    email = request.args.get('email')
+    if not email:
+        flash('Invalid reset link.')
+        return redirect(url_for('login'))
+    
+    user = User.query.filter_by(id=email).first()
+    
+    # Verify the token is valid
+    if not user or not user.verify_reset_token(token):
+        flash('Invalid or expired reset link. Please request a new one.')
+        return redirect(url_for('reset_password_request'))
+    
+    if request.method == 'POST':
+        password = request.form['password']
+        confirm_password = request.form['confirm_password']
+        
+        if password != confirm_password:
+            flash('Passwords do not match.')
+            return render_template('reset_password_confirm.html', token=token, email=email)
+        
+        # Update the user's password
+        user.set_password(password)
+        user.clear_reset_token()
+        db.session.commit()
+        
+        app.logger.info(f"Password reset successful for user: {email}")
+        flash('Your password has been reset successfully. You can now log in with your new password.')
+        return redirect(url_for('login'))
+    
+    return render_template('reset_password_confirm.html', token=token, email=email)
+
+
+
+
+
+#--------------------
+# DATABASE INITIALIZATION
+#--------------------
 
 # Database initialization at application startup
 with app.app_context():
@@ -950,7 +1143,6 @@ with app.app_context():
         print("Creating database tables...")
         db.create_all()
         print("Tables created successfully")
-        # Rest of code...
     except Exception as e:
         print(f"ERROR CREATING TABLES: {str(e)}")
 

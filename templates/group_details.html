@@ -97,7 +97,7 @@
                     </button>
                 </div>
                 
-                <!-- Add Expense Form (Hidden by default) -->
+                <!-- Add Expense Form (Hidden by default) - UPDATED to match dashboard.html -->
                 <div id="expenseFormContainer" class="card-body border-bottom" style="display: none;">
                     <form method="POST" action="{{ url_for('add_expense') }}">
                         <div class="row">
@@ -125,7 +125,7 @@
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="paid_by" class="form-label">Paid By</label>
-                                <select class="form-select bg-dark text-light" id="paid_by" name="paid_by" required>
+                                <select class="form-control bg-dark text-light" id="paid_by" name="paid_by" required>
                                     {% for member in group.members %}
                                         <option value="{{ member.id }}" {% if member == current_user %}selected{% endif %}>
                                             {{ member.name }} ({{ member.id }})
@@ -134,19 +134,56 @@
                                 </select>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="split_method" class="form-label">Split Method</label>
-                                <select class="form-select bg-dark text-light" id="split_method" name="split_method" required onchange="toggleSplitValue()">
-                                    <option value="half">50/50 Split</option>
-                                    <option value="amount">Split by Amount</option>
-                                    <option value="percentage">Split by Percentage</option>
+                                <label for="split_with" class="form-label">Split With (select multiple)</label>
+                                <select class="form-select bg-dark text-light" id="split_with" name="split_with" multiple required>
+                                    {% for member in group.members %}
+                                        <option value="{{ member.id }}">{{ member.name }} ({{ member.id }})</option>
+                                    {% endfor %}
                                 </select>
+                                <small class="text-muted d-block mt-1">Click to select multiple people</small>
                             </div>
                         </div>
                         
-                        <div class="mb-3" id="split_value_container" style="display: none;">
-                            <label for="split_value" class="form-label">Split Value</label>
-                            <input type="number" step="0.01" class="form-control bg-dark text-light" id="split_value" name="split_value">
-                            <small class="text-muted">For amount: enter first person's amount. For percentage: enter first person's percentage.</small>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="split_method" class="form-label">Split Method</label>
+                                <select class="form-control bg-dark text-light" id="split_method" name="split_method" required onchange="toggleSplitOptions()">
+                                    <option value="equal">Equal Split Among All</option>
+                                    <option value="custom">Custom Amount for Each Person</option>
+                                    <option value="percentage">Percentage Split for Each Person</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3" id="split_value_container" style="display: none;">
+                                <label for="split_value" class="form-label">Split Value (Legacy - Deprecated)</label>
+                                <input type="number" step="0.01" class="form-control bg-dark text-light" id="split_value" name="split_value">
+                                <small class="text-muted">This field is only for backward compatibility.</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Custom Split Values Container (Hidden by default) -->
+                        <div id="custom_split_container" class="mb-3" style="display: none;">
+                            <div class="card bg-dark">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Customize Split Values</h5>
+                                    <small class="text-muted" id="split_instruction">Set how much each person pays</small>
+                                </div>
+                                <div class="card-body">
+                                    <div id="split_values_container">
+                                        <!-- Will be populated by JavaScript -->
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-3">
+                                        <div>
+                                            <span class="text-muted">Total: $<span id="split_total">0.00</span></span>
+                                            <span class="ms-2 text-muted">Expense: $<span id="expense_amount">0.00</span></span>
+                                        </div>
+                                        <div>
+                                            <span class="badge bg-success" id="split_status">Balanced</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Hidden input to store the split details as JSON -->
+                            <input type="hidden" id="split_details" name="split_details">
                         </div>
                         
                         <!-- Hidden Group ID -->
@@ -214,6 +251,39 @@
 
 {% block scripts %}
 <script>
+    // Function to update split_with options based on paid_by selection
+function updateSplitWithOptions() {
+    const paidById = document.getElementById('paid_by').value;
+    const splitWithSelect = document.getElementById('split_with');
+    
+    // Store currently selected options
+    const selectedOptions = Array.from(splitWithSelect.selectedOptions).map(opt => opt.value);
+    
+    // Reload custom multiselect if it exists
+    if (typeof initializeMultiSelect === 'function') {
+        // Get the existing wrapper
+        const wrapper = document.querySelector('.multiselect-wrapper');
+        if (wrapper) {
+            // Remove old multiselect UI
+            wrapper.outerHTML = splitWithSelect.outerHTML;
+            
+            // Re-initialize multiselect
+            initializeMultiSelect();
+            
+            // Re-select previously selected options (except the new payer)
+            const newSplitWith = document.getElementById('split_with');
+            for (let i = 0; i < newSplitWith.options.length; i++) {
+                const option = newSplitWith.options[i];
+                if (selectedOptions.includes(option.value) && option.value !== paidById) {
+                    option.selected = true;
+                }
+            }
+            
+            // Trigger change event to update UI
+            newSplitWith.dispatchEvent(new Event('change'));
+        }
+    }
+}
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize today's date
         const today = new Date().toISOString().split('T')[0];
@@ -233,12 +303,53 @@
             toggleExpenseBtn.addEventListener('click', toggleExpenseForm);
         }
         
+        // Initialize multiselect dropdown for split_with
+        initializeMultiSelect();
+        
+        // Handle amount field changes
+        document.getElementById('amount').addEventListener('input', updateSplitValues);
+        
+        // Handle paid_by changes
+        document.getElementById('paid_by').addEventListener('change', updateSplitValues);
+        
+        // Listen for split_with changes from the multiselect
+        // Handle paid_by changes
+        document.getElementById('paid_by').addEventListener('change', function() {
+            // Update split_with options
+            updateSplitWithOptions();
+            
+            // Update split values if custom split method is selected
+            updateSplitValues();
+        });
+        
         // Initialize split value visibility
         const splitMethodSelect = document.querySelector('#split_method');
         if (splitMethodSelect) {
-            toggleSplitValue();
-            splitMethodSelect.addEventListener('change', toggleSplitValue);
+            toggleSplitOptions();
+            splitMethodSelect.addEventListener('change', toggleSplitOptions);
         }
+        
+        // Handle form submission to ensure split values are calculated and included
+        document.querySelector('form[action*="add_expense"]').addEventListener('submit', function(e) {
+            // Ensure the hidden split_details field is updated before submission
+            const splitMethod = document.getElementById('split_method').value;
+            if (splitMethod !== 'equal') {
+                // Trigger input event on the first split value input to update the hidden field
+                const firstInput = document.querySelector('.split-value-input');
+                if (firstInput) {
+                    firstInput.dispatchEvent(new Event('input'));
+                }
+                
+                // Validate totals
+                const splitStatus = document.getElementById('split_status').textContent;
+                if (splitStatus !== 'Balanced') {
+                    e.preventDefault();
+                    alert('Your split values must balance with the expense amount before saving.');
+                    return false;
+                }
+            }
+            return true;
+        });
     });
     
     function toggleMemberForm() {
@@ -271,28 +382,328 @@
         }
     }
     
-    function toggleSplitValue() {
-        const splitMethod = document.querySelector('#split_method').value;
-        const splitValueContainer = document.querySelector('#split_value_container');
-        const splitValue = document.querySelector('#split_value');
+    // New function from dashboard.html
+    function toggleSplitOptions() {
+        const splitMethod = document.getElementById('split_method').value;
+        const splitValueContainer = document.getElementById('split_value_container');
+        const customSplitContainer = document.getElementById('custom_split_container');
+        const splitValue = document.getElementById('split_value');
+        const splitInstruction = document.getElementById('split_instruction');
         
-        if (splitMethod === 'half') {
-            splitValueContainer.style.display = 'none';
-            splitValue.removeAttribute('required');
+        // Hide legacy split value field
+        splitValueContainer.style.display = 'none';
+        splitValue.removeAttribute('required');
+        
+        if (splitMethod === 'equal') {
+            customSplitContainer.style.display = 'none';
         } else {
-            splitValueContainer.style.display = 'block';
-            splitValue.setAttribute('required', 'required');
+            customSplitContainer.style.display = 'block';
             
             if (splitMethod === 'percentage') {
-                splitValue.setAttribute('max', '100');
-                splitValue.setAttribute('step', '0.1');
-                splitValue.placeholder = 'Enter percentage (0-100)';
-            } else {
-                splitValue.removeAttribute('max');
-                splitValue.setAttribute('step', '0.01');
-                splitValue.placeholder = 'Enter amount';
+                splitInstruction.textContent = 'Set what percentage each person pays (total must be 100%)';
+            } else { // custom amounts
+                splitInstruction.textContent = 'Set how much each person pays (total must match expense amount)';
+            }
+            
+            // Update the split values UI
+            updateSplitValues();
+        }
+    }
+    
+    // New function from dashboard.html
+    function updateSplitValues() {
+        const splitMethod = document.getElementById('split_method').value;
+        if (splitMethod === 'equal') return;
+        
+        const totalAmount = parseFloat(document.getElementById('amount').value) || 0;
+        const paidById = document.getElementById('paid_by').value;
+        const splitWithIds = Array.from(document.getElementById('split_with').selectedOptions).map(opt => opt.value);
+        
+        // Display current amount in the UI
+        document.getElementById('expense_amount').textContent = totalAmount.toFixed(2);
+        
+        // Get all participant IDs (payer + split_with)
+        let allParticipantIds = [...splitWithIds];
+        // Add payer if they're not already in the split_with list
+        if (!allParticipantIds.includes(paidById)) {
+            allParticipantIds.unshift(paidById);
+        }
+        
+        // Generate split values UI
+        const container = document.getElementById('split_values_container');
+        container.innerHTML = '';
+        
+        let splitValues = {};
+        
+        if (splitMethod === 'percentage') {
+            // Start with equal percentages
+            const equalPercentage = allParticipantIds.length ? (100 / allParticipantIds.length) : 0;
+            
+            allParticipantIds.forEach(userId => {
+                const user = Array.from(document.getElementById('paid_by').options)
+                    .find(opt => opt.value === userId);
+                
+                if (user) {
+                    const userName = user.text.split(' (')[0];
+                    const isPayerId = userId === paidById;
+                    
+                    // Create row for this user
+                    const row = document.createElement('div');
+                    row.className = 'row mb-2 align-items-center';
+                    row.innerHTML = `
+                        <div class="col-md-6">
+                            <span class="badge ${isPayerId ? 'bg-primary' : 'bg-secondary'} me-1">
+                                ${isPayerId ? '💰' : ''} ${userName}
+                            </span>
+                            ${isPayerId ? '<small class="text-muted">(Paid)</small>' : ''}
+                        </div>
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <input type="number" class="form-control bg-dark text-light split-value-input"
+                                    data-user-id="${userId}" step="0.1" min="0" max="100" 
+                                    value="${equalPercentage.toFixed(1)}">
+                                <span class="input-group-text bg-dark text-light">%</span>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(row);
+                    
+                    // Save the initial value
+                    splitValues[userId] = equalPercentage;
+                }
+            });
+            
+            // Add event listeners to percentage inputs
+            container.querySelectorAll('.split-value-input').forEach(input => {
+                input.addEventListener('input', function() {
+                    const userId = this.getAttribute('data-user-id');
+                    const percentage = parseFloat(this.value) || 0;
+                    splitValues[userId] = percentage;
+                    
+                    // Calculate total percentage
+                    const totalPercentage = Object.values(splitValues).reduce((sum, val) => sum + val, 0);
+                    document.getElementById('split_total').textContent = totalPercentage.toFixed(1) + '%';
+                    
+                    // Update status
+                    const statusBadge = document.getElementById('split_status');
+                    if (Math.abs(totalPercentage - 100) < 0.1) {
+                        statusBadge.textContent = 'Balanced';
+                        statusBadge.className = 'badge bg-success';
+                    } else if (totalPercentage < 100) {
+                        statusBadge.textContent = 'Underfunded';
+                        statusBadge.className = 'badge bg-warning';
+                    } else {
+                        statusBadge.textContent = 'Overfunded';
+                        statusBadge.className = 'badge bg-danger';
+                    }
+                    
+                    // Update hidden split details field
+                    document.getElementById('split_details').value = JSON.stringify({
+                        type: 'percentage',
+                        values: splitValues
+                    });
+                });
+                
+                // Trigger input event to initialize values
+                input.dispatchEvent(new Event('input'));
+            });
+            
+        } else { // Custom amount
+            // Start with equal amounts
+            const equalAmount = allParticipantIds.length ? (totalAmount / allParticipantIds.length) : 0;
+            
+            allParticipantIds.forEach(userId => {
+                const user = Array.from(document.getElementById('paid_by').options)
+                    .find(opt => opt.value === userId);
+                
+                if (user) {
+                    const userName = user.text.split(' (')[0];
+                    const isPayerId = userId === paidById;
+                    
+                    // Create row for this user
+                    const row = document.createElement('div');
+                    row.className = 'row mb-2 align-items-center';
+                    row.innerHTML = `
+                        <div class="col-md-6">
+                            <span class="badge ${isPayerId ? 'bg-primary' : 'bg-secondary'} me-1">
+                                ${isPayerId ? '💰' : ''} ${userName}
+                            </span>
+                            ${isPayerId ? '<small class="text-muted">(Paid)</small>' : ''}
+                        </div>
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <span class="input-group-text bg-dark text-light">$</span>
+                                <input type="number" class="form-control bg-dark text-light split-value-input"
+                                    data-user-id="${userId}" step="0.01" min="0" 
+                                    value="${equalAmount.toFixed(2)}">
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(row);
+                    
+                    // Save the initial value
+                    splitValues[userId] = equalAmount;
+                }
+            });
+            
+            // Add event listeners to amount inputs
+            container.querySelectorAll('.split-value-input').forEach(input => {
+                input.addEventListener('input', function() {
+                    const userId = this.getAttribute('data-user-id');
+                    const amount = parseFloat(this.value) || 0;
+                    splitValues[userId] = amount;
+                    
+                    // Calculate total amount
+                    const totalSplit = Object.values(splitValues).reduce((sum, val) => sum + val, 0);
+                    document.getElementById('split_total').textContent = totalSplit.toFixed(2);
+                    
+                    // Update status
+                    const statusBadge = document.getElementById('split_status');
+                    if (Math.abs(totalSplit - totalAmount) < 0.01) {
+                        statusBadge.textContent = 'Balanced';
+                        statusBadge.className = 'badge bg-success';
+                    } else if (totalSplit < totalAmount) {
+                        statusBadge.textContent = 'Underfunded';
+                        statusBadge.className = 'badge bg-warning';
+                    } else {
+                        statusBadge.textContent = 'Overfunded';
+                        statusBadge.className = 'badge bg-danger';
+                    }
+                    
+                    // Update hidden split details field
+                    document.getElementById('split_details').value = JSON.stringify({
+                        type: 'amount',
+                        values: splitValues
+                    });
+                });
+                
+                // Trigger input event to initialize values
+                input.dispatchEvent(new Event('input'));
+            });
+        }
+    }
+    
+    // New function from dashboard.html
+    function initializeMultiSelect() {
+        // Get the select element
+        const selectElement = document.getElementById('split_with');
+        
+        // Create a wrapper div
+        const wrapper = document.createElement('div');
+        wrapper.className = 'multiselect-wrapper position-relative';
+        selectElement.parentNode.insertBefore(wrapper, selectElement);
+        wrapper.appendChild(selectElement);
+        
+        // Create the custom dropdown
+        const customSelect = document.createElement('div');
+        customSelect.className = 'form-control bg-dark text-light d-flex flex-wrap align-items-center';
+        customSelect.style.minHeight = '38px';
+        customSelect.style.cursor = 'pointer';
+        wrapper.appendChild(customSelect);
+        
+        // Create dropdown content
+        const dropdownContent = document.createElement('div');
+        dropdownContent.className = 'position-absolute w-100 bg-dark border border-secondary rounded mt-1 p-2';
+        dropdownContent.style.zIndex = '100';
+        dropdownContent.style.maxHeight = '200px';
+        dropdownContent.style.overflowY = 'auto';
+        dropdownContent.style.display = 'none';
+        wrapper.appendChild(dropdownContent);
+        
+        // Hide the original select
+        selectElement.style.display = 'none';
+        
+        // Populate dropdown options
+        for (let i = 0; i < selectElement.options.length; i++) {
+            const option = selectElement.options[i];
+            
+            const checkboxContainer = document.createElement('div');
+            checkboxContainer.className = 'form-check mb-2';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'form-check-input';
+            checkbox.value = option.value;
+            checkbox.id = 'multiselect-' + option.value;
+            checkbox.checked = option.selected;
+            
+            const label = document.createElement('label');
+            label.htmlFor = 'multiselect-' + option.value;
+            label.className = 'form-check-label text-light ms-2';
+            label.textContent = option.textContent;
+            
+            checkboxContainer.appendChild(checkbox);
+            checkboxContainer.appendChild(label);
+            dropdownContent.appendChild(checkboxContainer);
+            
+            // Handle checkbox change
+            checkbox.addEventListener('change', function() {
+                option.selected = checkbox.checked;
+                updateCustomSelectDisplay();
+                
+                // Trigger change event on original select
+                const event = new Event('change', { bubbles: true });
+                selectElement.dispatchEvent(event);
+            });
+        }
+        
+        // Toggle dropdown on click
+        customSelect.addEventListener('click', function(e) {
+            dropdownContent.style.display = dropdownContent.style.display === 'none' ? 'block' : 'none';
+            e.stopPropagation();
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function() {
+            dropdownContent.style.display = 'none';
+        });
+        
+        // Prevent dropdown from closing when clicking inside it
+        dropdownContent.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+        
+        // Update the custom select display
+        function updateCustomSelectDisplay() {
+            customSelect.innerHTML = '';
+            let selectedCount = 0;
+            
+            for (let i = 0; i < selectElement.options.length; i++) {
+                if (selectElement.options[i].selected) {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge bg-primary me-1 mb-1';
+                    badge.textContent = selectElement.options[i].text.split(' (')[0]; // Just show the name
+                    
+                    const removeBtn = document.createElement('span');
+                    removeBtn.className = 'ms-1';
+                    removeBtn.innerHTML = '&times;';
+                    removeBtn.style.cursor = 'pointer';
+                    
+                    badge.appendChild(removeBtn);
+                    customSelect.appendChild(badge);
+                    selectedCount++;
+                    
+                    // Handle remove button
+                    removeBtn.addEventListener('click', function(e) {
+                        selectElement.options[i].selected = false;
+                        document.getElementById('multiselect-' + selectElement.options[i].value).checked = false;
+                        updateCustomSelectDisplay();
+                        e.stopPropagation();
+                    });
+                }
+            }
+            
+            // If nothing selected, show placeholder
+            if (selectedCount === 0) {
+                const placeholder = document.createElement('span');
+                placeholder.className = 'text-muted';
+                placeholder.textContent = 'Select people to split with';
+                customSelect.appendChild(placeholder);
             }
         }
+        
+        // Initial display update
+        updateCustomSelectDisplay();
     }
 </script>
 {% endblock %}

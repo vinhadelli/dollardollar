@@ -228,6 +228,7 @@
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end bg-dark" aria-labelledby="navDropdown">
                                 <li><a class="dropdown-item text-light" href="{{ url_for('dashboard') }}"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</a></li>
+                                <li><a class="dropdown-item text-light" href="{{ url_for('transactions') }}"><i class="fas fa-exchange-alt me-2"></i>Transactions</a></li>
                                 <li><a class="dropdown-item text-light" href="{{ url_for('settlements') }}"><i class="fas fa-money-bill-wave me-2"></i>Settle Up</a></li>
                                 <li><a class="dropdown-item text-light" href="{{ url_for('groups') }}"><i class="fas fa-users me-2"></i>Groups</a></li>
                                 {% if current_user.is_admin %}
