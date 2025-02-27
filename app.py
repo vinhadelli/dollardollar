@@ -505,11 +505,9 @@ def calculate_balances(user_id):
 
 @app.route('/')
 def home():
-    if app.config['DEVELOPMENT_MODE']:
-        return redirect(url_for('dashboard'))
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
+    return render_template('landing.html')
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
