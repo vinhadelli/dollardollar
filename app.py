@@ -372,12 +372,9 @@ def calculate_iou_data(expenses, users):
     # Calculate balances
     for expense in expenses:
         splits = expense.calculate_splits()
-        payer = splits['payer']
-        payer_id = payer['email']
-        payer_name = payer['name']
         
-        # If current user paid
-        if payer_id == current_user.id:
+        # If current user is the payer
+        if expense.paid_by == current_user.id:
             # Track what others owe current user
             for split in splits['splits']:
                 user_id = split['email']
@@ -387,15 +384,18 @@ def calculate_iou_data(expenses, users):
                 if user_id not in iou_data['owes_me']:
                     iou_data['owes_me'][user_id] = {'name': user_name, 'amount': 0}
                 iou_data['owes_me'][user_id]['amount'] += amount
-                
-        # If someone else paid
-        else:
-            # Find current user's split if they're involved
-            for split in splits['splits']:
-                if split['email'] == current_user.id:
-                    if payer_id not in iou_data['i_owe']:
-                        iou_data['i_owe'][payer_id] = {'name': payer_name, 'amount': 0}
-                    iou_data['i_owe'][payer_id]['amount'] += split['amount']
+        
+        # If current user is in the splits (but not the payer)
+        elif current_user.id in [split['email'] for split in splits['splits']]:
+            payer_id = expense.paid_by
+            payer = User.query.filter_by(id=payer_id).first()
+            
+            # Find current user's split amount
+            current_user_split = next((split['amount'] for split in splits['splits'] if split['email'] == current_user.id), 0)
+            
+            if payer_id not in iou_data['i_owe']:
+                iou_data['i_owe'][payer_id] = {'name': payer.name, 'amount': 0}
+            iou_data['i_owe'][payer_id]['amount'] += current_user_split
     
     # Calculate net balance
     total_owed = sum(data['amount'] for data in iou_data['owes_me'].values())
@@ -403,6 +403,7 @@ def calculate_iou_data(expenses, users):
     iou_data['net_balance'] = total_owed - total_owing
     
     return iou_data
+
 def calculate_balances(user_id):
     """Calculate balances between the current user and all other users"""
     balances = {}
@@ -582,7 +583,15 @@ def logout():
 @login_required_dev
 def dashboard():
     now = datetime.now()
-    expenses = Expense.query.filter_by(user_id=current_user.id).order_by(Expense.date.desc()).all()
+    
+    # Fetch all expenses where the user is either the creator or a split participant
+    expenses = Expense.query.filter(
+        or_(
+            Expense.user_id == current_user.id,
+            Expense.split_with.like(f'%{current_user.id}%')
+        )
+    ).order_by(Expense.date.desc()).all()
+    
     users = User.query.all()
     groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
     
@@ -961,7 +970,12 @@ def add_settlement():
 @login_required_dev
 def transactions():
     """Display all transactions with filtering capabilities"""
-    expenses = Expense.query.filter_by(user_id=current_user.id).order_by(Expense.date.desc()).all()
+    expenses = Expense.query.filter(
+        or_(
+            Expense.user_id == current_user.id,
+            Expense.split_with.like(f'%{current_user.id}%')
+        )
+    ).order_by(Expense.date.desc()).all()
     users = User.query.all()
     
     # Pre-calculate all expense splits to avoid repeated calculations

@@ -2,19 +2,29 @@
 __pycache__/
 *.py[cod]
 *.class
+*.pyc
+.Python
 
 # Virtual Environment
 venv/
 env/
 .env
 .venv
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# SQLite Databases
+# Database and Storage
 *.db
+*.sqlite3
 instance/
+*.db-journal
+.database
 
 # Docker
 .docker
+docker-compose.override.yml
 
 # IDEs and editors
 .idea/
@@ -22,19 +32,68 @@ instance/
 *.swp
 *.swo
 *~
+*.orig
+.history/
+*.iml
+*.ipr
+*.iws
 
 # OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Logs
+# Logs and Temporary Files
 *.log
+*.log.*
+logs/
+.temp/
+.tmp/
 
-# Build artifacts
+# Build and Packaging
 *.egg-info/
 dist/
 build/
+*.egg
+MANIFEST
+*.manifest
+*.spec
 
-# Sensitive configuration files
+# Testing and Coverage
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+htmlcov/
+.hypothesis/
+
+# Sensitive and Local Configuration
 *.env
 !.env.example
+secrets.yml
+*.pem
+*.key
+*.crt
+
+# Dependency Directories
+node_modules/
+jspm_packages/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Backup files
+*.bak
+*.gho
+*.ori
+*.orig
+*.tmp
+
+# Project-specific exclusions
+# Add any project-specific files or directories you want to ignore
+migrations/
