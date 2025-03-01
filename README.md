@@ -10,7 +10,7 @@ Born from a desire to move beyond restrictive financial tracking platforms, this
 - 🏠 Self-hosted privacy
 - 🤝 Collaborative expense management
 
-## 🚀 Key Features
+##  Key Features
 
 ### Expense Tracking
 - 📊 Detailed transaction logging
@@ -76,7 +76,7 @@ This project explores AI-assisted open-source development:
 - Leveraging AI tools for rapid prototyping
 - Combining technological innovation with human creativity
 - Iterative development with large language models
-  - Local LLMs
+  - Local LLMs(qwen2.5, DeepSeek-V3)
   - Claude AI
   - Human domain expertise
 
@@ -87,7 +87,7 @@ This project explores AI-assisted open-source development:
 - Transparent data management
 - User-controlled infrastructure
 
-## 🤔 Who Is This For?
+##  Who Is This For?
 
 - Roommates tracking shared expenses
 - Couples managing joint finances
@@ -95,7 +95,7 @@ This project explores AI-assisted open-source development:
 - Small teams tracking group expenses
 - Anyone seeking a privacy-focused financial tool
 
-## 🤓 Contributing
+## Contributing
 
 Contributions are welcome! Please check out our contributing guidelines.
 
@@ -105,11 +105,11 @@ Contributions are welcome! Please check out our contributing guidelines.
 4. Push to the branch
 5. Create a Pull Request
 
-## 📄 License
+##  License
 
 MIT License
 
-## 🙌 Acknowledgements
+##  Acknowledgements
 
 - Inspired by the need for transparent, flexible expense tracking
 - Special thanks to my wife, who endured countless late nights of coding, provided unwavering support, and maintained patience during endless debugging sessions. This project wouldn't exist without her understanding and encouragement.

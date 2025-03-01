@@ -13,6 +13,8 @@
 - 10GB disk space
 - Internet connection for initial setup
 
+### NOTE : The first user to signup will become the admin 
+
 ## Installation Methods
 
 ### 1. Docker Deployment (Recommended)
