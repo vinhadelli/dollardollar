@@ -1239,7 +1239,6 @@ def transactions():
 # Add this to your Flask app.py to implement transaction export functionality
 
 
-
 @app.route('/export_transactions', methods=['POST'])
 @login_required_dev
 def export_transactions():
@@ -1254,12 +1253,17 @@ def export_transactions():
         # Extract filter parameters
         start_date = filters.get('startDate')
         end_date = filters.get('endDate')
-        paid_by = filters.get('paidBy')
-        card_used = filters.get('cardUsed')
-        group_id = filters.get('groupId')
+        paid_by = filters.get('paidBy', 'all')
+        card_used = filters.get('cardUsed', 'all')
+        group_id = filters.get('groupId', 'all')
         min_amount = filters.get('minAmount')
         max_amount = filters.get('maxAmount')
-        description = filters.get('description')
+        description = filters.get('description', '')
+        
+        # Import required libraries
+        import csv
+        import io
+        from flask import send_file
         
         # Build query with SQLAlchemy
         query = Expense.query.filter(
@@ -1300,7 +1304,7 @@ def export_transactions():
         # Write header row
         writer.writerow([
             'Date', 'Description', 'Amount', 'Card Used', 'Paid By', 
-            'Split Method', 'Group', 'Your Share'
+            'Split Method', 'Group', 'Your Role', 'Your Share', 'Total Expense'
         ])
         
         # Write data rows
@@ -1311,13 +1315,15 @@ def export_transactions():
             # Get group name if applicable
             group_name = expense.group.name if expense.group else "No Group"
             
-            # Calculate current user's share
+            # Calculate user's role and share
+            user_role = ''
             user_share = 0
+            
             if expense.paid_by == user_id:
-                # If current user paid, get their portion
+                user_role = 'Payer'
                 user_share = splits['payer']['amount']
             else:
-                # If someone else paid, find current user in splits
+                user_role = 'Participant'
                 for split in splits['splits']:
                     if split['email'] == user_id:
                         user_share = split['amount']
@@ -1330,12 +1336,14 @@ def export_transactions():
             writer.writerow([
                 expense.date.strftime('%Y-%m-%d'),
                 expense.description,
-                f"${expense.amount:.2f}",
+                f"{expense.amount:.2f}",
                 expense.card_used,
                 payer_name,
                 expense.split_method,
                 group_name,
-                f"${user_share:.2f}"
+                user_role,
+                f"{user_share:.2f}",
+                f"{expense.amount:.2f}"
             ])
         
         # Rewind the string buffer
@@ -1350,8 +1358,8 @@ def export_transactions():
             io.BytesIO(output.getvalue().encode('utf-8')),
             mimetype='text/csv',
             as_attachment=True,
-            attachment_filename=filename
-        )
+            download_name=filename
+    )
         
     except Exception as e:
         app.logger.error(f"Error exporting transactions: {str(e)}")

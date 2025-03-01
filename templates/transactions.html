@@ -663,33 +663,63 @@ function clearFilters() {
 
 // Export transactions
 function exportTransactions() {
-    // Create a more advanced export placeholder function
-    
-    // Get table data
-    const table = document.getElementById('expensesTable');
-    if (!table) {
-        alert('No transaction data found to export.');
-        return;
-    }
-    
-    // Get visible rows only (respecting filters)
-    const visibleRows = Array.from(table.querySelectorAll('tbody tr'))
-        .filter(row => row.style.display !== 'none' && row.cells.length > 1);
-    
-    if (visibleRows.length === 0) {
-        alert('No visible transactions to export. Please adjust your filters.');
-        return;
-    }
-    
-    // In a real implementation, we would:
-    // 1. Format the data for export
-    // 2. Create a CSV or Excel file
-    // 3. Trigger download
-    
-    // For now, show a more helpful message
-    alert(`Ready to export ${visibleRows.length} transactions. In a production environment, this would trigger a download of your transaction data in CSV or Excel format.`);
-}
+    // Collect filter data from form
+    const filters = {
+        startDate: document.getElementById('startDate')?.value,
+        endDate: document.getElementById('endDate')?.value,
+        paidBy: document.getElementById('paidByFilter')?.value,
+        cardUsed: document.getElementById('cardFilter')?.value,
+        groupId: document.getElementById('groupFilter')?.value,
+        minAmount: document.getElementById('minAmount')?.value,
+        maxAmount: document.getElementById('maxAmount')?.value,
+        description: document.getElementById('descriptionSearch')?.value
+    };
 
+    // Show loading state
+    const exportBtn = document.getElementById('exportData');
+    if (exportBtn) {
+        exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Exporting...';
+        exportBtn.disabled = true;
+    }
+
+    // Perform AJAX request to export
+    fetch('{{ url_for("export_transactions") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(filters)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Export failed');
+        }
+        return response.blob();
+    })
+    .then(blob => {
+        // Create a download link
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+        a.href = url;
+        a.download = `dollar_bill_transactions_${timestamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    })
+    .catch(error => {
+        console.error('Export error:', error);
+        alert('Failed to export transactions. Please try again.');
+    })
+    .finally(() => {
+        // Reset button state
+        if (exportBtn) {
+            exportBtn.innerHTML = '<i class="fas fa-file-export me-2"></i>Export';
+            exportBtn.disabled = false;
+        }
+    });
+    }
 // Function to update split values UI
 function updateSplitValues() {
     const splitMethodEl = document.getElementById('split_method');
