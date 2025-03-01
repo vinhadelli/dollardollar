@@ -322,7 +322,10 @@
         document.getElementById('endDate').value = today;
         
         // Toggle expense form visibility
-        document.getElementById('toggleExpenseForm').addEventListener('click', toggleExpenseForm);
+        const toggleButton = document.getElementById('toggleExpenseForm');
+        if (toggleButton) {
+            toggleButton.addEventListener('click', toggleExpenseForm);
+        }
         
         // Filter handlers
         document.getElementById('applyFilters').addEventListener('click', applyFilters);
@@ -569,18 +572,18 @@
     }
     
     function toggleExpenseForm() {
-        const form = document.getElementById('expenseFormContainer');
-        const button = document.getElementById('toggleExpenseForm');
-        
-        if (form.style.display === 'none') {
-            form.style.display = 'block';
-            button.innerHTML = '<i class="fas fa-times me-2"></i>Cancel';
-            button.classList.replace('btn-primary', 'btn-secondary');
-        } else {
-            form.style.display = 'none';
-            button.innerHTML = '<i class="fas fa-plus me-2"></i>Add New Expense';
-            button.classList.replace('btn-secondary', 'btn-primary');
-        }
+    const form = document.getElementById('expenseFormContainer');
+    const button = document.getElementById('toggleExpenseForm');
+    
+    if (form.style.display === 'none') {
+        form.style.display = 'block';
+        button.innerHTML = '<i class="fas fa-times me-2"></i>Cancel';
+        button.classList.replace('btn-primary', 'btn-secondary');
+    } else {
+        form.style.display = 'none';
+        button.innerHTML = '<i class="fas fa-plus me-2"></i>Add New Expense';
+        button.classList.replace('btn-secondary', 'btn-primary');
+    }
     }
     
     // Function to update split values UI

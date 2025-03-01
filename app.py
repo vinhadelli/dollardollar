@@ -727,9 +727,30 @@ def dashboard():
                     total_expenses += split['amount']
                     break
         
-    # Calculate current month total
-    current_month_key = now.strftime('%Y-%m')
-    current_month_total = monthly_totals.get(current_month_key, {}).get('total', 0)
+    # Calculate current month's total for the current user
+    current_month_total = 0
+    current_month = now.strftime('%Y-%m')
+
+    for expense in expenses:
+        # Skip if not in current month
+        if expense.date.strftime('%Y-%m') != current_month:
+            continue
+            
+        splits = expense.calculate_splits()
+        
+        if expense.paid_by == current_user.id:
+            # If user paid, add their own portion
+            current_month_total += splits['payer']['amount']
+            
+            # Also add what others owe them (the entire expense)
+            for split in splits['splits']:
+                current_month_total += split['amount']
+        else:
+            # If someone else paid, add only this user's portion
+            for split in splits['splits']:
+                if split['email'] == current_user.id:
+                    current_month_total += split['amount']
+                    break
 
 
     # Get unique cards (only where current user paid)
@@ -1096,12 +1117,14 @@ def add_settlement():
 @login_required_dev
 def transactions():
     """Display all transactions with filtering capabilities"""
+    # Fetch all expenses where the user is either the creator or a split participant
     expenses = Expense.query.filter(
         or_(
             Expense.user_id == current_user.id,
             Expense.split_with.like(f'%{current_user.id}%')
         )
     ).order_by(Expense.date.desc()).all()
+    
     users = User.query.all()
     
     # Pre-calculate all expense splits to avoid repeated calculations
@@ -1109,11 +1132,59 @@ def transactions():
     for expense in expenses:
         expense_splits[expense.id] = expense.calculate_splits()
     
+    # Calculate total expenses for current user (similar to dashboard calculation)
+    now = datetime.now()
+    current_year = now.year
+    total_expenses = 0
+
+    for expense in expenses:
+        # Skip if not in current year
+        if expense.date.year != current_year:
+            continue
+            
+        splits = expense_splits[expense.id]
+        
+        if expense.paid_by == current_user.id:
+            # If user paid, add their own portion
+            total_expenses += splits['payer']['amount']
+            
+            # Also add what others owe them (the entire expense)
+            for split in splits['splits']:
+                total_expenses += split['amount']
+        else:
+            # If someone else paid, add only this user's portion
+            for split in splits['splits']:
+                if split['email'] == current_user.id:
+                    total_expenses += split['amount']
+                    break
+    
+    # Calculate current month total (similar to dashboard calculation)
+    current_month_total = 0
+    current_month = now.strftime('%Y-%m')
+
+    for expense in expenses:
+        # Skip if not in current month
+        if expense.date.strftime('%Y-%m') != current_month:
+            continue
+            
+        splits = expense_splits[expense.id]
+        
+        if expense.paid_by == current_user.id:
+            # If user paid, add their own portion
+            current_month_total += splits['payer']['amount']
+            
+            # Also add what others owe them (the entire expense)
+            for split in splits['splits']:
+                current_month_total += split['amount']
+        else:
+            # If someone else paid, add only this user's portion
+            for split in splits['splits']:
+                if split['email'] == current_user.id:
+                    current_month_total += split['amount']
+                    break
+    
     # Calculate monthly totals for statistics
     monthly_totals = {}
-    total_expenses = 0
-    current_month_total = 0
-    current_month_key = datetime.now().strftime('%Y-%m')
     unique_cards = set()
     
     for expense in expenses:
@@ -1127,20 +1198,16 @@ def transactions():
             
         # Add to monthly totals
         monthly_totals[month_key]['total'] += expense.amount
-        total_expenses += expense.amount
         
         # Add card to total
         if expense.card_used not in monthly_totals[month_key]['by_card']:
             monthly_totals[month_key]['by_card'][expense.card_used] = 0
         monthly_totals[month_key]['by_card'][expense.card_used] += expense.amount
         
-        # Track unique cards
-        unique_cards.add(expense.card_used)
+        # Track unique cards where current user paid
+        if expense.paid_by == current_user.id:
+            unique_cards.add(expense.card_used)
         
-        # Track current month total
-        if month_key == current_month_key:
-            current_month_total += expense.amount
-            
         # Add contributors' data
         splits = expense_splits[expense.id]
         
@@ -1166,7 +1233,6 @@ def transactions():
                         current_month_total=current_month_total,
                         unique_cards=unique_cards,
                         users=users)
-
 
 
 #--------------------
