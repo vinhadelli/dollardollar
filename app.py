@@ -14,8 +14,15 @@ import secrets
 from datetime import timedelta
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
+import ssl
 
 
+os.environ['OPENSSL_LEGACY_PROVIDER'] = '1'
+
+try:
+    ssl._create_default_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
 #--------------------
 # SETUP AND CONFIGURATION
 #--------------------
@@ -97,10 +104,14 @@ class User(UserMixin, db.Model):
         foreign_keys=[Group.created_by])
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = generate_password_hash(password,method='pbkdf2:sha256')
 
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        try:
+            return check_password_hash(self.password_hash, password)
+        except ValueError:
+            # Handle potential legacy or incompatible hash formats
+            return False
         
     def generate_reset_token(self):
         """Generate a password reset token that expires in 1 hour"""
