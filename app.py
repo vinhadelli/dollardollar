@@ -1,6 +1,8 @@
 import os
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, send_file, request, jsonify, request, redirect, url_for, flash, session
+import csv
+import io
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -1234,7 +1236,126 @@ def transactions():
                         unique_cards=unique_cards,
                         users=users)
 
+# Add this to your Flask app.py to implement transaction export functionality
 
+
+
+@app.route('/export_transactions', methods=['POST'])
+@login_required_dev
+def export_transactions():
+    """Export transactions as CSV file based on filter criteria"""
+    try:
+        # Get filter criteria from request
+        filters = request.json if request.is_json else {}
+        
+        # Default to all transactions for the current user if no filters provided
+        user_id = current_user.id
+        
+        # Extract filter parameters
+        start_date = filters.get('startDate')
+        end_date = filters.get('endDate')
+        paid_by = filters.get('paidBy')
+        card_used = filters.get('cardUsed')
+        group_id = filters.get('groupId')
+        min_amount = filters.get('minAmount')
+        max_amount = filters.get('maxAmount')
+        description = filters.get('description')
+        
+        # Build query with SQLAlchemy
+        query = Expense.query.filter(
+            or_(
+                Expense.user_id == user_id,
+                Expense.split_with.like(f'%{user_id}%')
+            )
+        )
+        
+        # Apply filters
+        if start_date:
+            query = query.filter(Expense.date >= datetime.strptime(start_date, '%Y-%m-%d'))
+        if end_date:
+            query = query.filter(Expense.date <= datetime.strptime(end_date, '%Y-%m-%d'))
+        if paid_by and paid_by != 'all':
+            query = query.filter(Expense.paid_by == paid_by)
+        if card_used and card_used != 'all':
+            query = query.filter(Expense.card_used == card_used)
+        if group_id:
+            if group_id == 'none':
+                query = query.filter(Expense.group_id == None)
+            elif group_id != 'all':
+                query = query.filter(Expense.group_id == group_id)
+        if min_amount:
+            query = query.filter(Expense.amount >= float(min_amount))
+        if max_amount:
+            query = query.filter(Expense.amount <= float(max_amount))
+        if description:
+            query = query.filter(Expense.description.ilike(f'%{description}%'))
+        
+        # Order by date, newest first
+        expenses = query.order_by(Expense.date.desc()).all()
+        
+        # Create CSV data in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header row
+        writer.writerow([
+            'Date', 'Description', 'Amount', 'Card Used', 'Paid By', 
+            'Split Method', 'Group', 'Your Share'
+        ])
+        
+        # Write data rows
+        for expense in expenses:
+            # Calculate split info
+            splits = expense.calculate_splits()
+            
+            # Get group name if applicable
+            group_name = expense.group.name if expense.group else "No Group"
+            
+            # Calculate current user's share
+            user_share = 0
+            if expense.paid_by == user_id:
+                # If current user paid, get their portion
+                user_share = splits['payer']['amount']
+            else:
+                # If someone else paid, find current user in splits
+                for split in splits['splits']:
+                    if split['email'] == user_id:
+                        user_share = split['amount']
+                        break
+            
+            # Find the name of who paid
+            payer = User.query.filter_by(id=expense.paid_by).first()
+            payer_name = payer.name if payer else expense.paid_by
+            
+            writer.writerow([
+                expense.date.strftime('%Y-%m-%d'),
+                expense.description,
+                f"${expense.amount:.2f}",
+                expense.card_used,
+                payer_name,
+                expense.split_method,
+                group_name,
+                f"${user_share:.2f}"
+            ])
+        
+        # Rewind the string buffer
+        output.seek(0)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"dollar_bill_transactions_{timestamp}.csv"
+        
+        # Send file for download
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            attachment_filename=filename
+        )
+        
+    except Exception as e:
+        app.logger.error(f"Error exporting transactions: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 #--------------------
 # # Password reset routes
 #--------------------

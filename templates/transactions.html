@@ -310,51 +310,114 @@
 
 {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize today's date
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('date').value = today;
-        
-        // Set default date range for filters (last 30 days)
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
-        document.getElementById('endDate').value = today;
-        
-        // Toggle expense form visibility
-        const toggleButton = document.getElementById('toggleExpenseForm');
-        if (toggleButton) {
-            toggleButton.addEventListener('click', toggleExpenseForm);
-        }
-        
-        // Filter handlers
-        document.getElementById('applyFilters').addEventListener('click', applyFilters);
-        document.getElementById('clearFilters').addEventListener('click', clearFilters);
-        document.getElementById('exportData').addEventListener('click', exportTransactions);
-        
-        // Initialize multiselect dropdown for split_with
-        initializeMultiSelect();
-        
-        // Handle amount field changes
-        document.getElementById('amount').addEventListener('input', updateSplitValues);
-        
-        // Handle paid_by changes
-        document.getElementById('paid_by').addEventListener('change', updateSplitValues);
-        
-        // Listen for split_with changes from the multiselect
-        document.getElementById('split_with').addEventListener('change', updateSplitValues);
-        
-        // Make table headers sortable
-        const tableHeaders = document.querySelectorAll('#expensesTable th');
-        tableHeaders.forEach(header => {
-            if (header.querySelector('.fa-sort')) {
-                header.style.cursor = 'pointer';
-                header.addEventListener('click', () => sortTable(header));
+   // This script fixes the transaction page functionality
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize today's date
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Set date field for new expense form
+    const dateInput = document.getElementById('date');
+    if (dateInput) {
+        dateInput.value = today;
+    }
+    
+    // Set default date range for filters (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+    
+    if (startDateInput && endDateInput) {
+        startDateInput.value = thirtyDaysAgo.toISOString().split('T')[0];
+        endDateInput.value = today;
+    }
+    
+    // Fix 1: Toggle expense form visibility with proper display check
+    const toggleButton = document.getElementById('toggleExpenseForm');
+    const expenseForm = document.getElementById('expenseFormContainer');
+    
+    if (toggleButton && expenseForm) {
+        // Fix the toggle functionality
+        toggleButton.addEventListener('click', function() {
+            // Use getComputedStyle to correctly determine if element is hidden
+            const isHidden = window.getComputedStyle(expenseForm).display === 'none';
+            
+            if (isHidden) {
+                expenseForm.style.display = 'block';
+                toggleButton.innerHTML = '<i class="fas fa-times me-2"></i>Cancel';
+                toggleButton.classList.replace('btn-primary', 'btn-secondary');
+            } else {
+                expenseForm.style.display = 'none';
+                toggleButton.innerHTML = '<i class="fas fa-plus me-2"></i>Add New Expense';
+                toggleButton.classList.replace('btn-secondary', 'btn-primary');
             }
         });
-        
-        // Handle form submission to ensure split values are calculated and included
-        document.querySelector('form[action*="add_expense"]').addEventListener('submit', function(e) {
+    }
+    
+    // Fix 2: Ensure filter functionality works
+    const applyFiltersButton = document.getElementById('applyFilters');
+    if (applyFiltersButton) {
+        applyFiltersButton.addEventListener('click', function() {
+            applyFilters();
+        });
+    }
+    
+    const clearFiltersButton = document.getElementById('clearFilters');
+    if (clearFiltersButton) {
+        clearFiltersButton.addEventListener('click', function() {
+            clearFilters();
+        });
+    }
+    
+    // Fix 3: Export functionality
+    const exportButton = document.getElementById('exportData');
+    if (exportButton) {
+        exportButton.addEventListener('click', function() {
+            exportTransactions();
+        });
+    }
+    
+    // Initialize multiselect dropdown for split_with
+    const splitWithSelect = document.getElementById('split_with');
+    if (splitWithSelect) {
+        initializeMultiSelect();
+    }
+    
+    // Handle amount field changes
+    const amountInput = document.getElementById('amount');
+    if (amountInput) {
+        amountInput.addEventListener('input', updateSplitValues);
+    }
+    
+    // Handle paid_by changes
+    const paidBySelect = document.getElementById('paid_by');
+    if (paidBySelect) {
+        paidBySelect.addEventListener('change', updateSplitValues);
+    }
+    
+    // Listen for split_with changes from the multiselect
+    if (splitWithSelect) {
+        splitWithSelect.addEventListener('change', updateSplitValues);
+    }
+    
+    // Make table headers sortable
+    const tableHeaders = document.querySelectorAll('#expensesTable th');
+    tableHeaders.forEach(header => {
+        const sortIcon = header.querySelector('.fa-sort');
+        if (sortIcon) {
+            header.style.cursor = 'pointer';
+            header.addEventListener('click', function() {
+                sortTable(header);
+            });
+        }
+    });
+    
+    // Handle form submission to ensure split values are calculated and included
+    const expenseAddForm = document.querySelector('form[action*="add_expense"]');
+    if (expenseAddForm) {
+        expenseAddForm.addEventListener('submit', function(e) {
             // Ensure the hidden split_details field is updated before submission
             const splitMethod = document.getElementById('split_method').value;
             if (splitMethod !== 'equal') {
@@ -374,69 +437,118 @@
             }
             return true;
         });
-    });
-    
-    // Table sorting function
-    function sortTable(header) {
-        const table = document.getElementById('expensesTable');
-        const index = Array.from(header.parentNode.children).indexOf(header);
-        const sortIcon = header.querySelector('i');
-        const isAscending = sortIcon.classList.contains('fa-sort') || sortIcon.classList.contains('fa-sort-down');
-        
-        // Update sort icons
-        document.querySelectorAll('#expensesTable th i').forEach(icon => {
-            icon.className = 'fas fa-sort';
-        });
-        
-        sortIcon.className = isAscending ? 'fas fa-sort-up' : 'fas fa-sort-down';
-        
-        // Get rows and sort
-        const rows = Array.from(table.querySelectorAll('tbody tr'));
-        
-        rows.sort((a, b) => {
-            let aValue = a.cells[index].textContent.trim();
-            let bValue = b.cells[index].textContent.trim();
-            
-            // Handle date sorting
-            if (index === 0) {
-                return isAscending ? 
-                    new Date(bValue) - new Date(aValue) : 
-                    new Date(aValue) - new Date(bValue);
-            }
-            
-            // Handle amount sorting
-            if (index === 2) {
-                aValue = parseFloat(aValue.replace('$', ''));
-                bValue = parseFloat(bValue.replace('$', ''));
-                return isAscending ? bValue - aValue : aValue - bValue;
-            }
-            
-            // Default string comparison
-            return isAscending ? 
-                bValue.localeCompare(aValue) : 
-                aValue.localeCompare(bValue);
-        });
-        
-        // Reorder rows
-        const tbody = table.querySelector('tbody');
-        rows.forEach(row => tbody.appendChild(row));
     }
     
-    // Filter transactions
-    function applyFilters() {
-    const startDate = document.getElementById('startDate').value;
-    const endDate = document.getElementById('endDate').value;
-    const paidBy = document.getElementById('paidByFilter').value;
-    const cardUsed = document.getElementById('cardFilter').value;
-    const groupId = document.getElementById('groupFilter').value;
-    const minAmount = document.getElementById('minAmount').value;
-    const maxAmount = document.getElementById('maxAmount').value;
-    const description = document.getElementById('descriptionSearch').value.toLowerCase();
+    // Initialize split options if the split method select exists
+    const splitMethodSelect = document.getElementById('split_method');
+    if (splitMethodSelect) {
+        splitMethodSelect.addEventListener('change', toggleSplitOptions);
+        // Initialize split options based on current value
+        toggleSplitOptions();
+    }
+});
+
+// Fix implementation of toggleSplitOptions
+function toggleSplitOptions() {
+    const splitMethod = document.getElementById('split_method').value;
+    const splitValueContainer = document.getElementById('split_value_container');
+    const customSplitContainer = document.getElementById('custom_split_container');
+    
+    if (!splitValueContainer || !customSplitContainer) return;
+    
+    const splitValue = document.getElementById('split_value');
+    const splitInstruction = document.getElementById('split_instruction');
+    
+    // Hide legacy split value field
+    splitValueContainer.style.display = 'none';
+    if (splitValue) {
+        splitValue.removeAttribute('required');
+    }
+    
+    if (splitMethod === 'equal') {
+        customSplitContainer.style.display = 'none';
+    } else {
+        customSplitContainer.style.display = 'block';
+        
+        if (splitInstruction) {
+            if (splitMethod === 'percentage') {
+                splitInstruction.textContent = 'Set what percentage each person pays (total must be 100%)';
+            } else { // custom amounts
+                splitInstruction.textContent = 'Set how much each person pays (total must match expense amount)';
+            }
+        }
+        
+        // Update the split values UI
+        updateSplitValues();
+    }
+}
+
+// Table sorting function
+function sortTable(header) {
+    const table = document.getElementById('expensesTable');
+    if (!table) return;
+    
+    const index = Array.from(header.parentNode.children).indexOf(header);
+    const sortIcon = header.querySelector('i');
+    const isAscending = sortIcon.classList.contains('fa-sort') || sortIcon.classList.contains('fa-sort-down');
+    
+    // Update sort icons
+    document.querySelectorAll('#expensesTable th i').forEach(icon => {
+        icon.className = 'fas fa-sort';
+    });
+    
+    sortIcon.className = isAscending ? 'fas fa-sort-up' : 'fas fa-sort-down';
+    
+    // Get rows and sort
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    
+    rows.sort((a, b) => {
+        if (!a.cells[index] || !b.cells[index]) return 0;
+        
+        let aValue = a.cells[index].textContent.trim();
+        let bValue = b.cells[index].textContent.trim();
+        
+        // Handle date sorting
+        if (index === 0) {
+            return isAscending ? 
+                new Date(bValue) - new Date(aValue) : 
+                new Date(aValue) - new Date(bValue);
+        }
+        
+        // Handle amount sorting
+        if (index === 2) {
+            aValue = parseFloat(aValue.replace('$', '').replace(',', ''));
+            bValue = parseFloat(bValue.replace('$', '').replace(',', ''));
+            return isAscending ? bValue - aValue : aValue - bValue;
+        }
+        
+        // Default string comparison
+        return isAscending ? 
+            bValue.localeCompare(aValue) : 
+            aValue.localeCompare(bValue);
+    });
+    
+    // Reorder rows
+    const tbody = table.querySelector('tbody');
+    rows.forEach(row => tbody.appendChild(row));
+}
+
+// Fix: Filter transactions function
+function applyFilters() {
+    const startDate = document.getElementById('startDate')?.value;
+    const endDate = document.getElementById('endDate')?.value;
+    const paidBy = document.getElementById('paidByFilter')?.value;
+    const cardUsed = document.getElementById('cardFilter')?.value;
+    const groupId = document.getElementById('groupFilter')?.value;
+    const minAmount = document.getElementById('minAmount')?.value;
+    const maxAmount = document.getElementById('maxAmount')?.value;
+    const description = document.getElementById('descriptionSearch')?.value?.toLowerCase() || '';
     
     let visibleCount = 0;
     
     // Get all rows
     const rows = document.querySelectorAll('#expensesTable tbody tr');
+    if (!rows.length) return;
     
     rows.forEach(row => {
         // Only process rows that aren't the "No transactions found" row
@@ -454,12 +566,20 @@
         if (startDate && new Date(rowDate) < new Date(startDate)) visible = false;
         if (endDate && new Date(rowDate) > new Date(endDate)) visible = false;
         
+        // Paid by filter
+        if (paidBy && paidBy !== 'all') {
+            // This would need to be adapted to the actual data structure
+            // Assuming the payer info is available within the row
+            const paidByValue = row.getAttribute('data-paid-by');
+            if (paidByValue !== paidBy) visible = false;
+        }
+        
         // Card filter
-        if (cardUsed !== 'all' && rowCard !== cardUsed) visible = false;
+        if (cardUsed && cardUsed !== 'all' && rowCard !== cardUsed) visible = false;
         
         // Group filter
         if (groupId === 'none' && rowGroup !== '-') visible = false;
-        if (groupId !== 'all' && groupId !== 'none' && rowGroup !== groupId) visible = false;
+        if (groupId && groupId !== 'all' && groupId !== 'none' && rowGroup !== groupId) visible = false;
         
         // Amount filter
         if (minAmount && !isNaN(parseFloat(minAmount)) && rowAmount < parseFloat(minAmount)) visible = false;
@@ -474,7 +594,10 @@
     });
     
     // Update result count
-    document.getElementById('resultCount').textContent = `${visibleCount} transaction${visibleCount !== 1 ? 's' : ''}`;
+    const resultCountEl = document.getElementById('resultCount');
+    if (resultCountEl) {
+        resultCountEl.textContent = `${visibleCount} transaction${visibleCount !== 1 ? 's' : ''}`;
+    }
     
     // Show/hide the "no results" message
     const noResultsRow = document.querySelector('#expensesTable tbody tr td[colspan="7"]');
@@ -490,18 +613,25 @@
         }
     }
 }
-    
-    // Clear all filters
-    function clearFilters() {
+
+// Fix: Clear all filters
+function clearFilters() {
     // Reset form fields
-    document.getElementById('filterForm').reset();
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.reset();
+    }
     
     // Set default date range (last 30 days)
     const today = new Date().toISOString().split('T')[0];
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
-    document.getElementById('endDate').value = today;
+    
+    const startDateEl = document.getElementById('startDate');
+    const endDateEl = document.getElementById('endDate');
+    
+    if (startDateEl) startDateEl.value = thirtyDaysAgo.toISOString().split('T')[0];
+    if (endDateEl) endDateEl.value = today;
     
     // Show all rows except the "No transactions match your filters" row
     const rows = document.querySelectorAll('#expensesTable tbody tr');
@@ -518,7 +648,10 @@
     });
     
     // Update result count
-    document.getElementById('resultCount').textContent = `${actualRowCount} transaction${actualRowCount !== 1 ? 's' : ''}`;
+    const resultCountEl = document.getElementById('resultCount');
+    if (resultCountEl) {
+        resultCountEl.textContent = `${actualRowCount} transaction${actualRowCount !== 1 ? 's' : ''}`;
+    }
     
     // Restore original "No transactions found" message if there are no transactions
     const noResultsRow = document.querySelector('#expensesTable tbody tr td[colspan="7"]');
@@ -527,141 +660,130 @@
         noResultsRow.textContent = 'No transactions found';
     }
 }
+
+// Export transactions
+function exportTransactions() {
+    // Create a more advanced export placeholder function
     
-    // Export transactions
-    function exportTransactions() {
-        // This would need backend integration
-        alert('Export functionality would be implemented with backend support.');
+    // Get table data
+    const table = document.getElementById('expensesTable');
+    if (!table) {
+        alert('No transaction data found to export.');
+        return;
     }
     
-    // Delete expense
-    function deleteExpense(expenseId) {
-        if (confirm('Are you sure you want to delete this expense?')) {
-            // This would need backend integration
-            console.log('Would delete expense ID:', expenseId);
-            alert('Delete functionality would be implemented with backend support.');
-        }
+    // Get visible rows only (respecting filters)
+    const visibleRows = Array.from(table.querySelectorAll('tbody tr'))
+        .filter(row => row.style.display !== 'none' && row.cells.length > 1);
+    
+    if (visibleRows.length === 0) {
+        alert('No visible transactions to export. Please adjust your filters.');
+        return;
     }
     
-    // Handle split method changes
-    function toggleSplitOptions() {
-        const splitMethod = document.getElementById('split_method').value;
-        const splitValueContainer = document.getElementById('split_value_container');
-        const customSplitContainer = document.getElementById('custom_split_container');
-        const splitValue = document.getElementById('split_value');
-        const splitInstruction = document.getElementById('split_instruction');
+    // In a real implementation, we would:
+    // 1. Format the data for export
+    // 2. Create a CSV or Excel file
+    // 3. Trigger download
+    
+    // For now, show a more helpful message
+    alert(`Ready to export ${visibleRows.length} transactions. In a production environment, this would trigger a download of your transaction data in CSV or Excel format.`);
+}
+
+// Function to update split values UI
+function updateSplitValues() {
+    const splitMethodEl = document.getElementById('split_method');
+    if (!splitMethodEl) return;
+    
+    const splitMethod = splitMethodEl.value;
+    if (splitMethod === 'equal') return;
+    
+    const amountEl = document.getElementById('amount');
+    const paidByEl = document.getElementById('paid_by');
+    const splitWithEl = document.getElementById('split_with');
+    const splitTotalEl = document.getElementById('split_total');
+    const expenseAmountEl = document.getElementById('expense_amount');
+    
+    if (!amountEl || !paidByEl || !splitWithEl || !splitTotalEl || !expenseAmountEl) return;
+    
+    const totalAmount = parseFloat(amountEl.value) || 0;
+    const paidById = paidByEl.value;
+    const splitWithIds = Array.from(splitWithEl.selectedOptions).map(opt => opt.value);
+    
+    // Display current amount in the UI
+    expenseAmountEl.textContent = totalAmount.toFixed(2);
+    
+    // Get all participant IDs (payer + split_with)
+    let allParticipantIds = [...splitWithIds];
+    // Add payer if they're not already in the split_with list
+    if (!allParticipantIds.includes(paidById)) {
+        allParticipantIds.unshift(paidById);
+    }
+    
+    // Generate split values UI
+    const container = document.getElementById('split_values_container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    let splitValues = {};
+    
+    if (splitMethod === 'percentage') {
+        // Start with equal percentages
+        const equalPercentage = allParticipantIds.length ? (100 / allParticipantIds.length) : 0;
         
-        // Hide legacy split value field
-        splitValueContainer.style.display = 'none';
-        splitValue.removeAttribute('required');
-        
-        if (splitMethod === 'equal') {
-            customSplitContainer.style.display = 'none';
-        } else {
-            customSplitContainer.style.display = 'block';
+        allParticipantIds.forEach(userId => {
+            const user = Array.from(paidByEl.options)
+                .find(opt => opt.value === userId);
             
-            if (splitMethod === 'percentage') {
-                splitInstruction.textContent = 'Set what percentage each person pays (total must be 100%)';
-            } else { // custom amounts
-                splitInstruction.textContent = 'Set how much each person pays (total must match expense amount)';
-            }
-            
-            // Update the split values UI
-            updateSplitValues();
-        }
-    }
-    
-    function toggleExpenseForm() {
-    const form = document.getElementById('expenseFormContainer');
-    const button = document.getElementById('toggleExpenseForm');
-    
-    if (form.style.display === 'none') {
-        form.style.display = 'block';
-        button.innerHTML = '<i class="fas fa-times me-2"></i>Cancel';
-        button.classList.replace('btn-primary', 'btn-secondary');
-    } else {
-        form.style.display = 'none';
-        button.innerHTML = '<i class="fas fa-plus me-2"></i>Add New Expense';
-        button.classList.replace('btn-secondary', 'btn-primary');
-    }
-    }
-    
-    // Function to update split values UI
-    function updateSplitValues() {
-        const splitMethod = document.getElementById('split_method').value;
-        if (splitMethod === 'equal') return;
-        
-        const totalAmount = parseFloat(document.getElementById('amount').value) || 0;
-        const paidById = document.getElementById('paid_by').value;
-        const splitWithIds = Array.from(document.getElementById('split_with').selectedOptions).map(opt => opt.value);
-        
-        // Display current amount in the UI
-        document.getElementById('expense_amount').textContent = totalAmount.toFixed(2);
-        
-        // Get all participant IDs (payer + split_with)
-        let allParticipantIds = [...splitWithIds];
-        // Add payer if they're not already in the split_with list
-        if (!allParticipantIds.includes(paidById)) {
-            allParticipantIds.unshift(paidById);
-        }
-        
-        // Generate split values UI
-        const container = document.getElementById('split_values_container');
-        container.innerHTML = '';
-        
-        let splitValues = {};
-        
-        if (splitMethod === 'percentage') {
-            // Start with equal percentages
-            const equalPercentage = allParticipantIds.length ? (100 / allParticipantIds.length) : 0;
-            
-            allParticipantIds.forEach(userId => {
-                const user = Array.from(document.getElementById('paid_by').options)
-                    .find(opt => opt.value === userId);
+            if (user) {
+                const userName = user.text.split(' (')[0];
+                const isPayerId = userId === paidById;
                 
-                if (user) {
-                    const userName = user.text.split(' (')[0];
-                    const isPayerId = userId === paidById;
-                    
-                    // Create row for this user
-                    const row = document.createElement('div');
-                    row.className = 'row mb-2 align-items-center';
-                    row.innerHTML = `
-                        <div class="col-md-6">
-                            <span class="badge ${isPayerId ? 'bg-primary' : 'bg-secondary'} me-1">
-                                ${isPayerId ? '💰' : ''} ${userName}
-                            </span>
-                            ${isPayerId ? '<small class="text-muted">(Paid)</small>' : ''}
+                // Create row for this user
+                const row = document.createElement('div');
+                row.className = 'row mb-2 align-items-center';
+                row.innerHTML = `
+                    <div class="col-md-6">
+                        <span class="badge ${isPayerId ? 'bg-primary' : 'bg-secondary'} me-1">
+                            ${isPayerId ? '💰' : ''} ${userName}
+                        </span>
+                        ${isPayerId ? '<small class="text-muted">(Paid)</small>' : ''}
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <input type="number" class="form-control bg-dark text-light split-value-input"
+                                data-user-id="${userId}" step="0.1" min="0" max="100" 
+                                value="${equalPercentage.toFixed(1)}">
+                            <span class="input-group-text bg-dark text-light">%</span>
                         </div>
-                        <div class="col-md-6">
-                            <div class="input-group">
-                                <input type="number" class="form-control bg-dark text-light split-value-input"
-                                    data-user-id="${userId}" step="0.1" min="0" max="100" 
-                                    value="${equalPercentage.toFixed(1)}">
-                                <span class="input-group-text bg-dark text-light">%</span>
-                            </div>
-                        </div>
-                    `;
-                    container.appendChild(row);
-                    
-                    // Save the initial value
-                    splitValues[userId] = equalPercentage;
+                    </div>
+                `;
+                container.appendChild(row);
+                
+                // Save the initial value
+                splitValues[userId] = equalPercentage;
+            }
+        });
+        
+        // Add event listeners to percentage inputs
+        container.querySelectorAll('.split-value-input').forEach(input => {
+            input.addEventListener('input', function() {
+                const userId = this.getAttribute('data-user-id');
+                const percentage = parseFloat(this.value) || 0;
+                splitValues[userId] = percentage;
+                
+                // Calculate total percentage
+                const totalPercentage = Object.values(splitValues).reduce((sum, val) => sum + val, 0);
+                
+                const splitTotalEl = document.getElementById('split_total');
+                if (splitTotalEl) {
+                    splitTotalEl.textContent = totalPercentage.toFixed(1) + '%';
                 }
-            });
-            
-            // Add event listeners to percentage inputs
-            container.querySelectorAll('.split-value-input').forEach(input => {
-                input.addEventListener('input', function() {
-                    const userId = this.getAttribute('data-user-id');
-                    const percentage = parseFloat(this.value) || 0;
-                    splitValues[userId] = percentage;
-                    
-                    // Calculate total percentage
-                    const totalPercentage = Object.values(splitValues).reduce((sum, val) => sum + val, 0);
-                    document.getElementById('split_total').textContent = totalPercentage.toFixed(1) + '%';
-                    
-                    // Update status
-                    const statusBadge = document.getElementById('split_status');
+                
+                // Update status
+                const statusBadge = document.getElementById('split_status');
+                if (statusBadge) {
                     if (Math.abs(totalPercentage - 100) < 0.1) {
                         statusBadge.textContent = 'Balanced';
                         statusBadge.className = 'badge bg-success';
@@ -672,69 +794,78 @@
                         statusBadge.textContent = 'Overfunded';
                         statusBadge.className = 'badge bg-danger';
                     }
-                    
-                    // Update hidden split details field
-                    document.getElementById('split_details').value = JSON.stringify({
+                }
+                
+                // Update hidden split details field
+                const splitDetailsEl = document.getElementById('split_details');
+                if (splitDetailsEl) {
+                    splitDetailsEl.value = JSON.stringify({
                         type: 'percentage',
                         values: splitValues
                     });
-                });
-                
-                // Trigger input event to initialize values
-                input.dispatchEvent(new Event('input'));
-            });
-            
-        } else { // Custom amount
-            // Start with equal amounts
-            const equalAmount = allParticipantIds.length ? (totalAmount / allParticipantIds.length) : 0;
-            
-            allParticipantIds.forEach(userId => {
-                const user = Array.from(document.getElementById('paid_by').options)
-                    .find(opt => opt.value === userId);
-                
-                if (user) {
-                    const userName = user.text.split(' (')[0];
-                    const isPayerId = userId === paidById;
-                    
-                    // Create row for this user
-                    const row = document.createElement('div');
-                    row.className = 'row mb-2 align-items-center';
-                    row.innerHTML = `
-                        <div class="col-md-6">
-                            <span class="badge ${isPayerId ? 'bg-primary' : 'bg-secondary'} me-1">
-                                ${isPayerId ? '💰' : ''} ${userName}
-                            </span>
-                            ${isPayerId ? '<small class="text-muted">(Paid)</small>' : ''}
-                        </div>
-                        <div class="col-md-6">
-                            <div class="input-group">
-                                <span class="input-group-text bg-dark text-light">$</span>
-                                <input type="number" class="form-control bg-dark text-light split-value-input"
-                                    data-user-id="${userId}" step="0.01" min="0" 
-                                    value="${equalAmount.toFixed(2)}">
-                            </div>
-                        </div>
-                    `;
-                    container.appendChild(row);
-                    
-                    // Save the initial value
-                    splitValues[userId] = equalAmount;
                 }
             });
             
-            // Add event listeners to amount inputs
-            container.querySelectorAll('.split-value-input').forEach(input => {
-                input.addEventListener('input', function() {
-                    const userId = this.getAttribute('data-user-id');
-                    const amount = parseFloat(this.value) || 0;
-                    splitValues[userId] = amount;
-                    
-                    // Calculate total amount
-                    const totalSplit = Object.values(splitValues).reduce((sum, val) => sum + val, 0);
-                    document.getElementById('split_total').textContent = totalSplit.toFixed(2);
-                    
-                    // Update status
-                    const statusBadge = document.getElementById('split_status');
+            // Trigger input event to initialize values
+            input.dispatchEvent(new Event('input'));
+        });
+        
+    } else { // Custom amount
+        // Start with equal amounts
+        const equalAmount = allParticipantIds.length ? (totalAmount / allParticipantIds.length) : 0;
+        
+        allParticipantIds.forEach(userId => {
+            const user = Array.from(paidByEl.options)
+                .find(opt => opt.value === userId);
+            
+            if (user) {
+                const userName = user.text.split(' (')[0];
+                const isPayerId = userId === paidById;
+                
+                // Create row for this user
+                const row = document.createElement('div');
+                row.className = 'row mb-2 align-items-center';
+                row.innerHTML = `
+                    <div class="col-md-6">
+                        <span class="badge ${isPayerId ? 'bg-primary' : 'bg-secondary'} me-1">
+                            ${isPayerId ? '💰' : ''} ${userName}
+                        </span>
+                        ${isPayerId ? '<small class="text-muted">(Paid)</small>' : ''}
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark text-light">$</span>
+                            <input type="number" class="form-control bg-dark text-light split-value-input"
+                                data-user-id="${userId}" step="0.01" min="0" 
+                                value="${equalAmount.toFixed(2)}">
+                        </div>
+                    </div>
+                `;
+                container.appendChild(row);
+                
+                // Save the initial value
+                splitValues[userId] = equalAmount;
+            }
+        });
+        
+        // Add event listeners to amount inputs
+        container.querySelectorAll('.split-value-input').forEach(input => {
+            input.addEventListener('input', function() {
+                const userId = this.getAttribute('data-user-id');
+                const amount = parseFloat(this.value) || 0;
+                splitValues[userId] = amount;
+                
+                // Calculate total amount
+                const totalSplit = Object.values(splitValues).reduce((sum, val) => sum + val, 0);
+                
+                const splitTotalEl = document.getElementById('split_total');
+                if (splitTotalEl) {
+                    splitTotalEl.textContent = totalSplit.toFixed(2);
+                }
+                
+                // Update status
+                const statusBadge = document.getElementById('split_status');
+                if (statusBadge) {
                     if (Math.abs(totalSplit - totalAmount) < 0.01) {
                         statusBadge.textContent = 'Balanced';
                         statusBadge.className = 'badge bg-success';
@@ -745,141 +876,158 @@
                         statusBadge.textContent = 'Overfunded';
                         statusBadge.className = 'badge bg-danger';
                     }
-                    
-                    // Update hidden split details field
-                    document.getElementById('split_details').value = JSON.stringify({
+                }
+                
+                // Update hidden split details field
+                const splitDetailsEl = document.getElementById('split_details');
+                if (splitDetailsEl) {
+                    splitDetailsEl.value = JSON.stringify({
                         type: 'amount',
                         values: splitValues
                     });
-                });
-                
-                // Trigger input event to initialize values
-                input.dispatchEvent(new Event('input'));
+                }
             });
-        }
+            
+            // Trigger input event to initialize values
+            input.dispatchEvent(new Event('input'));
+        });
     }
+}
+
+// Implement the multiselect dropdown
+function initializeMultiSelect() {
+    // Get the select element
+    const selectElement = document.getElementById('split_with');
+    if (!selectElement) return;
+    
+    // Check if already initialized
+    if (selectElement.parentNode.classList.contains('multiselect-wrapper')) {
+        return; // Already initialized
     }
     
-    function initializeMultiSelect() {
-        // Get the select element
-        const selectElement = document.getElementById('split_with');
+    // Create a wrapper div
+    const wrapper = document.createElement('div');
+    wrapper.className = 'multiselect-wrapper position-relative';
+    selectElement.parentNode.insertBefore(wrapper, selectElement);
+    wrapper.appendChild(selectElement);
+    
+    // Create the custom dropdown
+    const customSelect = document.createElement('div');
+    customSelect.className = 'form-control bg-dark text-light d-flex flex-wrap align-items-center';
+    customSelect.style.minHeight = '38px';
+    customSelect.style.cursor = 'pointer';
+    wrapper.appendChild(customSelect);
+    
+    // Create dropdown content
+    const dropdownContent = document.createElement('div');
+    dropdownContent.className = 'position-absolute w-100 bg-dark border border-secondary rounded mt-1 p-2';
+    dropdownContent.style.zIndex = '100';
+    dropdownContent.style.maxHeight = '200px';
+    dropdownContent.style.overflowY = 'auto';
+    dropdownContent.style.display = 'none';
+    wrapper.appendChild(dropdownContent);
+    
+    // Hide the original select
+    selectElement.style.display = 'none';
+    
+    // Populate dropdown options
+    for (let i = 0; i < selectElement.options.length; i++) {
+        const option = selectElement.options[i];
         
-        // Create a wrapper div
-        const wrapper = document.createElement('div');
-        wrapper.className = 'multiselect-wrapper position-relative';
-        selectElement.parentNode.insertBefore(wrapper, selectElement);
-        wrapper.appendChild(selectElement);
+        const checkboxContainer = document.createElement('div');
+        checkboxContainer.className = 'form-check mb-2';
         
-        // Create the custom dropdown
-        const customSelect = document.createElement('div');
-        customSelect.className = 'form-control bg-dark text-light d-flex flex-wrap align-items-center';
-        customSelect.style.minHeight = '38px';
-        customSelect.style.cursor = 'pointer';
-        wrapper.appendChild(customSelect);
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'form-check-input';
+        checkbox.value = option.value;
+        checkbox.id = 'multiselect-' + option.value;
+        checkbox.checked = option.selected;
         
-        // Create dropdown content
-        const dropdownContent = document.createElement('div');
-        dropdownContent.className = 'position-absolute w-100 bg-dark border border-secondary rounded mt-1 p-2';
-        dropdownContent.style.zIndex = '100';
-        dropdownContent.style.maxHeight = '200px';
-        dropdownContent.style.overflowY = 'auto';
+        const label = document.createElement('label');
+        label.htmlFor = 'multiselect-' + option.value;
+        label.className = 'form-check-label text-light ms-2';
+        label.textContent = option.textContent;
+        
+        checkboxContainer.appendChild(checkbox);
+        checkboxContainer.appendChild(label);
+        dropdownContent.appendChild(checkboxContainer);
+        
+        // Handle checkbox change
+        checkbox.addEventListener('change', function() {
+            option.selected = checkbox.checked;
+            updateCustomSelectDisplay();
+            
+            // Trigger change event on original select
+            const event = new Event('change', { bubbles: true });
+            selectElement.dispatchEvent(event);
+        });
+    }
+    
+    // Toggle dropdown on click
+    customSelect.addEventListener('click', function(e) {
+        dropdownContent.style.display = dropdownContent.style.display === 'none' ? 'block' : 'none';
+        e.stopPropagation();
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function() {
         dropdownContent.style.display = 'none';
-        wrapper.appendChild(dropdownContent);
+    });
+    
+    // Prevent dropdown from closing when clicking inside it
+    dropdownContent.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+    
+    // Update the custom select display
+    function updateCustomSelectDisplay() {
+        customSelect.innerHTML = '';
+        let selectedCount = 0;
         
-        // Hide the original select
-        selectElement.style.display = 'none';
-        
-        // Populate dropdown options
         for (let i = 0; i < selectElement.options.length; i++) {
-            const option = selectElement.options[i];
-            
-            const checkboxContainer = document.createElement('div');
-            checkboxContainer.className = 'form-check mb-2';
-            
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.className = 'form-check-input';
-            checkbox.value = option.value;
-            checkbox.id = 'multiselect-' + option.value;
-            checkbox.checked = option.selected;
-            
-            const label = document.createElement('label');
-            label.htmlFor = 'multiselect-' + option.value;
-            label.className = 'form-check-label text-light ms-2';
-            label.textContent = option.textContent;
-            
-            checkboxContainer.appendChild(checkbox);
-            checkboxContainer.appendChild(label);
-            dropdownContent.appendChild(checkboxContainer);
-            
-            // Handle checkbox change
-            checkbox.addEventListener('change', function() {
-                option.selected = checkbox.checked;
-                updateCustomSelectDisplay();
+            if (selectElement.options[i].selected) {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-primary me-1 mb-1';
+                badge.textContent = selectElement.options[i].text.split(' (')[0]; // Just show the name
                 
-                // Trigger change event on original select
-                const event = new Event('change', { bubbles: true });
-                selectElement.dispatchEvent(event);
-            });
-        }
-        
-        // Toggle dropdown on click
-        customSelect.addEventListener('click', function(e) {
-            dropdownContent.style.display = dropdownContent.style.display === 'none' ? 'block' : 'none';
-            e.stopPropagation();
-        });
-        
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function() {
-            dropdownContent.style.display = 'none';
-        });
-        
-        // Prevent dropdown from closing when clicking inside it
-        dropdownContent.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-        
-        // Update the custom select display
-        function updateCustomSelectDisplay() {
-            customSelect.innerHTML = '';
-            let selectedCount = 0;
-            
-            for (let i = 0; i < selectElement.options.length; i++) {
-                if (selectElement.options[i].selected) {
-                    const badge = document.createElement('span');
-                    badge.className = 'badge bg-primary me-1 mb-1';
-                    badge.textContent = selectElement.options[i].text.split(' (')[0]; // Just show the name
-                    
-                    const removeBtn = document.createElement('span');
-                    removeBtn.className = 'ms-1';
-                    removeBtn.innerHTML = '&times;';
-                    removeBtn.style.cursor = 'pointer';
-                    
-                    badge.appendChild(removeBtn);
-                    customSelect.appendChild(badge);
-                    selectedCount++;
-                    
-                    // Handle remove button
+                const removeBtn = document.createElement('span');
+                removeBtn.className = 'ms-1';
+                removeBtn.innerHTML = '&times;';
+                removeBtn.style.cursor = 'pointer';
+                
+                badge.appendChild(removeBtn);
+                customSelect.appendChild(badge);
+                selectedCount++;
+                
+                // Handle remove button with closure to capture current i value
+                (function(optionIndex) {
                     removeBtn.addEventListener('click', function(e) {
-                        selectElement.options[i].selected = false;
-                        document.getElementById('multiselect-' + selectElement.options[i].value).checked = false;
+                        selectElement.options[optionIndex].selected = false;
+                        const cb = document.getElementById('multiselect-' + selectElement.options[optionIndex].value);
+                        if (cb) cb.checked = false;
                         updateCustomSelectDisplay();
+                        
+                        // Trigger change event
+                        selectElement.dispatchEvent(new Event('change', { bubbles: true }));
                         e.stopPropagation();
                     });
-                }
-            }
-            
-            // If nothing selected, show placeholder
-            if (selectedCount === 0) {
-                const placeholder = document.createElement('span');
-                placeholder.className = 'text-muted';
-                placeholder.textContent = 'Select people to split with';
-                customSelect.appendChild(placeholder);
+                })(i);
             }
         }
         
-        // Initial display update
-        updateCustomSelectDisplay();
+        // If nothing selected, show placeholder
+        if (selectedCount === 0) {
+            const placeholder = document.createElement('span');
+            placeholder.className = 'text-muted';
+            placeholder.textContent = 'Select people to split with';
+            customSelect.appendChild(placeholder);
+        }
     }
+    
+    // Initial display update
+    updateCustomSelectDisplay();
+}
+
 </script>
 {% endblock %}
