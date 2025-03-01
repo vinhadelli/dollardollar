@@ -2,52 +2,48 @@ version: '3'
 
 services:
   app:
-    build: .
+    image: harung43/dollardollar:latest
+    platform: linux/amd64
     ports:
-      - "5001:5001"
-    env_file:
-      - .env
+      - "5006:5001"
     environment:
-      - SQLALCHEMY_DATABASE_URI=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/dollardollar
+      - SQLALCHEMY_DATABASE_URI=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
       - DEVELOPMENT_MODE=False
-      - DISABLE_SIGNUPS=Flase
+      - DISABLE_SIGNUPS=${DISABLE_SIGNUPS:-False}
+      - DEBUG=${DEBUG:-False}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - FLASK_APP=app.py
+      - SECRET_KEY=${SECRET_KEY}
+      - MAIL_SERVER=${MAIL_SERVER}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USE_TLS=${MAIL_USE_TLS:-True}
+      - MAIL_USE_SSL=${MAIL_USE_SSL:-False}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - MAIL_DEFAULT_SENDER=${MAIL_DEFAULT_SENDER}
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     networks:
       - app-network
-    volumes:
-      - ./logs:/app/logs
-      - ./init_db.py:/app/init_db.py
-    command: gunicorn --bind 0.0.0.0:5001 --workers=3 --timeout=120 app:app
 
   db:
     image: postgres:13
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-dollardollar}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
     networks:
       - app-network
-    # The database port is not exposed to the host, only within the network
-    # If you need to access it directly for development, uncomment the following:
-    # ports:
-    #   - "5432:5432"
 
 volumes:
   postgres_data:

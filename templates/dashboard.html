@@ -48,7 +48,7 @@
                     <label for="split_with" class="form-label">Split With (select multiple)</label>
                     <select class="form-select bg-dark text-light" id="split_with" name="split_with" multiple required>
                         {% for user in users %}
-                            {% if user.id != current_user.id %}
+                            {% if user.id != paid_by %}
                                 <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
                             {% endif %}
                         {% endfor %}
@@ -706,37 +706,48 @@
     }
     
     function initializeMultiSelect() {
-        // Get the select element
-        const selectElement = document.getElementById('split_with');
+    // Get the select element
+    const selectElement = document.getElementById('split_with');
+    const paidBySelect = document.getElementById('paid_by');
+    
+    // Create a wrapper div
+    const wrapper = document.createElement('div');
+    wrapper.className = 'multiselect-wrapper position-relative';
+    selectElement.parentNode.insertBefore(wrapper, selectElement);
+    wrapper.appendChild(selectElement);
+    
+    // Create the custom dropdown
+    const customSelect = document.createElement('div');
+    customSelect.className = 'form-control bg-dark text-light d-flex flex-wrap align-items-center';
+    customSelect.style.minHeight = '38px';
+    customSelect.style.cursor = 'pointer';
+    wrapper.appendChild(customSelect);
+    
+    // Create dropdown content
+    const dropdownContent = document.createElement('div');
+    dropdownContent.className = 'position-absolute w-100 bg-dark border border-secondary rounded mt-1 p-2';
+    dropdownContent.style.zIndex = '100';
+    dropdownContent.style.maxHeight = '200px';
+    dropdownContent.style.overflowY = 'auto';
+    dropdownContent.style.display = 'none';
+    wrapper.appendChild(dropdownContent);
+    
+    // Hide the original select
+    selectElement.style.display = 'none';
+    
+    // Function to update options based on paid_by
+    function updateOptions() {
+        const paidById = paidBySelect.value;
         
-        // Create a wrapper div
-        const wrapper = document.createElement('div');
-        wrapper.className = 'multiselect-wrapper position-relative';
-        selectElement.parentNode.insertBefore(wrapper, selectElement);
-        wrapper.appendChild(selectElement);
+        // Clear existing dropdown content
+        dropdownContent.innerHTML = '';
         
-        // Create the custom dropdown
-        const customSelect = document.createElement('div');
-        customSelect.className = 'form-control bg-dark text-light d-flex flex-wrap align-items-center';
-        customSelect.style.minHeight = '38px';
-        customSelect.style.cursor = 'pointer';
-        wrapper.appendChild(customSelect);
-        
-        // Create dropdown content
-        const dropdownContent = document.createElement('div');
-        dropdownContent.className = 'position-absolute w-100 bg-dark border border-secondary rounded mt-1 p-2';
-        dropdownContent.style.zIndex = '100';
-        dropdownContent.style.maxHeight = '200px';
-        dropdownContent.style.overflowY = 'auto';
-        dropdownContent.style.display = 'none';
-        wrapper.appendChild(dropdownContent);
-        
-        // Hide the original select
-        selectElement.style.display = 'none';
-        
-        // Populate dropdown options
+        // Repopulate dropdown options
         for (let i = 0; i < selectElement.options.length; i++) {
             const option = selectElement.options[i];
+            
+            // Skip the payer
+            if (option.value === paidById) continue;
             
             const checkboxContainer = document.createElement('div');
             checkboxContainer.className = 'form-check mb-2';
@@ -768,63 +779,73 @@
             });
         }
         
-        // Toggle dropdown on click
-        customSelect.addEventListener('click', function(e) {
-            dropdownContent.style.display = dropdownContent.style.display === 'none' ? 'block' : 'none';
-            e.stopPropagation();
-        });
+        // Update display
+        updateCustomSelectDisplay();
+    }
+    
+    // Toggle dropdown on click
+    customSelect.addEventListener('click', function(e) {
+        dropdownContent.style.display = dropdownContent.style.display === 'none' ? 'block' : 'none';
+        e.stopPropagation();
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function() {
+        dropdownContent.style.display = 'none';
+    });
+    
+    // Prevent dropdown from closing when clicking inside it
+    dropdownContent.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+    
+    // Update the custom select display
+    function updateCustomSelectDisplay() {
+        customSelect.innerHTML = '';
+        let selectedCount = 0;
         
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function() {
-            dropdownContent.style.display = 'none';
-        });
-        
-        // Prevent dropdown from closing when clicking inside it
-        dropdownContent.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-        
-        // Update the custom select display
-        function updateCustomSelectDisplay() {
-            customSelect.innerHTML = '';
-            let selectedCount = 0;
-            
-            for (let i = 0; i < selectElement.options.length; i++) {
-                if (selectElement.options[i].selected) {
-                    const badge = document.createElement('span');
-                    badge.className = 'badge bg-primary me-1 mb-1';
-                    badge.textContent = selectElement.options[i].text.split(' (')[0]; // Just show the name
-                    
-                    const removeBtn = document.createElement('span');
-                    removeBtn.className = 'ms-1';
-                    removeBtn.innerHTML = '&times;';
-                    removeBtn.style.cursor = 'pointer';
-                    
-                    badge.appendChild(removeBtn);
-                    customSelect.appendChild(badge);
-                    selectedCount++;
-                    
-                    // Handle remove button
-                    removeBtn.addEventListener('click', function(e) {
-                        selectElement.options[i].selected = false;
-                        document.getElementById('multiselect-' + selectElement.options[i].value).checked = false;
-                        updateCustomSelectDisplay();
-                        e.stopPropagation();
-                    });
-                }
-            }
-            
-            // If nothing selected, show placeholder
-            if (selectedCount === 0) {
-                const placeholder = document.createElement('span');
-                placeholder.className = 'text-muted';
-                placeholder.textContent = 'Select people to split with';
-                customSelect.appendChild(placeholder);
+        for (let i = 0; i < selectElement.options.length; i++) {
+            if (selectElement.options[i].selected && selectElement.options[i].value !== paidBySelect.value) {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-primary me-1 mb-1';
+                badge.textContent = selectElement.options[i].text.split(' (')[0]; // Just show the name
+                
+                const removeBtn = document.createElement('span');
+                removeBtn.className = 'ms-1';
+                removeBtn.innerHTML = '&times;';
+                removeBtn.style.cursor = 'pointer';
+                
+                badge.appendChild(removeBtn);
+                customSelect.appendChild(badge);
+                selectedCount++;
+                
+                // Handle remove button
+                removeBtn.addEventListener('click', function(e) {
+                    selectElement.options[i].selected = false;
+                    const checkbox = document.getElementById('multiselect-' + selectElement.options[i].value);
+                    if (checkbox) checkbox.checked = false;
+                    updateCustomSelectDisplay();
+                    e.stopPropagation();
+                });
             }
         }
         
-        // Initial display update
-        updateCustomSelectDisplay();
+        // If nothing selected, show placeholder
+        if (selectedCount === 0) {
+            const placeholder = document.createElement('span');
+            placeholder.className = 'text-muted';
+            placeholder.textContent = 'Select people to split with';
+            customSelect.appendChild(placeholder);
+        }
     }
+    
+    // Add event listener to paid_by select to update options
+    if (paidBySelect) {
+        paidBySelect.addEventListener('change', updateOptions);
+    }
+    
+    // Initial setup
+    updateOptions();
+}
 </script>
 {% endblock %}
