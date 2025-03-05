@@ -80,20 +80,6 @@ This project explores AI-assisted open-source development:
   - Claude AI
   - Human domain expertise
 
-## 🛡️ Security Philosophy
-
-- Privacy-first design
-- Self-hosted solution
-- Transparent data management
-- User-controlled infrastructure
-
-##  Who Is This For?
-
-- Roommates tracking shared expenses
-- Couples managing joint finances
-- Travel groups splitting costs
-- Small teams tracking group expenses
-- Anyone seeking a privacy-focused financial tool
 
 ## Contributing
 
