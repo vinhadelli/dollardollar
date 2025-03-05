@@ -209,12 +209,14 @@ class Expense(db.Model):
                     'email': user.id
                 })
         
-        # Set up result structure
+        # Set up result structure with both base and original currency
         result = {
             'payer': {
                 'name': payer_name, 
                 'email': payer_email,
-                'amount': 0  # Will calculate below
+                'amount': 0,  # Base currency amount
+                'original_amount': self.original_amount,  # Original amount
+                'currency_code': self.currency_code  # Original currency code
             },
             'splits': []
         }
@@ -233,6 +235,7 @@ class Expense(db.Model):
             
             # Equal splits among all participants
             per_person = self.amount / total_participants if total_participants > 0 else 0
+            per_person_original = self.original_amount / total_participants if total_participants > 0 else 0
             
             # Assign payer's portion (only if they're not already in the splits)
             if self.paid_by not in split_with_ids:
@@ -245,66 +248,85 @@ class Expense(db.Model):
                 result['splits'].append({
                     'name': user['name'],
                     'email': user['email'],
-                    'amount': per_person
+                    'amount': per_person,
+                    'original_amount': per_person_original,
+                    'currency_code': self.currency_code
                 })
-                
+                    
         elif self.split_method == 'percentage':
             # Use per-user percentages if available in split_details
             if split_details and split_details.get('type') == 'percentage':
                 percentages = split_details.get('values', {})
                 total_assigned = 0
+                total_original_assigned = 0
                 
                 # Calculate payer's amount if specified
                 payer_percent = float(percentages.get(self.paid_by, 0))
                 payer_amount = (self.amount * payer_percent) / 100
+                payer_original_amount = (self.original_amount * payer_percent) / 100
+                
                 result['payer']['amount'] = payer_amount if self.paid_by not in split_with_ids else 0
                 total_assigned += payer_amount if self.paid_by not in split_with_ids else 0
+                total_original_assigned += payer_original_amount if self.paid_by not in split_with_ids else 0
                 
                 # Calculate each user's portion based on their percentage
                 for user in split_users:
                     user_percent = float(percentages.get(user['id'], 0))
                     user_amount = (self.amount * user_percent) / 100
+                    user_original_amount = (self.original_amount * user_percent) / 100
+                    
                     result['splits'].append({
                         'name': user['name'],
                         'email': user['email'],
-                        'amount': user_amount
+                        'amount': user_amount,
+                        'original_amount': user_original_amount,
+                        'currency_code': self.currency_code
                     })
                     total_assigned += user_amount
+                    total_original_assigned += user_original_amount
                 
                 # Validate total (handle rounding errors)
                 if abs(total_assigned - self.amount) > 0.01:
-                    # Adjust last split to make it add up
                     difference = self.amount - total_assigned
                     if result['splits']:
                         result['splits'][-1]['amount'] += difference
                     elif result['payer']['amount'] > 0:
                         result['payer']['amount'] += difference
+                
             else:
                 # Backward compatibility mode
                 payer_percentage = self.split_value if self.split_value is not None else 0
                 payer_amount = (self.amount * payer_percentage) / 100
+                payer_original_amount = (self.original_amount * payer_percentage) / 100
                 
                 result['payer']['amount'] = payer_amount if self.paid_by not in split_with_ids else 0
                 
                 # Split remainder equally
                 remaining = self.amount - result['payer']['amount']
+                remaining_original = self.original_amount - payer_original_amount
                 per_person = remaining / len(split_users) if split_users else 0
+                per_person_original = remaining_original / len(split_users) if split_users else 0
                 
                 for user in split_users:
                     result['splits'].append({
                         'name': user['name'],
                         'email': user['email'],
-                        'amount': per_person
+                        'amount': per_person,
+                        'original_amount': per_person_original,
+                        'currency_code': self.currency_code
                     })
-                
+        
         elif self.split_method == 'custom':
             # Use per-user custom amounts if available in split_details
             if split_details and split_details.get('type') == 'amount':
                 amounts = split_details.get('values', {})
                 total_assigned = 0
+                total_original_assigned = 0
                 
                 # Set payer's amount if specified
                 payer_amount = float(amounts.get(self.paid_by, 0))
+                payer_original_amount = 0  # This is tricky, might need additional logic
+                
                 result['payer']['amount'] = payer_amount if self.paid_by not in split_with_ids else 0
                 total_assigned += payer_amount if self.paid_by not in split_with_ids else 0
                 
@@ -314,13 +336,14 @@ class Expense(db.Model):
                     result['splits'].append({
                         'name': user['name'],
                         'email': user['email'],
-                        'amount': user_amount
+                        'amount': user_amount,
+                        'original_amount': 0,  # This is tricky, might need additional logic
+                        'currency_code': self.currency_code
                     })
                     total_assigned += user_amount
                 
                 # Validate total (handle rounding errors)
                 if abs(total_assigned - self.amount) > 0.01:
-                    # Adjust last split to make it add up
                     difference = self.amount - total_assigned
                     if result['splits']:
                         result['splits'][-1]['amount'] += difference
@@ -340,9 +363,11 @@ class Expense(db.Model):
                     result['splits'].append({
                         'name': user['name'],
                         'email': user['email'],
-                        'amount': per_person
+                        'amount': per_person,
+                        'original_amount': per_person,  # Defaults to base currency amount
+                        'currency_code': self.currency_code
                     })
-        
+    
         return result
 
 class RecurringExpense(db.Model):
@@ -1283,36 +1308,43 @@ def add_expense():
                 import json
                 split_details = request.form.get('split_details')
             
-            # NEW CODE: Get currency information
+            # Get currency information
             currency_code = request.form.get('currency_code', 'USD')
             if not currency_code:
                 # Use user's default currency or system default (USD)
                 currency_code = current_user.default_currency_code or 'USD'
             
-            # NEW CODE: Get amount and convert if needed
+            # Get original amount in the selected currency
             original_amount = float(request.form['amount'])
-            amount = original_amount
             
-            # NEW CODE: Convert to base currency if not already
+            # Find the currencies
+            selected_currency = Currency.query.filter_by(code=currency_code).first()
             base_currency = Currency.query.filter_by(is_base=True).first()
-            if currency_code != base_currency.code:
-                amount = convert_currency(original_amount, currency_code, base_currency.code)
             
-            # Get form data - UPDATED to include currency fields
+            if not selected_currency or not base_currency:
+                flash('Currency configuration error.')
+                return redirect(url_for('dashboard'))
+            
+            # Convert original amount to base currency
+            # Multiply by the rate to convert from selected currency to base currency
+            # For example, if 1 INR = 0.012 USD, then 1 * 0.012 = 0.012 USD
+            amount = original_amount * selected_currency.rate_to_base
+            
+            # Create expense record
             expense = Expense(
                 description=request.form['description'],
-                amount=amount,  # This is now the converted amount
-                original_amount=original_amount,  # NEW: Store original amount
-                currency_code=currency_code,  # NEW: Store currency code
+                amount=amount,  # Amount in base currency
+                original_amount=original_amount,  # Original amount in selected currency
+                currency_code=currency_code,  # Store the original currency code
                 date=expense_date,
                 card_used=request.form['card_used'],
                 split_method=request.form['split_method'],
                 split_value=float(request.form.get('split_value', 0)) if request.form.get('split_value') else 0,
+                split_details=split_details,
                 paid_by=request.form['paid_by'],
                 user_id=current_user.id,
                 group_id=request.form.get('group_id') if request.form.get('group_id') else None,
-                split_with=split_with_str,  # Store as comma-separated string
-                split_details=split_details  # Store the JSON string
+                split_with=split_with_str,
             )
             
             # Handle tags if present
