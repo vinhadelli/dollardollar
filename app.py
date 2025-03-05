@@ -17,6 +17,8 @@ from datetime import timedelta
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
 import ssl
+import requests
+
 
 
 os.environ['OPENSSL_LEGACY_PROVIDER'] = '1'
@@ -102,6 +104,8 @@ class User(UserMixin, db.Model):
     reset_token = db.Column(db.String(100), nullable=True)
     reset_token_expiry = db.Column(db.DateTime, nullable=True)
     expenses = db.relationship('Expense', backref='user', lazy=True)
+    default_currency_code = db.Column(db.String(3), db.ForeignKey('currencies.code'), nullable=True)
+    default_currency = db.relationship('Currency', backref=db.backref('users', lazy=True))
     created_groups = db.relationship('Group', backref='creator', lazy=True,
         foreign_keys=[Group.created_by])
 
@@ -146,6 +150,22 @@ class Settlement(db.Model):
     # Relationships
     payer = db.relationship('User', foreign_keys=[payer_id], backref=db.backref('settlements_paid', lazy=True))
     receiver = db.relationship('User', foreign_keys=[receiver_id], backref=db.backref('settlements_received', lazy=True))
+class Currency(db.Model):
+    __tablename__ = 'currencies'
+    code = db.Column(db.String(3), primary_key=True)  # ISO 4217 currency code (e.g., USD, EUR, GBP)
+    name = db.Column(db.String(50), nullable=False)
+    symbol = db.Column(db.String(5), nullable=False)
+    rate_to_base = db.Column(db.Float, nullable=False, default=1.0)  # Exchange rate to base currency
+    is_base = db.Column(db.Boolean, default=False)  # Whether this is the base currency
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"{self.code} ({self.symbol})"
+    
+expense_tags = db.Table('expense_tags',
+    db.Column('expense_id', db.Integer, db.ForeignKey('expenses.id'), primary_key=True),
+    db.Column('tag_id', db.Integer, db.ForeignKey('tags.id'), primary_key=True)
+)
 
 class Expense(db.Model):
     __tablename__ = 'expenses'
@@ -161,7 +181,13 @@ class Expense(db.Model):
     group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=True)
     split_with = db.Column(db.String(500), nullable=True)  # Comma-separated list of user IDs
     split_details = db.Column(db.Text, nullable=True)  # JSON string storing custom split values for each user
-
+    recurring_id = db.Column(db.Integer, db.ForeignKey('recurring_expenses.id'), nullable=True)
+    tags = db.relationship('Tag', secondary=expense_tags, lazy='subquery', 
+                   backref=db.backref('expenses', lazy=True))
+    # Add these fields to your existing Expense class:
+    currency_code = db.Column(db.String(3), db.ForeignKey('currencies.code'), nullable=True)
+    original_amount = db.Column(db.Float, nullable=True)  # Amount in original currency
+    currency = db.relationship('Currency', backref=db.backref('expenses', lazy=True))
     def calculate_splits(self):
         import json
         
@@ -319,6 +345,73 @@ class Expense(db.Model):
         
         return result
 
+class RecurringExpense(db.Model):
+    __tablename__ = 'recurring_expenses'
+    id = db.Column(db.Integer, primary_key=True)
+    description = db.Column(db.String(200), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    card_used = db.Column(db.String(50), nullable=False)
+    split_method = db.Column(db.String(20), nullable=False)  # 'equal', 'custom', 'percentage'
+    split_value = db.Column(db.Float, nullable=True)
+    split_details = db.Column(db.Text, nullable=True)  # JSON string
+    paid_by = db.Column(db.String(50), nullable=False)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False)
+    group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=True)
+    split_with = db.Column(db.String(500), nullable=True)  # Comma-separated list of user IDs
+    
+    # Recurring specific fields
+    frequency = db.Column(db.String(20), nullable=False)  # 'daily', 'weekly', 'monthly', 'yearly'
+    start_date = db.Column(db.DateTime, nullable=False)
+    end_date = db.Column(db.DateTime, nullable=True)  # Optional end date
+    last_created = db.Column(db.DateTime, nullable=True)  # Track last created instance
+    active = db.Column(db.Boolean, default=True)
+    
+    # Relationships
+    user = db.relationship('User', backref=db.backref('recurring_expenses', lazy=True))
+    group = db.relationship('Group', backref=db.backref('recurring_expenses', lazy=True))
+    expenses = db.relationship('Expense', backref=db.backref('recurring_source', lazy=True), 
+                              foreign_keys='Expense.recurring_id')
+    currency_code = db.Column(db.String(3), db.ForeignKey('currencies.code'), nullable=True)
+    original_amount = db.Column(db.Float, nullable=True)  # Amount in original currency
+    currency = db.relationship('Currency', backref=db.backref('recurring_expenses', lazy=True))
+    
+    def create_expense_instance(self, for_date=None):
+        """Create a single expense instance from this recurring template"""
+        if for_date is None:
+            for_date = datetime.utcnow()
+            
+        # Copy data to create a new expense
+        expense = Expense(
+            description=self.description,
+            amount=self.amount,
+            date=for_date,
+            card_used=self.card_used,
+            split_method=self.split_method,
+            split_value=self.split_value,
+            split_details=self.split_details,
+            paid_by=self.paid_by,
+            user_id=self.user_id,
+            group_id=self.group_id,
+            split_with=self.split_with,
+            recurring_id=self.id  # Link to this recurring expense
+        )
+        
+        # Update the last created date
+        self.last_created = for_date
+        
+        return expense
+# Tag-Expense Association Table
+
+class Tag(db.Model):
+    __tablename__ = 'tags'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    color = db.Column(db.String(20), default="#6c757d")  # Default color gray
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    user = db.relationship('User', backref=db.backref('tags', lazy=True))
 #--------------------
 # AUTH AND UTILITIES
 #--------------------
@@ -372,7 +465,169 @@ def init_db():
 #--------------------
 # BUSINESS LOGIC FUNCTIONS
 #--------------------
+# Add this function to your app.py file
+def update_currency_rates():
+    """
+    Update currency exchange rates using a public API
+    Returns the number of currencies updated or -1 on error
+    """
+    try:
+        # Get the base currency
+        base_currency = Currency.query.filter_by(is_base=True).first()
+        if not base_currency:
+            app.logger.error("No base currency found. Cannot update rates.")
+            return -1
+            
+        base_code = base_currency.code
+        
+        # Use ExchangeRate-API (free tier - https://www.exchangerate-api.com/)
+        # Or you can use another free API like https://frankfurter.app/
+        response = requests.get(f'https://api.frankfurter.app/latest?from={base_code}')
+        
+        if response.status_code != 200:
+            app.logger.error(f"API request failed with status code {response.status_code}")
+            return -1
+        
+        data = response.json()
+        rates = data.get('rates', {})
+        
+        # Get all currencies except base
+        currencies = Currency.query.filter(Currency.code != base_code).all()
+        updated_count = 0
+        
+        # Update rates
+        for currency in currencies:
+            if currency.code in rates:
+                currency.rate_to_base = 1 / rates[currency.code]  # Convert to base currency rate
+                currency.last_updated = datetime.utcnow()
+                updated_count += 1
+            else:
+                app.logger.warning(f"No rate found for {currency.code}")
+        
+        # Commit changes
+        db.session.commit()
+        app.logger.info(f"Updated {updated_count} currency rates")
+        return updated_count
+        
+    except Exception as e:
+        app.logger.error(f"Error updating currency rates: {str(e)}")
+        return -1
+def init_default_currencies():
+    """Initialize the default currencies in the database"""
+    with app.app_context():
+        # Check if any currencies exist
+        if Currency.query.count() == 0:
+            # Add USD as base currency
+            usd = Currency(
+                code='USD',
+                name='US Dollar',
+                symbol='$',
+                rate_to_base=1.0,
+                is_base=True
+            )
+            
+            # Add some common currencies
+            eur = Currency(
+                code='EUR',
+                name='Euro',
+                symbol='€',
+                rate_to_base=1.1,  # Example rate
+                is_base=False
+            )
+            
+            gbp = Currency(
+                code='GBP',
+                name='British Pound',
+                symbol='£',
+                rate_to_base=1.3,  # Example rate
+                is_base=False
+            )
+            
+            jpy = Currency(
+                code='JPY',
+                name='Japanese Yen',
+                symbol='¥',
+                rate_to_base=0.0091,  # Example rate
+                is_base=False
+            )
+            
+            db.session.add(usd)
+            db.session.add(eur)
+            db.session.add(gbp)
+            db.session.add(jpy)
+            
+            try:
+                db.session.commit()
+                print("Default currencies initialized")
+            except Exception as e:
+                db.session.rollback()
+                print(f"Error initializing currencies: {str(e)}")
 
+
+def convert_currency(amount, from_code, to_code):
+    """Convert an amount from one currency to another"""
+    if from_code == to_code:
+        return amount
+    
+    from_currency = Currency.query.filter_by(code=from_code).first()
+    to_currency = Currency.query.filter_by(code=to_code).first()
+    
+    if not from_currency or not to_currency:
+        return amount  # Return original if either currency not found
+    
+    # Convert to base currency first, then to target currency
+    amount_in_base = amount / from_currency.rate_to_base
+    return amount_in_base * to_currency.rate_to_base
+def create_scheduled_expenses():
+    """Create expense instances for active recurring expenses"""
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Find active recurring expenses
+    active_recurring = RecurringExpense.query.filter_by(active=True).all()
+    
+    for recurring in active_recurring:
+        # Skip if end date is set and passed
+        if recurring.end_date and recurring.end_date < today:
+            continue
+            
+        # Determine if we need to create an expense based on frequency and last created date
+        create_expense = False
+        last_date = recurring.last_created or recurring.start_date
+        
+        if recurring.frequency == 'daily':
+            # Create if last was created yesterday or earlier
+            if (today - last_date).days >= 1:
+                create_expense = True
+                
+        elif recurring.frequency == 'weekly':
+            # Create if last was created 7 days ago or more
+            if (today - last_date).days >= 7:
+                create_expense = True
+                
+        elif recurring.frequency == 'monthly':
+            # Create if we're in a new month from the last creation
+            last_month = last_date.month
+            last_year = last_date.year
+            
+            current_month = today.month
+            current_year = today.year
+            
+            if current_year > last_year or (current_year == last_year and current_month > last_month):
+                create_expense = True
+                
+        elif recurring.frequency == 'yearly':
+            # Create if we're in a new year from the last creation
+            if today.year > last_date.year:
+                create_expense = True
+        
+        # Create the expense if needed
+        if create_expense:
+            expense = recurring.create_expense_instance(today)
+            db.session.add(expense)
+    
+    # Commit all changes
+    if active_recurring:
+        db.session.commit()
 def calculate_iou_data(expenses, users):
     """Calculate who owes whom money based on expenses"""
     # Initialize data structure
@@ -512,7 +767,180 @@ def calculate_balances(user_id):
     
     # Return only non-zero balances
     return [balance for balance in balances.values() if abs(balance['amount']) > 0.01]
+def send_welcome_email(user):
+    """
+    Send a welcome email to a newly registered user
+    """
+    try:
+        subject = "Welcome to Dollar Dollar Bill Y'all!"
+        
+        # Create welcome email body
+        body_html = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background-color: #15803d; color: white; padding: 10px 20px; text-align: center; border-radius: 5px 5px 0 0; }}
+                .content {{ background-color: #f9f9f9; padding: 20px; border-radius: 0 0 5px 5px; }}
+                .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #777; }}
+                .button {{ display: inline-block; background-color: #15803d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Welcome to Dollar Dollar Bill Y'all!</h1>
+                </div>
+                <div class="content">
+                    <h2>Hi {user.name},</h2>
+                    <p>Thank you for joining our expense tracking app. We're excited to help you manage your finances effectively!</p>
+                    
+                    <h3>Getting Started:</h3>
+                    <ol>
+                        <li>Add your first expense from the dashboard</li>
+                        <li>Create groups to share expenses with friends or family</li>
+                        <li>Track your spending patterns in the stats section</li>
+                    </ol>
+                    
+                    <p>If you have any questions or need assistance, please don't hesitate to contact us.</p>
+                    
+                    <a href="{request.host_url}" class="button">Go to Dashboard</a>
+                </div>
+                <div class="footer">
+                    <p>This email was sent to {user.id}. If you didn't create this account, please ignore this email.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Simple text version for clients that don't support HTML
+        body_text = f"""
+        Welcome to Dollar Dollar Bill Y'all!
+        
+        Hi {user.name},
+        
+        Thank you for joining our expense tracking app. We're excited to help you manage your finances effectively!
+        
+        Getting Started:
+        1. Add your first expense from the dashboard
+        2. Create groups to share expenses with friends or family
+        3. Track your spending patterns in the stats section
+        
+        If you have any questions or need assistance, please don't hesitate to contact us.
+        
+        Visit: {request.host_url}
+        
+        This email was sent to {user.id}. If you didn't create this account, please ignore this email.
+        """
+        
+        # Create and send the message
+        msg = Message(
+            subject=subject,
+            recipients=[user.id],
+            body=body_text,
+            html=body_html
+        )
+        
+        # Send the email
+        mail.send(msg)
+        
+        app.logger.info(f"Welcome email sent to {user.id}")
+        return True
+        
+    except Exception as e:
+        app.logger.error(f"Error sending welcome email: {str(e)}")
+        return False
 
+def send_group_invitation_email(user, group, inviter):
+    """
+    Send an email notification when a user is added to a group
+    """
+    try:
+        subject = f"You've been added to {group.name} on Dollar Dollar Bill Y'all"
+        
+        # Create invitation email body
+        body_html = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background-color: #15803d; color: white; padding: 10px 20px; text-align: center; border-radius: 5px 5px 0 0; }}
+                .content {{ background-color: #f9f9f9; padding: 20px; border-radius: 0 0 5px 5px; }}
+                .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #777; }}
+                .button {{ display: inline-block; background-color: #15803d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Group Invitation</h1>
+                </div>
+                <div class="content">
+                    <h2>Hi {user.name},</h2>
+                    <p>You have been added to the group <strong>"{group.name}"</strong> by {inviter.name}.</p>
+                    
+                    <h3>Group Details:</h3>
+                    <ul>
+                        <li><strong>Group Name:</strong> {group.name}</li>
+                        <li><strong>Description:</strong> {group.description or 'No description provided'}</li>
+                        <li><strong>Created by:</strong> {group.creator.name}</li>
+                        <li><strong>Members:</strong> {', '.join([member.name for member in group.members])}</li>
+                    </ul>
+                    
+                    <p>You can now track and split expenses with other members of this group.</p>
+                    
+                    <a href="{request.host_url}groups/{group.id}" class="button">View Group</a>
+                </div>
+                <div class="footer">
+                    <p>This email was sent to {user.id}. If you believe this was a mistake, please contact the group creator.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Simple text version for clients that don't support HTML
+        body_text = f"""
+        Group Invitation - Dollar Dollar Bill Y'all
+        
+        Hi {user.name},
+        
+        You have been added to the group "{group.name}" by {inviter.name}.
+        
+        Group Details:
+        - Group Name: {group.name}
+        - Description: {group.description or 'No description provided'}
+        - Created by: {group.creator.name}
+        - Members: {', '.join([member.name for member in group.members])}
+        
+        You can now track and split expenses with other members of this group.
+        
+        View Group: {request.host_url}groups/{group.id}
+        
+        This email was sent to {user.id}. If you believe this was a mistake, please contact the group creator.
+        """
+        
+        # Create and send the message
+        msg = Message(
+            subject=subject,
+            recipients=[user.id],
+            body=body_text,
+            html=body_html
+        )
+        
+        # Send the email
+        mail.send(msg)
+        
+        app.logger.info(f"Group invitation email sent to {user.id} for group {group.name}")
+        return True
+        
+    except Exception as e:
+        app.logger.error(f"Error sending group invitation email: {str(e)}")
+        return False
+    
 @app.route('/get_transaction_details/<other_user_id>')
 @login_required_dev
 def get_transaction_details(other_user_id):
@@ -585,7 +1013,7 @@ def home():
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
-     # Check if signups are disabled
+    # Check if signups are disabled
     if app.config['DISABLE_SIGNUPS'] and not app.config['DEVELOPMENT_MODE']:
         flash('New account registration is currently disabled.')
         return redirect(url_for('login'))
@@ -606,11 +1034,18 @@ def signup():
         user.set_password(password)
         
         # Make first user admin
-        if User.query.count() == 0:
+        is_first_user = User.query.count() == 0
+        if is_first_user:
             user.is_admin = True
         
         db.session.add(user)
         db.session.commit()
+        
+        # Send welcome email
+        try:
+            send_welcome_email(user)
+        except Exception as e:
+            app.logger.error(f"Failed to send welcome email: {str(e)}")
         
         login_user(user)
         flash('Account created successfully!')
@@ -620,12 +1055,22 @@ def signup():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if app.config['DEVELOPMENT_MODE']:
-        # In development mode, auto-login as dev user
+    if app.config['DEVELOPMENT_MODE'] and not current_user.is_authenticated:
         dev_user = User.query.filter_by(id=DEV_USER_EMAIL).first()
-        if dev_user:
-            login_user(dev_user)
-            return redirect(url_for('dashboard'))
+        if not dev_user:
+            dev_user = User(
+                id=DEV_USER_EMAIL,
+                name='Developer',
+                is_admin=True
+            )
+            dev_user.set_password(DEV_USER_PASSWORD)
+            db.session.add(dev_user)
+            db.session.commit()
+        login_user(dev_user)
+        return redirect(url_for('dashboard'))
+    
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
     
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
@@ -797,7 +1242,7 @@ def dashboard():
     expense_splits = {}
     for expense in expenses:
         expense_splits[expense.id] = expense.calculate_splits()
-    
+    currencies = Currency.query.all()
     return render_template('dashboard.html', 
                          expenses=expenses,
                          expense_splits=expense_splits,
@@ -808,6 +1253,7 @@ def dashboard():
                          users=users,
                          groups=groups,
                          iou_data=iou_data,
+                         currencies=currencies,
                          now=now)
 
 @app.route('/add_expense', methods=['GET', 'POST'])
@@ -835,10 +1281,27 @@ def add_expense():
                 import json
                 split_details = request.form.get('split_details')
             
-            # Get form data
+            # NEW CODE: Get currency information
+            currency_code = request.form.get('currency_code')
+            if not currency_code:
+                # Use user's default currency or system default (USD)
+                currency_code = current_user.default_currency_code or 'USD'
+            
+            # NEW CODE: Get amount and convert if needed
+            original_amount = float(request.form['amount'])
+            amount = original_amount
+            
+            # NEW CODE: Convert to base currency if not already
+            base_currency = Currency.query.filter_by(is_base=True).first()
+            if currency_code != base_currency.code:
+                amount = convert_currency(original_amount, currency_code, base_currency.code)
+            
+            # Get form data - UPDATED to include currency fields
             expense = Expense(
                 description=request.form['description'],
-                amount=float(request.form['amount']),
+                amount=amount,  # This is now the converted amount
+                original_amount=original_amount,  # NEW: Store original amount
+                currency_code=currency_code,  # NEW: Store currency code
                 date=expense_date,
                 card_used=request.form['card_used'],
                 split_method=request.form['split_method'],
@@ -850,6 +1313,14 @@ def add_expense():
                 split_details=split_details  # Store the JSON string
             )
             
+            # Handle tags if present
+            tag_ids = request.form.getlist('tags')
+            if tag_ids:
+                for tag_id in tag_ids:
+                    tag = Tag.query.get(int(tag_id))
+                    if tag and tag.user_id == current_user.id:
+                        expense.tags.append(tag)
+            
             db.session.add(expense)
             db.session.commit()
             flash('Expense added successfully!')
@@ -860,7 +1331,165 @@ def add_expense():
             flash(f'Error: {str(e)}')
             
     return redirect(url_for('dashboard'))
+@app.route('/tags')
+@login_required_dev
+def manage_tags():
+    tags = Tag.query.filter_by(user_id=current_user.id).all()
+    return render_template('tags.html', tags=tags)
 
+@app.route('/tags/add', methods=['POST'])
+@login_required_dev
+def add_tag():
+    name = request.form.get('name')
+    color = request.form.get('color', "#6c757d")
+    
+    # Check if tag already exists for this user
+    existing_tag = Tag.query.filter_by(user_id=current_user.id, name=name).first()
+    if existing_tag:
+        flash('Tag with this name already exists')
+        return redirect(url_for('manage_tags'))
+    
+    tag = Tag(name=name, color=color, user_id=current_user.id)
+    db.session.add(tag)
+    db.session.commit()
+    
+    flash('Tag added successfully')
+    return redirect(url_for('manage_tags'))
+
+@app.route('/tags/delete/<int:tag_id>', methods=['POST'])
+@login_required_dev
+def delete_tag(tag_id):
+    tag = Tag.query.get_or_404(tag_id)
+    
+    # Check if tag belongs to current user
+    if tag.user_id != current_user.id:
+        flash('You don\'t have permission to delete this tag')
+        return redirect(url_for('manage_tags'))
+    
+    db.session.delete(tag)
+    db.session.commit()
+    
+    flash('Tag deleted successfully')
+    return redirect(url_for('manage_tags'))
+
+@app.route('/recurring')
+@login_required_dev
+def recurring():
+    recurring_expenses = RecurringExpense.query.filter_by(user_id=current_user.id).all()
+    users = User.query.all()
+    groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
+    
+    return render_template('recurring.html', 
+                          recurring_expenses=recurring_expenses, 
+                          users=users,
+                          groups=groups)
+
+@app.route('/add_recurring', methods=['POST'])
+@login_required_dev
+def add_recurring():
+    try:
+        # Handle multi-select for split_with
+        split_with_ids = request.form.getlist('split_with')
+        split_with_str = ','.join(split_with_ids) if split_with_ids else None
+        
+        # Parse date with error handling
+        try:
+            start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d')
+            end_date = None
+            if request.form.get('end_date'):
+                end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d')
+        except ValueError:
+            flash('Invalid date format. Please use YYYY-MM-DD format.')
+            return redirect(url_for('recurring'))
+        
+        # Process split details if provided
+        split_details = None
+        if request.form.get('split_details'):
+            import json
+            split_details = request.form.get('split_details')
+        
+        # Create new recurring expense
+        recurring_expense = RecurringExpense(
+            description=request.form['description'],
+            amount=float(request.form['amount']),
+            card_used=request.form['card_used'],
+            split_method=request.form['split_method'],
+            split_value=float(request.form.get('split_value', 0)) if request.form.get('split_value') else 0,
+            split_details=split_details,
+            paid_by=request.form['paid_by'],
+            user_id=current_user.id,
+            group_id=request.form.get('group_id') if request.form.get('group_id') else None,
+            split_with=split_with_str,
+            frequency=request.form['frequency'],
+            start_date=start_date,
+            end_date=end_date,
+            active=True
+        )
+        
+        # Handle tags if present
+        tag_ids = request.form.getlist('tags')
+        
+        db.session.add(recurring_expense)
+        db.session.commit()
+        
+        # Create first expense instance if the start date is today or in the past
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        if start_date <= today:
+            expense = recurring_expense.create_expense_instance(start_date)
+            
+            # Add the tags to the expense
+            if tag_ids:
+                for tag_id in tag_ids:
+                    tag = Tag.query.get(int(tag_id))
+                    if tag and tag.user_id == current_user.id:
+                        expense.tags.append(tag)
+            
+            db.session.add(expense)
+            db.session.commit()
+        
+        flash('Recurring expense added successfully!')
+        
+    except Exception as e:
+        print("Error adding recurring expense:", str(e))
+        flash(f'Error: {str(e)}')
+    
+    return redirect(url_for('recurring'))
+
+@app.route('/toggle_recurring/<int:recurring_id>', methods=['POST'])
+@login_required_dev
+def toggle_recurring(recurring_id):
+    recurring_expense = RecurringExpense.query.get_or_404(recurring_id)
+    
+    # Security check
+    if recurring_expense.user_id != current_user.id:
+        flash('You don\'t have permission to modify this recurring expense')
+        return redirect(url_for('recurring'))
+    
+    # Toggle the active status
+    recurring_expense.active = not recurring_expense.active
+    db.session.commit()
+    
+    status = "activated" if recurring_expense.active else "deactivated"
+    flash(f'Recurring expense {status} successfully')
+    
+    return redirect(url_for('recurring'))
+
+@app.route('/delete_recurring/<int:recurring_id>', methods=['POST'])
+@login_required_dev
+def delete_recurring(recurring_id):
+    recurring_expense = RecurringExpense.query.get_or_404(recurring_id)
+    
+    # Security check
+    if recurring_expense.user_id != current_user.id:
+        flash('You don\'t have permission to delete this recurring expense')
+        return redirect(url_for('recurring'))
+    
+    db.session.delete(recurring_expense)
+    db.session.commit()
+    
+    flash('Recurring expense deleted successfully')
+    
+    return redirect(url_for('recurring'))
 #--------------------
 # ROUTES: GROUPS
 #--------------------
@@ -931,6 +1560,12 @@ def add_group_member(group_id):
         group.members.append(user)
         db.session.commit()
         flash(f'{user.name} added to group!')
+        
+        # Send group invitation email
+        try:
+            send_group_invitation_email(user, group, current_user)
+        except Exception as e:
+            app.logger.error(f"Failed to send group invitation email: {str(e)}")
     
     return redirect(url_for('group_details', group_id=group_id))
 
@@ -963,7 +1598,6 @@ def admin():
     
     users = User.query.all()
     return render_template('admin.html', users=users)
-
 @app.route('/admin/add_user', methods=['POST'])
 @login_required_dev
 def admin_add_user():
@@ -985,9 +1619,14 @@ def admin_add_user():
     db.session.add(user)
     db.session.commit()
     
+    # Send welcome email
+    try:
+        send_welcome_email(user)
+    except Exception as e:
+        app.logger.error(f"Failed to send welcome email: {str(e)}")
+    
     flash('User added successfully!')
     return redirect(url_for('admin'))
-
 @app.route('/admin/delete_user/<user_id>', methods=['POST'])
 @login_required_dev
 def admin_delete_user(user_id):
@@ -1114,7 +1753,234 @@ def add_settlement():
         
     return redirect(url_for('settlements'))
 # Add this route to your app.py file
+@app.route('/currencies')
+@login_required_dev
+def manage_currencies():
+    currencies = Currency.query.all()
+    return render_template('currencies.html', currencies=currencies)
 
+@app.route('/currencies/add', methods=['POST'])
+@login_required_dev
+def add_currency():
+    if not current_user.is_admin:
+        flash('Only administrators can add currencies')
+        return redirect(url_for('manage_currencies'))
+    
+    code = request.form.get('code', '').upper()
+    name = request.form.get('name')
+    symbol = request.form.get('symbol')
+    rate_to_base = float(request.form.get('rate_to_base', 1.0))
+    is_base = request.form.get('is_base') == 'on'
+    
+    # Validate currency code format
+    if not code or len(code) != 3 or not code.isalpha():
+        flash('Invalid currency code. Please use 3-letter ISO currency code (e.g., USD, EUR, GBP)')
+        return redirect(url_for('manage_currencies'))
+    
+    # Check if currency already exists
+    existing = Currency.query.filter_by(code=code).first()
+    if existing:
+        flash(f'Currency {code} already exists')
+        return redirect(url_for('manage_currencies'))
+    
+    # If setting as base, update all existing base currencies
+    if is_base:
+        for currency in Currency.query.filter_by(is_base=True).all():
+            currency.is_base = False
+    
+    # Create new currency
+    currency = Currency(
+        code=code,
+        name=name,
+        symbol=symbol,
+        rate_to_base=rate_to_base,
+        is_base=is_base
+    )
+    db.session.add(currency)
+    
+    try:
+        db.session.commit()
+        flash(f'Currency {code} added successfully')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error adding currency: {str(e)}')
+    
+    return redirect(url_for('manage_currencies'))
+
+@app.route('/currencies/update/<code>', methods=['POST'])
+@login_required_dev
+def update_currency(code):
+    if not current_user.is_admin:
+        flash('Only administrators can update currencies')
+        return redirect(url_for('manage_currencies'))
+    
+    currency = Currency.query.filter_by(code=code).first_or_404()
+    
+    # Update fields
+    currency.name = request.form.get('name', currency.name)
+    currency.symbol = request.form.get('symbol', currency.symbol)
+    currency.rate_to_base = float(request.form.get('rate_to_base', currency.rate_to_base))
+    new_is_base = request.form.get('is_base') == 'on'
+    
+    # If setting as base, update all existing base currencies
+    if new_is_base and not currency.is_base:
+        for curr in Currency.query.filter_by(is_base=True).all():
+            curr.is_base = False
+    
+    currency.is_base = new_is_base
+    currency.last_updated = datetime.utcnow()
+    
+    try:
+        db.session.commit()
+        flash(f'Currency {code} updated successfully')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating currency: {str(e)}')
+    
+    return redirect(url_for('manage_currencies'))
+@app.route('/currencies/delete/<string:code>', methods=['DELETE'])
+@login_required
+def delete_currency(code):
+    """
+    Delete a currency from the system
+    Only accessible to admin users
+    """
+    # Ensure user is an admin
+    if not current_user.is_admin:
+        return jsonify({
+            'success': False, 
+            'message': 'Unauthorized. Admin access required.'
+        }), 403
+    
+    try:
+        # Find the currency
+        currency = Currency.query.filter_by(code=code).first()
+        
+        if not currency:
+            return jsonify({
+                'success': False, 
+                'message': f'Currency {code} not found.'
+            }), 404
+        
+        # Prevent deleting the base currency
+        if currency.is_base:
+            return jsonify({
+                'success': False, 
+                'message': 'Cannot delete the base currency. Set another currency as base first.'
+            }), 400
+        
+        # Optional: Check if currency is in use
+        # You might want to add additional checks like:
+        # - Check if any expenses use this currency
+        # - Check if any users have this as their default currency
+        
+        # Remove the currency
+        db.session.delete(currency)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Currency {code} deleted successfully.'
+        })
+    
+    except Exception as e:
+        # Rollback in case of error
+        db.session.rollback()
+        
+        # Log the error
+        app.logger.error(f"Error deleting currency {code}: {str(e)}")
+        
+        return jsonify({
+            'success': False, 
+            'message': f'An error occurred while deleting currency {code}.'
+        }), 500
+@app.route('/currencies/set-base/<string:code>', methods=['POST'])
+@login_required
+def set_base_currency(code):
+    """
+    Change the base currency
+    Only accessible to admin users
+    """
+    # Ensure user is an admin
+    if not current_user.is_admin:
+        flash('Unauthorized. Admin access required.', 'error')
+        return redirect(url_for('currencies'))
+    
+    try:
+        # Find the currency to be set as base
+        new_base_currency = Currency.query.filter_by(code=code).first()
+        
+        if not new_base_currency:
+            flash(f'Currency {code} not found.', 'error')
+            return redirect(url_for('currencies'))
+        
+        # Find and unset the current base currency
+        current_base_currency = Currency.query.filter_by(is_base=True).first()
+        
+        if current_base_currency:
+            # Unset current base currency
+            current_base_currency.is_base = False
+        
+        # Set new base currency
+        new_base_currency.is_base = True
+        
+        # Update rate to base for this currency
+        new_base_currency.rate_to_base = 1.0
+        
+        # Update rates for other currencies relative to the new base
+        try:
+            update_currency_rates()
+        except Exception as rate_update_error:
+            # Log the error but don't prevent the base currency change
+            app.logger.error(f"Error updating rates after base currency change: {str(rate_update_error)}")
+        
+        # Commit changes
+        db.session.commit()
+        
+        flash(f'Base currency successfully changed to {code}.', 'success')
+    except Exception as e:
+        # Rollback in case of error
+        db.session.rollback()
+        
+        # Log the error
+        app.logger.error(f"Error changing base currency to {code}: {str(e)}")
+        
+        flash('An error occurred while changing the base currency.', 'error')
+    
+    return redirect(url_for('currencies'))
+@app.route('/update_currency_rates', methods=['POST'])
+@login_required_dev
+def update_rates_route():
+    """API route to update currency rates"""
+    if not current_user.is_admin:
+        flash('Only administrators can update currency rates')
+        return redirect(url_for('manage_currencies'))
+    
+    result = update_currency_rates()
+    
+    if result >= 0:
+        flash(f'Successfully updated {result} currency rates')
+    else:
+        flash('Error updating currency rates. Check the logs for details.')
+    
+    return redirect(url_for('manage_currencies'))
+@app.route('/set_default_currency', methods=['POST'])
+@login_required_dev
+def set_default_currency():
+    currency_code = request.form.get('default_currency')
+    
+    # Verify currency exists
+    currency = Currency.query.filter_by(code=currency_code).first()
+    if not currency:
+        flash('Invalid currency selected')
+        return redirect(url_for('manage_currencies'))
+    
+    # Update user's default currency
+    current_user.default_currency_code = currency_code
+    db.session.commit()
+    
+    flash(f'Default currency set to {currency.code} ({currency.symbol})')
+    return redirect(url_for('manage_currencies'))
 @app.route('/transactions')
 @login_required_dev
 def transactions():

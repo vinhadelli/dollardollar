@@ -107,6 +107,17 @@
                     <label for="amount" class="form-label">Amount ($)</label>
                     <input type="number" step="0.01" class="form-control bg-dark text-light" id="amount" name="amount" required>
                 </div>
+                <div class="col-md-6 mb-3">
+                    <label for="currency_code" class="form-label">Currency</label>
+                    <select class="form-control bg-dark text-light" id="currency_code" name="currency_code">
+                        {% for currency in currencies %}
+                            <option value="{{ currency.code }}" 
+                                    {% if currency.code == current_user.default_currency_code %}selected{% endif %}>
+                                {{ currency.code }} ({{ currency.symbol }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
             
             <div class="row">
@@ -194,7 +205,23 @@
                     {% endfor %}
                 </select>
             </div>
-            
+            <!--tag section -->
+            <div class="mb-3">
+                <label for="tags" class="form-label">Tags (Optional)</label>
+                <div class="tag-selector">
+                    {% for tag in current_user.tags %}
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input tag-checkbox" type="checkbox" id="tag{{ tag.id }}" name="tags" value="{{ tag.id }}" 
+                               style="background-color: {{ tag.color }}; border-color: {{ tag.color }};">
+                        <label class="form-check-label" for="tag{{ tag.id }}">{{ tag.name }}</label>
+                    </div>
+                    {% endfor %}
+                    
+                    {% if current_user.tags|length == 0 %}
+                    <p class="text-muted small">No tags created yet. <a href="{{ url_for('manage_tags') }}" class="text-warning">Create tags</a> to categorize expenses.</p>
+                    {% endif %}
+                </div>
+            </div>
             <div class="d-flex justify-content-end">
                 <button type="button" class="btn btn-secondary me-2" onclick="toggleExpenseForm()">Cancel</button>
                 <button type="submit" class="btn btn-primary">Add Expense</button>
@@ -317,11 +344,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().split('T')[0];
     
     // Set date field for new expense form
-    const dateInput = document.getElementById('date');
+    const dateInput = document.getElementById('date');  
     if (dateInput) {
         dateInput.value = today;
     }
-    
+     // Initialize tag checkboxes (add this line)
+    initializeTagCheckboxes();
     // Set default date range for filters (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -1057,6 +1085,22 @@ function initializeMultiSelect() {
     
     // Initial display update
     updateCustomSelectDisplay();
+}
+function initializeTagCheckboxes() {
+    const tagCheckboxes = document.querySelectorAll('.tag-checkbox');
+
+    tagCheckboxes.forEach(checkbox => {
+        const originalColor = checkbox.style.backgroundColor;
+
+        // Adjust checked style
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                this.style.backgroundColor = originalColor;
+            } else {
+                this.style.backgroundColor = 'transparent';
+            }
+        });
+    });
 }
 
 </script>
