@@ -1238,6 +1238,8 @@ def dashboard():
         'net_balance': net_balance
     }
     
+    currencies = Currency.query.all()
+    print(f"Passing {len(currencies)} currencies to dashboard template")
     # Pre-calculate expense splits to avoid repeated calculations in template
     expense_splits = {}
     for expense in expenses:
@@ -1282,7 +1284,7 @@ def add_expense():
                 split_details = request.form.get('split_details')
             
             # NEW CODE: Get currency information
-            currency_code = request.form.get('currency_code')
+            currency_code = request.form.get('currency_code', 'USD')
             if not currency_code:
                 # Use user's default currency or system default (USD)
                 currency_code = current_user.default_currency_code or 'USD'
@@ -1378,10 +1380,11 @@ def recurring():
     recurring_expenses = RecurringExpense.query.filter_by(user_id=current_user.id).all()
     users = User.query.all()
     groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
-    
+    currencies = Currency.query.all()
     return render_template('recurring.html', 
                           recurring_expenses=recurring_expenses, 
                           users=users,
+                          currencies=currencies,
                           groups=groups)
 
 @app.route('/add_recurring', methods=['POST'])
@@ -1543,7 +1546,8 @@ def group_details(group_id):
     
     expenses = Expense.query.filter_by(group_id=group_id).order_by(Expense.date.desc()).all()
     all_users = User.query.all()
-    return render_template('group_details.html', group=group, expenses=expenses, users=all_users)
+    currencies = Currency.query.all()
+    return render_template('group_details.html', group=group, expenses=expenses,currencies=currencies, users=all_users)
 
 @app.route('/groups/<int:group_id>/add_member', methods=['POST'])
 @login_required_dev
@@ -2055,6 +2059,7 @@ def transactions():
     monthly_totals = {}
     unique_cards = set()
     
+    currencies = Currency.query.all()
     for expense in expenses:
         month_key = expense.date.strftime('%Y-%m')
         if month_key not in monthly_totals:
@@ -2100,7 +2105,8 @@ def transactions():
                         total_expenses=total_expenses,
                         current_month_total=current_month_total,
                         unique_cards=unique_cards,
-                        users=users)
+                        users=users,
+                        currencies=currencies)
 
 # Add this to your Flask app.py to implement transaction export functionality
 
@@ -2341,6 +2347,7 @@ with app.app_context():
     try:
         print("Creating database tables...")
         db.create_all()
+        init_default_currencies()
         print("Tables created successfully")
     except Exception as e:
         print(f"ERROR CREATING TABLES: {str(e)}")
