@@ -1,12 +1,9 @@
 # Use a more specific base image that supports multiple architectures
 FROM --platform=$TARGETPLATFORM ubuntu:20.04
 
-ENV PENSSL_LEGACY_PROVIDER=1
-
-# Set non-interactive installation and prevent apt from prompting
+# Set environment variables
+ENV OPENSSL_LEGACY_PROVIDER=1
 ENV DEBIAN_FRONTEND=noninteractive
-
-# Fix for OpenSSL issue with digital envelope routines
 ENV PYTHONWARNINGS=ignore
 ENV OPENSSL_CONF=/etc/ssl/openssl-legacy.cnf
 ENV OPENSSL_ENABLE_MD5_VERIFY=1
@@ -23,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     postgresql-client \
     libpq-dev \
+    cron \
     && rm -rf /var/lib/apt/lists/* \
     && pip install scrypt
 
@@ -56,16 +54,31 @@ RUN echo "import ssl\n\n# Legacy OpenSSL support\ntry:\n    ssl._create_default_
 # Apply the patch
 RUN cat ssl_fix.py app.py > temp_app.py && mv temp_app.py app.py
 
+# Set up cron job for updating currencies
+RUN echo "0 1 * * * /venv/bin/python /app/update_currencies.py >> /var/log/cron.log 2>&1" | crontab -
+
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 
-ENV PYTHONUNBUFFERED=1 
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.py
 
 # Expose the port
 EXPOSE 5001
 
+# Create an entrypoint script to start cron and gunicorn
+RUN echo '#!/bin/bash\n\
+# Start cron\n\
+cron\n\
+\n\
+# Run the main container command\n\
+exec /venv/bin/gunicorn --bind 0.0.0.0:5001 --workers=3 --timeout=120 app:app\n\
+' > /entrypoint.sh
+
+# Make the entrypoint script executable
+RUN chmod +x /entrypoint.sh
+
 # Use multi-stage build support
 ARG TARGETPLATFORM
 
-# Use the absolute path to gunicorn from the virtual environment
-CMD ["/venv/bin/gunicorn", "--bind", "0.0.0.0:5001", "--workers=3", "--timeout=120", "app:app"]
+# Use the entrypoint script
+CMD ["/entrypoint.sh"]
