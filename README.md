@@ -2,6 +2,13 @@
 
 An open-source, self-hosted expense tracking and bill-splitting application designed for privacy, flexibility, and financial transparency.
 
+
+## NOTE:
+If you are encountring issues after updating/pulling the recent docker. Please run
+- flask db migrate 
+- flask db upgrade
+
+
 ## 🌟 Why DollarDollar?
 
 Born from a desire to move beyond restrictive financial tracking platforms, this app empowers users with:
