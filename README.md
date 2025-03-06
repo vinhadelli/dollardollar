@@ -138,27 +138,22 @@ MIT License
 Here's a visual tour of DollarDollar Bill Y'all:
 
 ### Dashboard Overview
-![Dashboard](<img width="1427" alt="Screenshot 2025-03-05 at 10 23 58 PM" src="https://github.com/user-attachments/assets/c12126a6-1295-4e5f-9e2a-2a970faca1c2" />
-)
-*Main dashboard showing monthly expenses summary and quick actions*
+<img width="1427" alt="Screenshot 2025-03-05 at 10 23 58 PM" src="https://github.com/user-attachments/assets/c12126a6-1295-4e5f-9e2a-2a970faca1c2" />
 
 ### Expense Splitting
-![Expense Splitting](<img width="1427" alt="Screenshot 2025-03-05 at 10 34 05 PM" src="https://github.com/user-attachments/assets/0ee7e55c-621e-4eeb-ae2b-11b1218dd158" />)
-*Flexible expense splitting options with real-time calculations*
+<img width="1427" alt="Screenshot 2025-03-05 at 10 34 05 PM" src="https://github.com/user-attachments/assets/0ee7e55c-621e-4eeb-ae2b-11b1218dd158" />
+
+###Settling Splits
+<img width="1427" alt="Screenshot 2025-03-05 at 10 36 48 PM" src="https://github.com/user-attachments/assets/1ca55758-5390-413b-b8e6-bb85e31263c0" />
 
 ### Group Management
-![Group Management]<img width="1427" alt="Screenshot 2025-03-05 at 10 24 14 PM" src="https://github.com/user-attachments/assets/33507573-2fb8-4727-9451-509c606bcc91" />
-
-*Create and manage expense groups with multiple participants*
+<img width="1427" alt="Screenshot 2025-03-05 at 10 24 14 PM" src="https://github.com/user-attachments/assets/33507573-2fb8-4727-9451-509c606bcc91" />
 
 ### Muti Currency Support
-![currency](<img width="1427" alt="Screenshot 2025-03-05 at 10 25 09 PM" src="https://github.com/user-attachments/assets/c965ccc6-4514-4b88-b3d1-7755373bd3ee" />)
-*Multi currency support*
+<img width="1427" alt="Screenshot 2025-03-05 at 10 25 09 PM" src="https://github.com/user-attachments/assets/c965ccc6-4514-4b88-b3d1-7755373bd3ee" />
 
 ### Recurring expenses
-![Recurring](<img width="1427" alt="Screenshot 2025-03-05 at 10 24 59 PM" src="https://github.com/user-attachments/assets/b0992c09-ea21-4f45-b85d-ce5378fdbdbc" />
-)
-*ability to scedule recurring expenses*
+<img width="1427" alt="Screenshot 2025-03-05 at 10 24 59 PM" src="https://github.com/user-attachments/assets/b0992c09-ea21-4f45-b85d-ce5378fdbdbc" />
 
 ## 🙏 Acknowledgements
 
