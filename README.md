@@ -143,7 +143,7 @@ Here's a visual tour of DollarDollar Bill Y'all:
 ### Expense Splitting
 <img width="1427" alt="Screenshot 2025-03-05 at 10 34 05 PM" src="https://github.com/user-attachments/assets/0ee7e55c-621e-4eeb-ae2b-11b1218dd158" />
 
-###Settling Splits
+### Settling Splits
 <img width="1427" alt="Screenshot 2025-03-05 at 10 36 48 PM" src="https://github.com/user-attachments/assets/1ca55758-5390-413b-b8e6-bb85e31263c0" />
 
 ### Group Management
