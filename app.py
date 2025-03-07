@@ -18,7 +18,7 @@ from flask_mail import Mail, Message
 from flask_migrate import Migrate
 import ssl
 import requests
-
+import json
 
 
 os.environ['OPENSSL_LEGACY_PROVIDER'] = '1'
@@ -189,8 +189,7 @@ class Expense(db.Model):
     original_amount = db.Column(db.Float, nullable=True)  # Amount in original currency
     currency = db.relationship('Currency', backref=db.backref('expenses', lazy=True))
     def calculate_splits(self):
-        import json
-        
+    
         # Get the user who paid
         payer = User.query.filter_by(id=self.paid_by).first()
         payer_name = payer.name if payer else "Unknown"
@@ -209,13 +208,16 @@ class Expense(db.Model):
                     'email': user.id
                 })
         
-        # Set up result structure with both base and original currency
+        # Handle case where original_amount is None by using amount
+        original_amount = self.original_amount if self.original_amount is not None else self.amount
+        
+    # Set up result structure with both base and original currency
         result = {
             'payer': {
                 'name': payer_name, 
                 'email': payer_email,
                 'amount': 0,  # Base currency amount
-                'original_amount': self.original_amount,  # Original amount
+                'original_amount': original_amount,  # Original amount
                 'currency_code': self.currency_code  # Original currency code
             },
             'splits': []
@@ -235,7 +237,7 @@ class Expense(db.Model):
             
             # Equal splits among all participants
             per_person = self.amount / total_participants if total_participants > 0 else 0
-            per_person_original = self.original_amount / total_participants if total_participants > 0 else 0
+            per_person_original = original_amount / total_participants if total_participants > 0 else 0
             
             # Assign payer's portion (only if they're not already in the splits)
             if self.paid_by not in split_with_ids:
@@ -263,7 +265,7 @@ class Expense(db.Model):
                 # Calculate payer's amount if specified
                 payer_percent = float(percentages.get(self.paid_by, 0))
                 payer_amount = (self.amount * payer_percent) / 100
-                payer_original_amount = (self.original_amount * payer_percent) / 100
+                payer_original_amount = (original_amount * payer_percent) / 100
                 
                 result['payer']['amount'] = payer_amount if self.paid_by not in split_with_ids else 0
                 total_assigned += payer_amount if self.paid_by not in split_with_ids else 0
@@ -273,7 +275,7 @@ class Expense(db.Model):
                 for user in split_users:
                     user_percent = float(percentages.get(user['id'], 0))
                     user_amount = (self.amount * user_percent) / 100
-                    user_original_amount = (self.original_amount * user_percent) / 100
+                    user_original_amount = (original_amount * user_percent) / 100
                     
                     result['splits'].append({
                         'name': user['name'],
@@ -297,13 +299,13 @@ class Expense(db.Model):
                 # Backward compatibility mode
                 payer_percentage = self.split_value if self.split_value is not None else 0
                 payer_amount = (self.amount * payer_percentage) / 100
-                payer_original_amount = (self.original_amount * payer_percentage) / 100
+                payer_original_amount = (original_amount * payer_percentage) / 100
                 
                 result['payer']['amount'] = payer_amount if self.paid_by not in split_with_ids else 0
                 
                 # Split remainder equally
                 remaining = self.amount - result['payer']['amount']
-                remaining_original = self.original_amount - payer_original_amount
+                remaining_original = original_amount - payer_original_amount
                 per_person = remaining / len(split_users) if split_users else 0
                 per_person_original = remaining_original / len(split_users) if split_users else 0
                 
@@ -325,7 +327,9 @@ class Expense(db.Model):
                 
                 # Set payer's amount if specified
                 payer_amount = float(amounts.get(self.paid_by, 0))
-                payer_original_amount = 0  # This is tricky, might need additional logic
+                # For original amount, scale by the same proportion
+                payer_ratio = payer_amount / self.amount if self.amount else 0
+                payer_original_amount = original_amount * payer_ratio
                 
                 result['payer']['amount'] = payer_amount if self.paid_by not in split_with_ids else 0
                 total_assigned += payer_amount if self.paid_by not in split_with_ids else 0
@@ -333,11 +337,15 @@ class Expense(db.Model):
                 # Set each user's amount
                 for user in split_users:
                     user_amount = float(amounts.get(user['id'], 0))
+                    # Scale original amount by same proportion
+                    user_ratio = user_amount / self.amount if self.amount else 0
+                    user_original_amount = original_amount * user_ratio
+                    
                     result['splits'].append({
                         'name': user['name'],
                         'email': user['email'],
                         'amount': user_amount,
-                        'original_amount': 0,  # This is tricky, might need additional logic
+                        'original_amount': user_original_amount,
                         'currency_code': self.currency_code
                     })
                     total_assigned += user_amount
@@ -352,22 +360,27 @@ class Expense(db.Model):
             else:
                 # Backward compatibility mode
                 payer_amount = self.split_value if self.split_value is not None else 0
+                # Calculate the ratio of payer amount to total
+                payer_ratio = payer_amount / self.amount if self.amount else 0
+                payer_original_amount = original_amount * payer_ratio
                 
                 result['payer']['amount'] = payer_amount if self.paid_by not in split_with_ids else 0
                 
                 # Split remainder equally
                 remaining = self.amount - result['payer']['amount']
+                remaining_original = original_amount - payer_original_amount
                 per_person = remaining / len(split_users) if split_users else 0
+                per_person_original = remaining_original / len(split_users) if split_users else 0
                 
                 for user in split_users:
                     result['splits'].append({
                         'name': user['name'],
                         'email': user['email'],
                         'amount': per_person,
-                        'original_amount': per_person,  # Defaults to base currency amount
+                        'original_amount': per_person_original,
                         'currency_code': self.currency_code
                     })
-    
+
         return result
 
 class RecurringExpense(db.Model):
