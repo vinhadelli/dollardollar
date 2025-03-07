@@ -231,12 +231,14 @@
                                 <li><a class="dropdown-item text-light" href="{{ url_for('dashboard') }}"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</a></li>
                                 <li><a class="dropdown-item text-light" href="{{ url_for('transactions') }}"><i class="fas fa-exchange-alt me-2"></i>Transactions</a></li>
                                 <li><a class="dropdown-item text-light" href="{{ url_for('settlements') }}"><i class="fas fa-money-bill-wave me-2"></i>Settle Up</a></li>
-                                <li><a class="dropdown-item text-light" href="{{ url_for('groups') }}"><i class="fas fa-users me-2"></i>Groups</a></li>
-                                <li><a class="dropdown-item text-light" href="{{ url_for('recurring') }}"><i class="fas fa-calendar-alt me-2"></i>Recurring Expenses</a></li>
-                                <li><a class="dropdown-item text-light" href="{{ url_for('manage_tags') }}"><i class="fas fa-tags me-2"></i>Manage Tags</a></li>
                                 <li><a class="dropdown-item text-light" href="{{ url_for('manage_currencies') }}">
                                     <i class="fas fa-money-bill-wave me-2"></i>Currencies
                                 </a></li>
+                                <li><a class="dropdown-item text-light" href="{{ url_for('recurring') }}"><i class="fas fa-calendar-alt me-2"></i>Recurring Expenses</a></li>
+                                <li><a class="dropdown-item text-light" href="{{ url_for('groups') }}"><i class="fas fa-users me-2"></i>Groups</a></li>
+                                <li><a class="dropdown-item text-light" href="{{ url_for('manage_tags') }}"><i class="fas fa-tags me-2"></i>Manage Tags</a></li>
+                                
+                                <li><a class="dropdown-item text-light" href="{{ url_for('stats') }}"><i class="fas fa-chart-bar me-2"></i>Statistics</a></li>
                                 {% if current_user.is_admin %}
                                     <li><a class="dropdown-item text-light" href="{{ url_for('admin') }}"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
                                 {% endif %}

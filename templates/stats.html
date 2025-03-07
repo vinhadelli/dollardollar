@@ -1,0 +1,641 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2 style="background: linear-gradient(90deg, #0ea5e9, #8b5cf6); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: bold;">
+                <i class="fas fa-chart-bar me-3" style="color: #a855f7;"></i>Financial Analytics & Insights
+            </h2>
+            <p class="text-muted">Visualize your spending patterns and track financial health over time</p>
+        </div>
+    </div>
+    
+    <!-- Filter Controls -->
+    <div class="card mb-4" style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(30, 41, 59, 0.95));">
+        <div class="card-header" style="background: rgba(15, 23, 42, 0.7); border-bottom: 1px solid rgba(148, 163, 184, 0.2);">
+            <h5 class="mb-0"><i class="fas fa-sliders-h me-2" style="color: #a855f7;"></i>Customize View</h5>
+        </div>
+        <div class="card-body">
+            <form id="statsFilterForm">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label" style="color: #94a3b8;"><i class="far fa-calendar-alt me-2" style="color: #38bdf8;"></i>Date Range</label>
+                        <div class="input-group">
+                            <input type="date" class="form-control bg-dark text-light" id="startDate" name="startDate" style="border-color: #475569;">
+                            <span class="input-group-text bg-dark text-light" style="border-color: #475569; color: #94a3b8;">to</span>
+                            <input type="date" class="form-control bg-dark text-light" id="endDate" name="endDate" style="border-color: #475569;">
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label" style="color: #94a3b8;"><i class="fas fa-users me-2" style="color: #818cf8;"></i>Group</label>
+                        <select class="form-select bg-dark text-light" id="groupFilter" name="groupId" style="border-color: #475569;">
+                            <option value="all">All Groups</option>
+                            <option value="none">Personal Only</option>
+                            {% for group in current_user.groups %}
+                                <option value="{{ group.id }}">{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label" style="color: #94a3b8;"><i class="fas fa-chart-pie me-2" style="color: #facc15;"></i>Chart Type</label>
+                        <select class="form-select bg-dark text-light" id="chartTypeFilter" name="chartType" style="border-color: #475569;">
+                            <option value="all">Show All</option>
+                            <option value="spending">Spending Patterns</option>
+                            <option value="categories">Category Breakdown</option>
+                            <option value="balance">Balance Trends</option>
+                            <option value="paymentMethod">Payment Methods</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-3 d-flex align-items-end">
+                        <button type="button" class="btn w-100" id="applyFilters" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.2);">
+                            <i class="fas fa-filter me-2"></i>Apply
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card" style="border-top: 4px solid #0ea5e9;">
+                <div class="card-body">
+                    <h5 class="card-title text-muted mb-2">
+                        <i class="fas fa-wallet me-2" style="color: #0ea5e9;"></i>Total Spending
+                    </h5>
+                    <h3 class="mb-0" id="totalSpending" style="color: #0ea5e9;">${{ "%.2f"|format(total_expenses) }}</h3>
+                    <p class="text-muted mt-2" id="spendingTrend">
+                        {% if spending_trend > 0 %}
+                        <i class="fas fa-arrow-up text-danger"></i> {{ "%.1f"|format(spending_trend) }}% from last period
+                        {% elif spending_trend < 0 %}
+                        <i class="fas fa-arrow-down text-success"></i> {{ "%.1f"|format(spending_trend|abs) }}% from last period
+                        {% else %}
+                        <i class="fas fa-equals text-warning"></i> No change from last period
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card" style="border-top: 4px solid {{ '#10b981' if net_balance >= 0 else '#ef4444' }};">
+                <div class="card-body">
+                    <h5 class="card-title text-muted mb-2">
+                        <i class="fas fa-balance-scale me-2" style="color: {{ '#10b981' if net_balance >= 0 else '#ef4444' }};"></i>Net Balance
+                    </h5>
+                    <h3 class="mb-0 {{ 'text-success' if net_balance >= 0 else 'text-danger' }}" id="netBalance">
+                        ${{ "%.2f"|format(net_balance|abs) }} {{ 'Owed' if net_balance >= 0 else 'Owing' }}
+                    </h3>
+                    <p class="text-muted mt-2">From {{ balance_count }} active IOUs</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card" style="border-top: 4px solid #8b5cf6;">
+                <div class="card-body">
+                    <h5 class="card-title text-muted mb-2">
+                        <i class="fas fa-chart-line me-2" style="color: #8b5cf6;"></i>Monthly Average
+                    </h5>
+                    <h3 class="mb-0" id="monthlyAverage" style="color: #8b5cf6;">${{ "%.2f"|format(monthly_average) }}</h3>
+                    <p class="text-muted mt-2">Based on the last {{ month_count }} months</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card" style="border-top: 4px solid #f97316;">
+                <div class="card-body">
+                    <h5 class="card-title text-muted mb-2">
+                        <i class="fas fa-crown me-2" style="color: #f97316;"></i>Largest Expense
+                    </h5>
+                    <h3 class="mb-0" id="largestExpense" style="color: #f97316;">${{ "%.2f"|format(largest_expense.amount) }}</h3>
+                    <p class="text-muted mt-2">{{ largest_expense.description }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Spending Chart -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header" style="background: rgba(15, 23, 42, 0.7);">
+                    <h5 class="mb-0"><i class="fas fa-chart-line me-2" style="color: #0ea5e9;"></i>Monthly Spending Trends</h5>
+                </div>
+                <div class="card-body" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));">
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="monthlySpendingChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Spending Breakdown and Payment Methods -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header" style="background: rgba(15, 23, 42, 0.7);">
+                    <h5 class="mb-0"><i class="fas fa-credit-card me-2" style="color: #10b981;"></i>Expense Breakdown By Card</h5>
+                </div>
+                <div class="card-body" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));">
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="paymentMethodChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header" style="background: rgba(15, 23, 42, 0.7);">
+                    <h5 class="mb-0"><i class="fas fa-chart-pie me-2" style="color: #f97316;"></i>Expense Distribution</h5>
+                </div>
+                <div class="card-body" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));">
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="expenseDistributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Balance History and Group Expenses -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header" style="background: rgba(15, 23, 42, 0.7);">
+                    <h5 class="mb-0"><i class="fas fa-balance-scale me-2" style="color: #8b5cf6;"></i>Balance History</h5>
+                </div>
+                <div class="card-body" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));">
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="balanceHistoryChart"></canvas>
+                        <div style="position: absolute; top: 10px; right: 10px; background: rgba(15, 23, 42, 0.7); padding: 5px 10px; border-radius: 4px; font-size: 12px;">
+                            <span style="color: #0ea5e9;"><i class="fas fa-circle me-1"></i>Owed</span>
+                            <span class="ms-3" style="color: #ef4444;"><i class="fas fa-circle me-1"></i>Owing</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header" style="background: rgba(15, 23, 42, 0.7);">
+                    <h5 class="mb-0"><i class="fas fa-users me-2" style="color: #c084fc;"></i>Group Expense Comparison</h5>
+                </div>
+                <div class="card-body" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));">
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="groupComparisonChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Expenses Table -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center" style="background: rgba(15, 23, 42, 0.7);">
+                    <h5 class="mb-0"><i class="fas fa-star me-2" style="color: #facc15;"></i>Top Expenses</h5>
+                    <div>
+                        <span class="badge" style="background: linear-gradient(135deg, #f97316, #facc15);">Top {{ top_expenses|length }} transactions</span>
+                    </div>
+                </div>
+                <div class="card-body" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));">
+                    <div class="table-responsive">
+                        <table class="table table-borderless">
+                            <thead>
+                                <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.2);">
+                                    <th style="color: #94a3b8;"><i class="far fa-calendar-alt me-2"></i>Date</th>
+                                    <th style="color: #94a3b8;"><i class="fas fa-tag me-2"></i>Description</th>
+                                    <th style="color: #94a3b8;"><i class="fas fa-dollar-sign me-2"></i>Amount</th>
+                                    <th style="color: #94a3b8;"><i class="fas fa-user me-2"></i>Paid By</th>
+                                    <th style="color: #94a3b8;"><i class="fas fa-credit-card me-2"></i>Card Used</th>
+                                    <th style="color: #94a3b8;"><i class="fas fa-users me-2"></i>Group</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for expense in top_expenses %}
+                                <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.1);">
+                                    <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ expense.description }}</td>
+                                    <td style="color: #38bdf8; font-weight: bold;">${{ "%.2f"|format(expense.amount) }}</td>
+                                    <td>
+                                        {% if expense.user_id == current_user.id %}
+                                        <span class="badge" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">You</span>
+                                        {% else %}
+                                        {{ expense.user.name }}
+                                        {% endif %}
+                                    </td>
+                                    <td><span class="badge bg-dark text-light">{{ expense.card_used }}</span></td>
+                                    <td>
+                                        {% if expense.group %}
+                                        <span class="badge" style="background: linear-gradient(135deg, #10b981, #34d399);">{{ expense.group.name }}</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add some animation when the page loads
+        document.querySelectorAll('.card').forEach((card, index) => {
+            card.style.opacity = 0;
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+            
+            setTimeout(() => {
+                card.style.opacity = 1;
+                card.style.transform = 'translateY(0)';
+            }, 100 * index); // Stagger the animations
+        });
+        
+        // Initialize date filters (last 6 months by default)
+        const today = new Date();
+        const endDate = today.toISOString().split('T')[0];
+        
+        const startDate = new Date();
+        startDate.setMonth(today.getMonth() - 6);
+        document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+        document.getElementById('endDate').value = endDate;
+        
+        // Filter button handler
+        document.getElementById('applyFilters').addEventListener('click', applyFilters);
+        
+        // Add hover effects to buttons
+        const filterBtn = document.getElementById('applyFilters');
+        filterBtn.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-2px)';
+            this.style.boxShadow = '0 6px 10px -1px rgba(99, 102, 241, 0.3)';
+        });
+        filterBtn.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = '0 4px 6px -1px rgba(99, 102, 241, 0.2)';
+        });
+        
+        // Initialize all charts
+        initializeCharts();
+    });
+    
+    function applyFilters() {
+        // This would typically make an AJAX call to refresh the data
+        // For now we'll just reload the page with the selected filters
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const groupId = document.getElementById('groupFilter').value;
+        const chartType = document.getElementById('chartTypeFilter').value;
+        
+        window.location.href = `{{ url_for('stats') }}?startDate=${startDate}&endDate=${endDate}&groupId=${groupId}&chartType=${chartType}`;
+    }
+    
+    function initializeCharts() {
+        // Set common Chart.js options for dark theme
+        Chart.defaults.color = '#fff';
+        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+        
+        // Add chart animations
+        const chartAnimations = {
+            duration: 2000,
+            easing: 'easeOutQuart'
+        };
+        
+        // Monthly Spending Chart
+        const monthlyCtx = document.getElementById('monthlySpendingChart').getContext('2d');
+        const monthlyGradient = monthlyCtx.createLinearGradient(0, 0, 0, 300);
+        monthlyGradient.addColorStop(0, 'rgba(45, 212, 191, 0.5)');
+        monthlyGradient.addColorStop(1, 'rgba(45, 212, 191, 0.0)');
+        
+        const monthlyChart = new Chart(monthlyCtx, {
+            type: 'line',
+            data: {
+                labels: {{ monthly_labels|tojson }},
+                datasets: [{
+                    label: 'Monthly Spending',
+                    data: {{ monthly_amounts|tojson }},
+                    backgroundColor: monthlyGradient,
+                    borderColor: '#0ea5e9',
+                    borderWidth: 3,
+                    pointBackgroundColor: '#3b82f6',
+                    pointBorderColor: '#2563eb',
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#7c3aed',
+                    pointHoverBorderColor: '#4f46e5',
+                    pointHoverBorderWidth: 2,
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `$${context.raw.toFixed(2)}`;
+                            }
+                        },
+                        backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                        titleColor: '#38bdf8',
+                        bodyColor: '#f8fafc',
+                        borderColor: '#1e40af',
+                        borderWidth: 1,
+                        padding: 10,
+                        boxPadding: 5,
+                        usePointStyle: true
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value;
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        }
+                    }
+                },
+                animation: chartAnimations
+            }
+        });
+        
+        // Payment Methods Pie Chart (cards used)
+        const paymentMethodCtx = document.getElementById('paymentMethodChart').getContext('2d');
+        const paymentMethodChart = new Chart(paymentMethodCtx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ payment_methods|tojson }},
+                datasets: [{
+                    data: {{ payment_amounts|tojson }},
+                    backgroundColor: [
+                        '#10b981', '#3b82f6', '#8b5cf6', '#ec4899',
+                        '#f97316', '#14b8a6', '#f43f5e', '#facc15',
+                        '#a3e635', '#06b6d4', '#6366f1', '#d946ef'
+                    ],
+                    borderColor: 'rgba(30, 41, 59, 0.7)',
+                    borderWidth: 2,
+                    hoverOffset: 15
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.raw;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `$${value.toFixed(2)} (${percentage}%)`;
+                            }
+                        },
+                        backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                        titleColor: '#38bdf8',
+                        bodyColor: '#f8fafc',
+                        borderColor: '#1e40af',
+                        borderWidth: 1,
+                        padding: 10
+                    },
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            font: {
+                                size: 10
+                            },
+                            boxWidth: 12,
+                            padding: 10
+                        }
+                    }
+                },
+                cutout: '70%',
+                animation: chartAnimations
+            }
+        });
+        
+        // Expense Distribution Chart
+        const distributionCtx = document.getElementById('expenseDistributionChart').getContext('2d');
+        const distributionChart = new Chart(distributionCtx, {
+            type: 'polarArea',
+            data: {
+                labels: {{ expense_categories|tojson }},
+                datasets: [{
+                    data: {{ category_amounts|tojson }},
+                    backgroundColor: [
+                        'rgba(56, 189, 248, 0.8)', 
+                        'rgba(251, 146, 60, 0.8)', 
+                        'rgba(168, 85, 247, 0.8)', 
+                        'rgba(251, 113, 133, 0.8)',
+                        'rgba(74, 222, 128, 0.8)',
+                        'rgba(250, 204, 21, 0.8)'
+                    ],
+                    borderColor: [
+                        'rgb(14, 165, 233)',
+                        'rgb(234, 88, 12)',
+                        'rgb(126, 34, 206)',
+                        'rgb(225, 29, 72)',
+                        'rgb(22, 163, 74)',
+                        'rgb(202, 138, 4)'
+                    ],
+                    borderWidth: 2,
+                    hoverBorderWidth: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        ticks: {
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                        titleColor: '#38bdf8',
+                        bodyColor: '#f8fafc',
+                        borderColor: '#1e40af',
+                        borderWidth: 1,
+                        padding: 10
+                    }
+                },
+                animation: chartAnimations
+            }
+        });
+        
+        // Balance History Chart
+        const balanceCtx = document.getElementById('balanceHistoryChart').getContext('2d');
+        const balanceChart = new Chart(balanceCtx, {
+            type: 'line',
+            data: {
+                labels: {{ balance_labels|tojson }},
+                datasets: [{
+                    label: 'Net Balance',
+                    data: {{ balance_amounts|tojson }},
+                    backgroundColor: function(context) {
+                        const index = context.dataIndex;
+                        const value = context.dataset.data[index];
+                        return value >= 0 ? 'rgba(34, 211, 238, 0.2)' : 'rgba(248, 113, 113, 0.2)';
+                    },
+                    borderColor: function(context) {
+                        const index = context.dataIndex;
+                        const value = context.dataset.data[index];
+                        return value >= 0 ? '#0ea5e9' : '#ef4444';
+                    },
+                    borderWidth: 3,
+                    tension: 0.3,
+                    fill: true,
+                    pointBackgroundColor: function(context) {
+                        const index = context.dataIndex;
+                        const value = context.dataset.data[index];
+                        return value >= 0 ? '#0284c7' : '#b91c1c';
+                    },
+                    pointBorderColor: '#f8fafc',
+                    pointHoverBackgroundColor: '#4f46e5',
+                    pointHoverBorderColor: '#818cf8',
+                    pointHoverBorderWidth: 3,
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.raw;
+                                return value >= 0 ? 
+                                    `Owed: $${value.toFixed(2)}` : 
+                                    `Owing: $${Math.abs(value).toFixed(2)}`;
+                            }
+                        },
+                        backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                        titleColor: '#38bdf8',
+                        bodyColor: '#f8fafc',
+                        borderColor: '#1e40af',
+                        borderWidth: 1,
+                        padding: 10
+                    }
+                },
+                scales: {
+                    y: {
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value;
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        }
+                    }
+                },
+                animation: chartAnimations
+            }
+        });
+        
+        // Group Comparison Chart
+        const groupCompCtx = document.getElementById('groupComparisonChart').getContext('2d');
+        const groupCompChart = new Chart(groupCompCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ group_names|tojson }},
+                datasets: [{
+                    label: 'Total Expenses',
+                    data: {{ group_totals|tojson }},
+                    backgroundColor: [
+                        '#c084fc', '#a78bfa', '#818cf8', '#60a5fa', 
+                        '#38bdf8', '#22d3ee', '#2dd4bf', '#34d399',
+                        '#4ade80', '#a3e635', '#facc15', '#fb923c'
+                    ],
+                    borderColor: '#334155',
+                    borderWidth: 2,
+                    borderRadius: 6,
+                    hoverBackgroundColor: [
+                        '#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', 
+                        '#0ea5e9', '#06b6d4', '#14b8a6', '#10b981',
+                        '#22c55e', '#84cc16', '#eab308', '#f97316'
+                    ],
+                    hoverBorderColor: '#1e293b',
+                    hoverBorderWidth: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value;
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `$${context.raw.toFixed(2)}`;
+                            }
+                        },
+                        backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                        titleColor: '#38bdf8',
+                        bodyColor: '#f8fafc',
+                        borderColor: '#1e40af',
+                        borderWidth: 1,
+                        padding: 10
+                    }
+                },
+                animation: chartAnimations
+            }
+        });
+    }
+</script>
+{% endblock %}

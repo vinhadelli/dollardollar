@@ -1788,7 +1788,8 @@ def add_settlement():
         flash(f'Error: {str(e)}')
         
     return redirect(url_for('settlements'))
-# Add this route to your app.py file
+
+
 @app.route('/currencies')
 @login_required_dev
 def manage_currencies():
@@ -1874,6 +1875,7 @@ def update_currency(code):
         flash(f'Error updating currency: {str(e)}')
     
     return redirect(url_for('manage_currencies'))
+
 @app.route('/currencies/delete/<string:code>', methods=['DELETE'])
 @login_required
 def delete_currency(code):
@@ -1905,10 +1907,6 @@ def delete_currency(code):
                 'message': 'Cannot delete the base currency. Set another currency as base first.'
             }), 400
         
-        # Optional: Check if currency is in use
-        # You might want to add additional checks like:
-        # - Check if any expenses use this currency
-        # - Check if any users have this as their default currency
         
         # Remove the currency
         db.session.delete(currency)
@@ -2017,6 +2015,7 @@ def set_default_currency():
     
     flash(f'Default currency set to {currency.code} ({currency.symbol})')
     return redirect(url_for('manage_currencies'))
+
 @app.route('/transactions')
 @login_required_dev
 def transactions():
@@ -2140,8 +2139,9 @@ def transactions():
                         users=users,
                         currencies=currencies)
 
-# Add this to your Flask app.py to implement transaction export functionality
-
+#--------------------
+# ROUTES: Housecleaning
+#--------------------
 
 @app.route('/export_transactions', methods=['POST'])
 @login_required_dev
@@ -2268,6 +2268,276 @@ def export_transactions():
     except Exception as e:
         app.logger.error(f"Error exporting transactions: {str(e)}")
         return jsonify({"error": str(e)}), 500
+    
+
+# Add this route to your app.py file
+
+@app.route('/stats')
+@login_required_dev
+def stats():
+    """Display financial statistics and visualizations"""
+    # Get filter parameters from request
+    start_date_str = request.args.get('startDate', None)
+    end_date_str = request.args.get('endDate', None)
+    group_id = request.args.get('groupId', 'all')
+    chart_type = request.args.get('chartType', 'all')
+    
+    # Parse dates or use defaults (last 6 months)
+    try:
+        if start_date_str:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+        else:
+            # Default to 6 months ago
+            start_date = datetime.now() - timedelta(days=180)
+            
+        if end_date_str:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+        else:
+            end_date = datetime.now()
+    except ValueError:
+        # If date parsing fails, use default range
+        start_date = datetime.now() - timedelta(days=180)
+        end_date = datetime.now()
+    
+    # Build the filter query
+    query_filters = [
+        or_(
+            Expense.user_id == current_user.id,
+            Expense.split_with.like(f'%{current_user.id}%')
+        ),
+        Expense.date >= start_date,
+        Expense.date <= end_date
+    ]
+    
+    # Add group filter if specified
+    if group_id != 'all':
+        if group_id == 'none':
+            query_filters.append(Expense.group_id.is_(None))
+        else:
+            query_filters.append(Expense.group_id == group_id)
+    
+    # Execute the query with all filters
+    expenses = Expense.query.filter(and_(*query_filters)).order_by(Expense.date).all()
+    
+    # Get all settlements in the date range
+    settlement_filters = [
+        or_(
+            Settlement.payer_id == current_user.id,
+            Settlement.receiver_id == current_user.id
+        ),
+        Settlement.date >= start_date,
+        Settlement.date <= end_date
+    ]
+    settlements = Settlement.query.filter(and_(*settlement_filters)).order_by(Settlement.date).all()
+    
+    # Calculate total expenses in the period
+    total_expenses = sum(expense.amount for expense in expenses)
+    
+    # Calculate spending trend (compared to previous period of same length)
+    previous_period_start = start_date - (end_date - start_date)
+    previous_period_filters = [
+        or_(
+            Expense.user_id == current_user.id,
+            Expense.split_with.like(f'%{current_user.id}%')
+        ),
+        Expense.date >= previous_period_start,
+        Expense.date < start_date
+    ]
+    
+    previous_expenses = Expense.query.filter(and_(*previous_period_filters)).all()
+    previous_total = sum(expense.amount for expense in previous_expenses)
+    
+    if previous_total > 0:
+        spending_trend = ((total_expenses - previous_total) / previous_total) * 100
+    else:
+        spending_trend = 0
+    
+    # Calculate net balance
+    balances = calculate_balances(current_user.id)
+    net_balance = sum(balance['amount'] for balance in balances)
+    balance_count = len(balances)
+    
+    # Find largest expense
+    largest_expense = {"amount": 0, "description": "None"}
+    if expenses:
+        largest = max(expenses, key=lambda x: x.amount)
+        largest_expense = {"amount": largest.amount, "description": largest.description}
+    
+    # Get monthly average spending
+    # Group expenses by month
+    monthly_spending = {}
+    for expense in expenses:
+        month_key = expense.date.strftime('%Y-%m')
+        if month_key not in monthly_spending:
+            monthly_spending[month_key] = 0
+        monthly_spending[month_key] += expense.amount
+    
+    month_count = len(monthly_spending)
+    if month_count > 0:
+        monthly_average = total_expenses / month_count
+    else:
+        monthly_average = 0
+    
+    # Prepare data for monthly spending chart
+    # Make sure we have entries for all months in the range
+    current_date = start_date.replace(day=1)
+    monthly_labels = []
+    monthly_amounts = []
+    
+    while current_date <= end_date:
+        month_key = current_date.strftime('%Y-%m')
+        month_label = current_date.strftime('%b %Y')
+        monthly_labels.append(month_label)
+        monthly_amounts.append(monthly_spending.get(month_key, 0))
+        
+        # Advance to next month
+        if current_date.month == 12:
+            current_date = current_date.replace(year=current_date.year + 1, month=1)
+        else:
+            current_date = current_date.replace(month=current_date.month + 1)
+    
+    # Payment methods (cards used) chart data
+    payment_methods = []
+    payment_amounts = []
+    cards_total = {}
+    
+    for expense in expenses:
+        if expense.card_used not in cards_total:
+            cards_total[expense.card_used] = 0
+        cards_total[expense.card_used] += expense.amount
+    
+    # Sort by amount, descending
+    for card, amount in sorted(cards_total.items(), key=lambda x: x[1], reverse=True)[:8]:  # Limit to top 8
+        payment_methods.append(card)
+        payment_amounts.append(amount)
+    
+    # Mock data for expense distribution (categories)
+    # In a real app, you'd have actual categories for expenses
+    # Here we'll use the first word of the description as a proxy for category
+    categories = {}
+    for expense in expenses:
+        # Get first word of description as category
+        category = expense.description.split()[0] if expense.description else "Other"
+        if category not in categories:
+            categories[category] = 0
+        categories[category] += expense.amount
+    
+    # Get top 6 categories
+    expense_categories = []
+    category_amounts = []
+    
+    for category, amount in sorted(categories.items(), key=lambda x: x[1], reverse=True)[:6]:
+        expense_categories.append(category)
+        category_amounts.append(amount)
+    
+    # Balance history chart data
+    # We need to reconstruct the balance at different points in time
+    # This is complex and would involve recalculating balances as of each date
+    # For now, we'll use a simplified approach
+    balance_labels = monthly_labels
+    
+    # Start with a zero balance and add expenses/settlements chronologically
+    chronological_items = []
+    
+    for expense in expenses:
+        splits = expense.calculate_splits()
+        
+        # If current user paid
+        if expense.paid_by == current_user.id:
+            # Add what others owe to current user
+            for split in splits['splits']:
+                amount = split['amount']
+                chronological_items.append({
+                    'date': expense.date,
+                    'amount': amount,  # Positive: others owe current user
+                    'type': 'expense'
+                })
+        # If current user owes
+        elif current_user.id in [split['email'] for split in splits['splits']]:
+            # Find current user's portion
+            user_split = next((split['amount'] for split in splits['splits'] if split['email'] == current_user.id), 0)
+            chronological_items.append({
+                'date': expense.date,
+                'amount': -user_split,  # Negative: current user owes others
+                'type': 'expense'
+            })
+    
+    # Add settlements
+    for settlement in settlements:
+        if settlement.payer_id == current_user.id:
+            # User paid money to someone else (decreases balance)
+            chronological_items.append({
+                'date': settlement.date,
+                'amount': -settlement.amount,
+                'type': 'settlement'
+            })
+        else:
+            # User received money (increases balance)
+            chronological_items.append({
+                'date': settlement.date,
+                'amount': settlement.amount,
+                'type': 'settlement'
+            })
+    
+    # Sort all items chronologically
+    chronological_items.sort(key=lambda x: x['date'])
+    
+    # Calculate running balance at each month boundary
+    balance_amounts = []
+    running_balance = 0
+    
+    for month_label, month_date in zip(monthly_labels, [datetime.strptime(f"{label} 01", "%b %Y %d") for label in monthly_labels]):
+        # Add all items that occurred before this month
+        while chronological_items and chronological_items[0]['date'] < month_date:
+            item = chronological_items.pop(0)
+            running_balance += item['amount']
+        
+        balance_amounts.append(running_balance)
+    
+    # Group comparison data
+    group_names = ["Personal"]
+    group_totals = [0]
+    
+    # Personal expenses (no group)
+    for expense in expenses:
+        if expense.group_id is None:
+            group_totals[0] += expense.amount
+    
+    # Add each group's total
+    groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
+    
+    for group in groups:
+        group_total = 0
+        for expense in expenses:
+            if expense.group_id == group.id:
+                group_total += expense.amount
+        
+        group_names.append(group.name)
+        group_totals.append(group_total)
+    
+    # Top expenses for the table
+    top_expenses = sorted(expenses, key=lambda x: x.amount, reverse=True)[:10]  # Top 10
+    
+    return render_template('stats.html',
+                        expenses=expenses,
+                        total_expenses=total_expenses,
+                        spending_trend=spending_trend,
+                        net_balance=net_balance,
+                        balance_count=balance_count,
+                        monthly_average=monthly_average,
+                        month_count=month_count,
+                        largest_expense=largest_expense,
+                        monthly_labels=monthly_labels,
+                        monthly_amounts=monthly_amounts,
+                        payment_methods=payment_methods,
+                        payment_amounts=payment_amounts,
+                        expense_categories=expense_categories,
+                        category_amounts=category_amounts,
+                        balance_labels=balance_labels,
+                        balance_amounts=balance_amounts,
+                        group_names=group_names,
+                        group_totals=group_totals,
+                        top_expenses=top_expenses)
 #--------------------
 # # Password reset routes
 #--------------------
