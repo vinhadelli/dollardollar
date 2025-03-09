@@ -2313,12 +2313,10 @@ def export_transactions():
         return jsonify({"error": str(e)}), 500
     
 
-# Add this route to your app.py file
-
 @app.route('/stats')
 @login_required_dev
 def stats():
-    """Display financial statistics and visualizations"""
+    """Display financial statistics and visualizations that are user-centric"""
     # Get filter parameters from request
     start_date_str = request.args.get('startDate', None)
     end_date_str = request.args.get('endDate', None)
@@ -2342,7 +2340,7 @@ def stats():
         start_date = datetime.now() - timedelta(days=180)
         end_date = datetime.now()
     
-    # Build the filter query
+    # Build the filter query - only expenses where user is involved
     query_filters = [
         or_(
             Expense.user_id == current_user.id,
@@ -2373,10 +2371,75 @@ def stats():
     ]
     settlements = Settlement.query.filter(and_(*settlement_filters)).order_by(Settlement.date).all()
     
-    # Calculate total expenses in the period
-    total_expenses = sum(expense.amount for expense in expenses)
+    # USER-CENTRIC: Calculate only the current user's expenses
+    current_user_expenses = []
+    total_user_expenses = 0
     
-    # Calculate spending trend (compared to previous period of same length)
+    for expense in expenses:
+        # Calculate splits for this expense
+        splits = expense.calculate_splits()
+        
+        # Create a record of the user's portion only
+        user_portion = 0
+        
+        if expense.paid_by == current_user.id:
+            # If current user paid, include their own portion
+            user_portion = splits['payer']['amount']
+        else:
+            # If someone else paid, find current user's portion from splits
+            for split in splits['splits']:
+                if split['email'] == current_user.id:
+                    user_portion = split['amount']
+                    break
+        
+        # Only add to list if user has a portion
+        if user_portion > 0:
+            current_user_expenses.append({
+                'id': expense.id,
+                'description': expense.description,
+                'date': expense.date,
+                'total_amount': expense.amount,
+                'user_portion': user_portion,
+                'paid_by': expense.paid_by,
+                'paid_by_name': expense.user.name,
+                'card_used': expense.card_used,
+                'group_id': expense.group_id,
+                'group_name': expense.group.name if expense.group else None
+            })
+            
+            # Add to user's total
+            total_user_expenses += user_portion
+    
+    # Calculate monthly spending for current user
+    monthly_spending = {}
+    monthly_labels = []
+    monthly_amounts = []
+    
+    # Initialize all months in range
+    current_date = start_date.replace(day=1)
+    while current_date <= end_date:
+        month_key = current_date.strftime('%Y-%m')
+        month_label = current_date.strftime('%b %Y')
+        monthly_labels.append(month_label)
+        monthly_spending[month_key] = 0
+        
+        # Advance to next month
+        if current_date.month == 12:
+            current_date = current_date.replace(year=current_date.year + 1, month=1)
+        else:
+            current_date = current_date.replace(month=current_date.month + 1)
+    
+    # Fill in spending data
+    for expense_data in current_user_expenses:
+        month_key = expense_data['date'].strftime('%Y-%m')
+        if month_key in monthly_spending:
+            monthly_spending[month_key] += expense_data['user_portion']
+    
+    # Prepare chart data in correct order
+    for month_key in sorted(monthly_spending.keys()):
+        monthly_amounts.append(monthly_spending[month_key])
+    
+    # Calculate spending trend compared to previous period
     previous_period_start = start_date - (end_date - start_date)
     previous_period_filters = [
         or_(
@@ -2388,82 +2451,71 @@ def stats():
     ]
     
     previous_expenses = Expense.query.filter(and_(*previous_period_filters)).all()
-    previous_total = sum(expense.amount for expense in previous_expenses)
+    previous_total = 0
+    
+    for expense in previous_expenses:
+        splits = expense.calculate_splits()
+        user_portion = 0
+        
+        if expense.paid_by == current_user.id:
+            user_portion = splits['payer']['amount']
+        else:
+            for split in splits['splits']:
+                if split['email'] == current_user.id:
+                    user_portion = split['amount']
+                    break
+        
+        previous_total += user_portion
     
     if previous_total > 0:
-        spending_trend = ((total_expenses - previous_total) / previous_total) * 100
+        spending_trend = ((total_user_expenses - previous_total) / previous_total) * 100
     else:
         spending_trend = 0
     
-    # Calculate net balance
+    # Calculate net balance (from balances function)
     balances = calculate_balances(current_user.id)
     net_balance = sum(balance['amount'] for balance in balances)
     balance_count = len(balances)
     
-    # Find largest expense
+    # Find largest expense for current user (based on their portion)
     largest_expense = {"amount": 0, "description": "None"}
-    if expenses:
-        largest = max(expenses, key=lambda x: x.amount)
-        largest_expense = {"amount": largest.amount, "description": largest.description}
+    if current_user_expenses:
+        largest = max(current_user_expenses, key=lambda x: x['user_portion'])
+        largest_expense = {"amount": largest['user_portion'], "description": largest['description']}
     
-    # Get monthly average spending
-    # Group expenses by month
-    monthly_spending = {}
-    for expense in expenses:
-        month_key = expense.date.strftime('%Y-%m')
-        if month_key not in monthly_spending:
-            monthly_spending[month_key] = 0
-        monthly_spending[month_key] += expense.amount
-    
-    month_count = len(monthly_spending)
+    # Calculate monthly average (current user's spending)
+    month_count = len([amt for amt in monthly_amounts if amt > 0])
     if month_count > 0:
-        monthly_average = total_expenses / month_count
+        monthly_average = total_user_expenses / month_count
     else:
         monthly_average = 0
     
-    # Prepare data for monthly spending chart
-    # Make sure we have entries for all months in the range
-    current_date = start_date.replace(day=1)
-    monthly_labels = []
-    monthly_amounts = []
-    
-    while current_date <= end_date:
-        month_key = current_date.strftime('%Y-%m')
-        month_label = current_date.strftime('%b %Y')
-        monthly_labels.append(month_label)
-        monthly_amounts.append(monthly_spending.get(month_key, 0))
-        
-        # Advance to next month
-        if current_date.month == 12:
-            current_date = current_date.replace(year=current_date.year + 1, month=1)
-        else:
-            current_date = current_date.replace(month=current_date.month + 1)
-    
-    # Payment methods (cards used) chart data
+    # Payment methods (cards used) - only count cards the current user used
     payment_methods = []
     payment_amounts = []
     cards_total = {}
     
-    for expense in expenses:
-        if expense.card_used not in cards_total:
-            cards_total[expense.card_used] = 0
-        cards_total[expense.card_used] += expense.amount
+    for expense_data in current_user_expenses:
+        # Only include in payment methods if current user paid
+        if expense_data['paid_by'] == current_user.id:
+            card = expense_data['card_used']
+            if card not in cards_total:
+                cards_total[card] = 0
+            cards_total[card] += expense_data['user_portion']
     
     # Sort by amount, descending
     for card, amount in sorted(cards_total.items(), key=lambda x: x[1], reverse=True)[:8]:  # Limit to top 8
         payment_methods.append(card)
         payment_amounts.append(amount)
     
-    # Mock data for expense distribution (categories)
-    # In a real app, you'd have actual categories for expenses
-    # Here we'll use the first word of the description as a proxy for category
+    # Expense categories based on first word of description (only user's portion)
     categories = {}
-    for expense in expenses:
+    for expense_data in current_user_expenses:
         # Get first word of description as category
-        category = expense.description.split()[0] if expense.description else "Other"
+        category = expense_data['description'].split()[0] if expense_data['description'] else "Other"
         if category not in categories:
             categories[category] = 0
-        categories[category] += expense.amount
+        categories[category] += expense_data['user_portion']
     
     # Get top 6 categories
     expense_categories = []
@@ -2474,12 +2526,10 @@ def stats():
         category_amounts.append(amount)
     
     # Balance history chart data
-    # We need to reconstruct the balance at different points in time
-    # This is complex and would involve recalculating balances as of each date
-    # For now, we'll use a simplified approach
+    # For user-centric approach, we'll calculate net balance over time
     balance_labels = monthly_labels
     
-    # Start with a zero balance and add expenses/settlements chronologically
+    # Chronologically organize expenses and settlements
     chronological_items = []
     
     for expense in expenses:
@@ -2529,7 +2579,10 @@ def stats():
     balance_amounts = []
     running_balance = 0
     
-    for month_label, month_date in zip(monthly_labels, [datetime.strptime(f"{label} 01", "%b %Y %d") for label in monthly_labels]):
+    # Converting month labels to datetime objects for comparison
+    month_dates = [datetime.strptime(f"{label} 01", "%b %Y %d") for label in monthly_labels]
+    
+    for month_date in month_dates:
         # Add all items that occurred before this month
         while chronological_items and chronological_items[0]['date'] < month_date:
             item = chronological_items.pop(0)
@@ -2537,33 +2590,33 @@ def stats():
         
         balance_amounts.append(running_balance)
     
-    # Group comparison data
+    # Group comparison data - only count user's portion of expenses
     group_names = ["Personal"]
     group_totals = [0]
     
     # Personal expenses (no group)
-    for expense in expenses:
-        if expense.group_id is None:
-            group_totals[0] += expense.amount
+    for expense_data in current_user_expenses:
+        if expense_data['group_id'] is None:
+            group_totals[0] += expense_data['user_portion']
     
-    # Add each group's total
+    # Add each group's total for current user
     groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
     
     for group in groups:
         group_total = 0
-        for expense in expenses:
-            if expense.group_id == group.id:
-                group_total += expense.amount
+        for expense_data in current_user_expenses:
+            if expense_data['group_id'] == group.id:
+                group_total += expense_data['user_portion']
         
         group_names.append(group.name)
         group_totals.append(group_total)
     
-    # Top expenses for the table
-    top_expenses = sorted(expenses, key=lambda x: x.amount, reverse=True)[:10]  # Top 10
-    
+    # Top expenses for the table - show user's portion
+    top_expenses = sorted(current_user_expenses, key=lambda x: x['user_portion'], reverse=True)[:10]  # Top 10
+
     return render_template('stats.html',
                         expenses=expenses,
-                        total_expenses=total_expenses,
+                        total_expenses=total_user_expenses,  # User's spending only
                         spending_trend=spending_trend,
                         net_balance=net_balance,
                         balance_count=balance_count,
@@ -2581,6 +2634,8 @@ def stats():
                         group_names=group_names,
                         group_totals=group_totals,
                         top_expenses=top_expenses)
+
+
 #--------------------
 # # Password reset routes
 #--------------------

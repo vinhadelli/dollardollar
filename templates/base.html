@@ -544,6 +544,19 @@
                     sidebar.classList.contains('show') ? 'open' : 'closed');
             }
             
+            // Close sidebar function
+            function closeSidebar() {
+                if (sidebar.classList.contains('show')) {
+                    sidebar.classList.remove('show');
+                    sidebarBackdrop.classList.remove('show');
+                    sidebarToggle.classList.remove('active');
+                    mainContent.classList.remove('sidebar-open');
+                    
+                    // Update stored state
+                    sessionStorage.setItem('sidebarState', 'closed');
+                }
+            }
+            
             // Add event listeners
             if (sidebarToggle && sidebar) {
                 sidebarToggle.addEventListener('click', toggleSidebar);
@@ -551,8 +564,14 @@
             
             // Close sidebar when clicking backdrop
             if (sidebarBackdrop) {
-                sidebarBackdrop.addEventListener('click', toggleSidebar);
+                sidebarBackdrop.addEventListener('click', closeSidebar);
             }
+            
+            // Close sidebar when clicking anywhere in the main content
+            mainContent.addEventListener('click', function(e) {
+                // Close sidebar regardless of screen size
+                closeSidebar();
+            });
             
             // Handle resize events
             window.addEventListener('resize', function() {
