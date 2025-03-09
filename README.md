@@ -7,6 +7,10 @@ If you are encountering issues after updating/pulling the recent docker, please 
 - `flask db migrate` 
 - `flask db upgrade`
 
+If you wish to reset the database
+- 'Python reset.py'
+
+
 ## 🌟 Why DollarDollar?
 
 Born from a desire to move beyond restrictive financial tracking platforms, this app empowers users with:
