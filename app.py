@@ -1304,9 +1304,22 @@ def add_expense():
         print("Form data:", request.form)
         
         try:
-            # Handle multi-select for split_with
-            split_with_ids = request.form.getlist('split_with')
-            split_with_str = ','.join(split_with_ids) if split_with_ids else None
+            # Check if this is a personal expense (no splits)
+            is_personal_expense = request.form.get('personal_expense') == 'on'
+            
+            # Handle split_with based on whether it's a personal expense
+            if is_personal_expense:
+                # For personal expenses, we set split_with to empty
+                # This will make calculate_splits assign the full amount to the payer
+                split_with_str = None
+            else:
+                # Handle multi-select for split_with
+                split_with_ids = request.form.getlist('split_with')
+                if not split_with_ids:
+                    flash('Please select at least one person to split with or mark as personal expense.')
+                    return redirect(url_for('dashboard'))
+                
+                split_with_str = ','.join(split_with_ids) if split_with_ids else None
             
             # Parse date with error handling
             try:
@@ -1441,9 +1454,21 @@ def recurring():
 @login_required_dev
 def add_recurring():
     try:
-        # Handle multi-select for split_with
-        split_with_ids = request.form.getlist('split_with')
-        split_with_str = ','.join(split_with_ids) if split_with_ids else None
+        # Check if this is a personal expense (no splits)
+        is_personal_expense = request.form.get('personal_expense') == 'on'
+        
+        # Handle split_with based on whether it's a personal expense
+        if is_personal_expense:
+            # For personal expenses, we set split_with to empty
+            split_with_str = None
+        else:
+            # Handle multi-select for split_with
+            split_with_ids = request.form.getlist('split_with')
+            if not split_with_ids:
+                flash('Please select at least one person to split with or mark as personal expense.')
+                return redirect(url_for('recurring'))
+            
+            split_with_str = ','.join(split_with_ids) if split_with_ids else None
         
         # Parse date with error handling
         try:

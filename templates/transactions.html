@@ -144,15 +144,21 @@
                     </select>
                 </div>
                 <div class="col-md-6 mb-3">
-                    <label for="split_with" class="form-label">Split With (select multiple)</label>
-                    <select class="form-select bg-dark text-light" id="split_with" name="split_with" multiple required>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label for="split_with" class="form-label">Split With (select multiple)</label>
+                        <div class="form-check form-switch ms-2">
+                            <input class="form-check-input" type="checkbox" id="personal_expense_check" name="personal_expense" onchange="togglePersonalExpense()">
+                            <label class="form-check-label" for="personal_expense_check">Personal expense</label>
+                        </div>
+                    </div>
+                    <select class="form-select bg-dark text-light" id="split_with" name="split_with" multiple>
                         {% for user in users %}
                             {% if user.id != current_user.id %}
                                 <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
                             {% endif %}
                         {% endfor %}
                     </select>
-                    <small class="text-muted d-block mt-1">Click to select multiple people</small>
+                    <small class="text-muted d-block mt-1">Check "Personal expense" for transactions with no splits, or select people to split with</small>
                 </div>
             </div>
             
@@ -341,6 +347,55 @@
 {% block scripts %}
 <script>
    // This script fixes the transaction page functionality
+// Toggle personal expense mode
+function togglePersonalExpense() {
+    const personalExpenseCheck = document.getElementById('personal_expense_check');
+    const splitWithContainer = document.querySelector('.multiselect-wrapper');
+    const splitWithSelect = document.getElementById('split_with');
+    const splitMethodSelect = document.getElementById('split_method');
+    const splitMethodContainer = document.getElementById('split_method').parentNode;
+    const customSplitContainer = document.getElementById('custom_split_container');
+    
+    if (personalExpenseCheck.checked) {
+        // This is a personal expense - simplify the form
+        if (splitWithContainer) splitWithContainer.style.opacity = '0.5';
+        if (splitMethodContainer) splitMethodContainer.style.opacity = '0.5';
+        if (customSplitContainer) customSplitContainer.style.display = 'none';
+        
+        // Clear any existing split_with selections
+        if (splitWithSelect) {
+            for (let i = 0; i < splitWithSelect.options.length; i++) {
+                splitWithSelect.options[i].selected = false;
+            }
+            
+            // Update the visual of multiselect if it exists
+            const customSelect = document.querySelector('.multiselect-wrapper .form-control');
+            if (customSelect) {
+                customSelect.innerHTML = '<span class="text-muted">Personal expense - no split</span>';
+            }
+        }
+    } else {
+        // This is a shared expense - enable the split options
+        if (splitWithContainer) splitWithContainer.style.opacity = '1';
+        if (splitMethodContainer) splitMethodContainer.style.opacity = '1';
+        
+        // Reset the multiselect display
+        const customSelect = document.querySelector('.multiselect-wrapper .form-control');
+        if (customSelect) {
+            customSelect.innerHTML = '<span class="text-muted">Select people to split with</span>';
+        }
+        
+        // Show custom split container if needed
+        if (splitMethodSelect && splitMethodSelect.value !== 'equal') {
+            if (customSplitContainer) customSplitContainer.style.display = 'block';
+        }
+    }
+    
+    // Update split values if needed
+    if (typeof updateSplitValues === 'function') {
+        updateSplitValues();
+    }
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize today's date
@@ -446,29 +501,46 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Handle form submission to ensure split values are calculated and included
-    const expenseAddForm = document.querySelector('form[action*="add_expense"]');
-    if (expenseAddForm) {
-        expenseAddForm.addEventListener('submit', function(e) {
-            // Ensure the hidden split_details field is updated before submission
-            const splitMethod = document.getElementById('split_method').value;
-            if (splitMethod !== 'equal') {
-                // Trigger input event on the first split value input to update the hidden field
-                const firstInput = document.querySelector('.split-value-input');
-                if (firstInput) {
-                    firstInput.dispatchEvent(new Event('input'));
-                }
-                
-                // Validate totals
-                const splitStatus = document.getElementById('split_status').textContent;
-                if (splitStatus !== 'Balanced') {
-                    e.preventDefault();
-                    alert('Your split values must balance with the expense amount before saving.');
-                    return false;
-                }
-            }
+const expenseAddForm = document.querySelector('form[action*="add_expense"]');
+if (expenseAddForm) {
+    expenseAddForm.addEventListener('submit', function(e) {
+        const splitWithSelect = document.getElementById('split_with');
+        const personalExpenseCheck = document.getElementById('personal_expense_check');
+        
+        // If personal expense is checked, we don't need to validate split_with
+        if (personalExpenseCheck && personalExpenseCheck.checked) {
+            // No validation needed for split_with
             return true;
-        });
-    }
+        }
+        
+        // For shared expenses, ensure at least one person is selected in split_with
+        if (splitWithSelect && splitWithSelect.selectedOptions.length === 0) {
+            e.preventDefault();
+            alert('Please select at least one person to split with or check "Personal expense"');
+            return false;
+        }
+        
+        // For non-personal expenses, ensure the split details are valid
+        const splitMethod = document.getElementById('split_method').value;
+        if (splitMethod !== 'equal') {
+            // Trigger input event on the first split value input to update the hidden field
+            const firstInput = document.querySelector('.split-value-input');
+            if (firstInput) {
+                firstInput.dispatchEvent(new Event('input'));
+            }
+            
+            // Validate totals
+            const splitStatus = document.getElementById('split_status').textContent;
+            if (splitStatus !== 'Balanced') {
+                e.preventDefault();
+                alert('Your split values must balance with the expense amount before saving.');
+                return false;
+            }
+        }
+        return true;
+    });
+}
+    
     
     // Initialize split options if the split method select exists
     const splitMethodSelect = document.getElementById('split_method');
