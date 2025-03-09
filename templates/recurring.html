@@ -80,9 +80,7 @@
                     <label for="split_with" class="form-label">Split With (select multiple)</label>
                     <select class="form-select bg-dark text-light" id="split_with" name="split_with" multiple required>
                         {% for user in users %}
-                            {% if user.id != current_user.id %}
-                                <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
-                            {% endif %}
+                            <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
                         {% endfor %}
                     </select>
                     <small class="text-muted d-block mt-1">Click to select multiple people</small>

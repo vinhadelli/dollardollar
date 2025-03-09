@@ -1422,7 +1422,12 @@ def delete_tag(tag_id):
 @app.route('/recurring')
 @login_required_dev
 def recurring():
-    recurring_expenses = RecurringExpense.query.filter_by(user_id=current_user.id).all()
+    recurring_expenses = RecurringExpense.query.filter(
+        or_(
+            RecurringExpense.user_id == current_user.id,
+            RecurringExpense.split_with.like(f'%{current_user.id}%')
+        )
+    ).all()
     users = User.query.all()
     groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
     currencies = Currency.query.all()
