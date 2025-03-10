@@ -86,9 +86,7 @@
                     </div>
                     <select class="form-select bg-dark text-light" id="split_with" name="split_with" multiple>
                         {% for user in users %}
-                            {% if user.id != current_user.id %}
-                                <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
-                            {% endif %}
+                            <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
                         {% endfor %}
                     </select>
                     <small class="text-muted d-block mt-1">Check "Personal expense" for transactions with no splits, or select people to split with</small>

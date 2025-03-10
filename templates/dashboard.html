@@ -51,7 +51,9 @@
                     <label for="paid_by" class="form-label">Paid By</label>
                     <select class="form-control bg-dark text-light" id="paid_by" name="paid_by" required>
                         {% for user in users %}
-                            <option value="{{ user.id }}" {% if user.id == current_user.id %}selected{% endif %}>{{ user.name }} ({{ user.id }})</option>
+                            <option value="{{ user.id }}" 
+                                     data-color="{{ user.user_color|default('#15803d') }}"
+                                    {% if user.id == current_user.id %}selected{% endif %}>{{ user.name }} ({{ user.id }})</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -65,9 +67,9 @@
                     </div>
                     <select class="form-select bg-dark text-light" id="split_with" name="split_with" multiple>
                         {% for user in users %}
-                            {% if user.id != current_user.id %}
-                                <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
-                            {% endif %}
+                            <option value="{{ user.id }}"
+                                    data-color="{{ user.user_color|default('#15803d') }}">
+                                {{ user.name }} ({{ user.id }})</option>
                         {% endfor %}
                     </select>
                     <small class="text-muted d-block mt-1">Check "Personal expense" for transactions with no splits, or select people to split with</small>
@@ -203,7 +205,7 @@
                                 {% for user_id, data in iou_data.owes_me.items() %}
                                 <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
                                     <div>
-                                        <span class="badge bg-secondary me-2">{{ data.name }}</span>
+                                        <span class="badge me-2" style="background-color: {{ get_user_color(user_id) }};">{{ data.name }}</span>
                                     </div>
                                     <div class="d-flex align-items-center">
                                         <span class="badge bg-success me-2">${{ "%.2f"|format(data.amount) }}</span>
@@ -231,7 +233,7 @@
                                 {% for user_id, data in iou_data.i_owe.items() %}
                                 <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
                                     <div>
-                                        <span class="badge bg-secondary me-2">{{ data.name }}</span>
+                                        <span class="badge me-2" style="background-color: {{ get_user_color(user_id) }};">{{ data.name }}</span>
                                     </div>
                                     <div class="d-flex align-items-center">
                                         <span class="badge bg-danger me-2">${{ "%.2f"|format(data.amount) }}</span>
@@ -349,14 +351,15 @@
                                             <div class="mb-1">
                                                 {% for user in users %}
                                                     {% if user.id == user_id %}
-                                                        <span class="badge bg-primary">{{ user.name }}</span>
+                                                        <span class="badge" style="background-color: {{ user.user_color|default('#15803d') }};">
+                                                            {{ user.name }}
+                                                        </span>
                                                     {% endif %}
                                                 {% endfor %}
                                                 <span class="badge bg-success">${{ "%.2f"|format(amount) }}</span>
                                             </div>
                                         {% endfor %}
                                     </td>
-                                    <td>
                                         <!-- Cards used this month -->
                                         {% for card, amount in data.by_card.items() %}
                                             <div class="mb-1">
@@ -402,16 +405,28 @@
                                                                         <td>{{ splits.payer.name }}</td>
                                                                         <td>{{ expense.card_used }}</td>
                                                                         <td>
-                                                                            <!-- Payer's portion -->
+                                                                         <!-- Payer's portion -->
                                                                             {% if splits.payer.amount > 0 %}
-                                                                                <small class="d-block mb-1">{{ splits.payer.name }}: ${{ "%.2f"|format(splits.payer.amount) }}</small>
+                                                                            <small class="d-block mb-1">
+                                                                                {% set payer_user = get_user_by_id(splits.payer.email) %}
+                                                                                <span class="badge" style="background-color: {{ payer_user.user_color if payer_user and payer_user.user_color else '#15803d' }};">
+                                                                                    {{ splits.payer.name }}
+                                                                                </span>: 
+                                                                                ${{ "%.2f"|format(splits.payer.amount) }}
+                                                                            </small>
                                                                             {% endif %}
-                                                                            
+
                                                                             <!-- Others' portions -->
                                                                             {% for split in splits.splits %}
-                                                                                <small class="d-block mb-1">{{ split.name }}: ${{ "%.2f"|format(split.amount) }}</small>
+                                                                            <small class="d-block mb-1">
+                                                                                {% set split_user = get_user_by_id(split.email) %}
+                                                                                <span class="badge" style="background-color: {{ split_user.user_color if split_user and split_user.user_color else '#15803d' }};">
+                                                                                    {{ split.name }}
+                                                                                </span>: 
+                                                                                ${{ "%.2f"|format(split.amount) }}
+                                                                                </small>
                                                                             {% endfor %}
-                                                                        </td>
+                                                                                                                                                    </td>
                                                                     </tr>
                                                                 {% endif %}
                                                             {% endfor %}
@@ -691,9 +706,10 @@ function togglePersonalExpense() {
                     // Create row for this user
                     const row = document.createElement('div');
                     row.className = 'row mb-2 align-items-center';
+                    const userColor = user.getAttribute('data-color') || '#15803d';
                     row.innerHTML = `
                         <div class="col-md-6">
-                            <span class="badge ${isPayerId ? 'bg-primary' : 'bg-secondary'} me-1">
+                            <span class="badge me-1" style="background-color: ${userColor}">
                                 ${isPayerId ? '💰' : ''} ${userName}
                             </span>
                             ${isPayerId ? '<small class="text-muted">(Paid)</small>' : ''}
@@ -764,9 +780,10 @@ function togglePersonalExpense() {
                     // Create row for this user
                     const row = document.createElement('div');
                     row.className = 'row mb-2 align-items-center';
+                    const userColor = user.getAttribute('data-color') || '#15803d';
                     row.innerHTML = `
                         <div class="col-md-6">
-                            <span class="badge ${isPayerId ? 'bg-primary' : 'bg-secondary'} me-1">
+                            <span class="badge me-1" style="background-color: ${userColor}">
                                 ${isPayerId ? '💰' : ''} ${userName}
                             </span>
                             ${isPayerId ? '<small class="text-muted">(Paid)</small>' : ''}
@@ -861,11 +878,18 @@ function togglePersonalExpense() {
         // Clear existing dropdown content
         dropdownContent.innerHTML = '';
         
+        // When payer changes, unselect them from split_with if they were selected
+        for (let i = 0; i < selectElement.options.length; i++) {
+            if (selectElement.options[i].value === paidById && selectElement.options[i].selected) {
+                selectElement.options[i].selected = false;
+            }
+        }
+        
         // Repopulate dropdown options
         for (let i = 0; i < selectElement.options.length; i++) {
             const option = selectElement.options[i];
             
-            // Skip the payer
+            // Skip adding the current payer to the dropdown options
             if (option.value === paidById) continue;
             
             const checkboxContainer = document.createElement('div');
@@ -924,9 +948,12 @@ function togglePersonalExpense() {
         let selectedCount = 0;
         
         for (let i = 0; i < selectElement.options.length; i++) {
+            // Don't show the current payer in the display even if somehow selected
             if (selectElement.options[i].selected && selectElement.options[i].value !== paidBySelect.value) {
                 const badge = document.createElement('span');
-                badge.className = 'badge bg-primary me-1 mb-1';
+                badge.className = 'badge me-1 mb-1';
+                const userColor = selectElement.options[i].getAttribute('data-color') || '#15803d';
+                badge.style.backgroundColor = userColor;
                 badge.textContent = selectElement.options[i].text.split(' (')[0]; // Just show the name
                 
                 const removeBtn = document.createElement('span');

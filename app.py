@@ -2,7 +2,9 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, render_template, send_file, request, jsonify, request, redirect, url_for, flash, session
 import csv
+import hashlib
 import io
+import re   
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -19,7 +21,7 @@ from flask_migrate import Migrate
 import ssl
 import requests
 import json
-
+from sqlalchemy import inspect, text
 
 os.environ['OPENSSL_LEGACY_PROVIDER'] = '1'
 
@@ -106,6 +108,7 @@ class User(UserMixin, db.Model):
     expenses = db.relationship('Expense', backref='user', lazy=True)
     default_currency_code = db.Column(db.String(3), db.ForeignKey('currencies.code'), nullable=True)
     default_currency = db.relationship('Currency', backref=db.backref('users', lazy=True))
+    user_color = db.Column(db.String(7), default="#15803d")
     created_groups = db.relationship('Group', backref='creator', lazy=True,
         foreign_keys=[Group.created_by])
 
@@ -979,6 +982,71 @@ def send_group_invitation_email(user, group, inviter):
         app.logger.error(f"Error sending group invitation email: {str(e)}")
         return False
     
+
+@app.before_first_request
+def check_db_structure():
+    """
+    Check database structure and add any missing columns.
+    This function runs before the first request to ensure the database schema is up-to-date.
+    """
+    with app.app_context():
+        app.logger.info("Checking database structure...")
+        inspector = inspect(db.engine)
+        
+        # Check User model for user_color column
+        users_columns = [col['name'] for col in inspector.get_columns('users')]
+        if 'user_color' not in users_columns:
+            app.logger.warning("Missing user_color column in users table - adding it now")
+            db.session.execute(text('ALTER TABLE users ADD COLUMN user_color VARCHAR(7) DEFAULT "#15803d"'))
+            db.session.commit()
+            app.logger.info("Added user_color column to users table")
+
+        # You can add more structure checks here as needed
+        # For example, checking for other missing columns or tables
+        
+        app.logger.info("Database structure check completed")
+
+@app.context_processor
+def utility_processor():
+    def get_user_color(user_id):
+        """
+        Generate a consistent color for a user based on their ID
+        This ensures the same user always gets the same color
+        """
+        import hashlib
+        
+        # Use MD5 hash to generate a consistent color
+        hash_object = hashlib.md5(user_id.encode())
+        hash_hex = hash_object.hexdigest()
+        
+        # Use the first 6 characters of the hash to create a color
+        # This ensures a consistent but pseudo-random color
+        r = int(hash_hex[:2], 16)
+        g = int(hash_hex[2:4], 16)
+        b = int(hash_hex[4:6], 16)
+        
+        # Ensure the color is not too light
+        brightness = (r * 299 + g * 587 + b * 114) / 1000
+        if brightness > 180:
+            # If too bright, darken the color
+            r = min(r * 0.7, 255)
+            g = min(g * 0.7, 255)
+            b = min(b * 0.7, 255)
+        
+        return f'rgb({r},{g},{b})'
+
+    def get_user_by_id(user_id):
+        """
+        Retrieve a user by their ID
+        Returns None if user not found to prevent template errors
+        """
+        return User.query.filter_by(id=user_id).first()
+
+    return {
+        'get_user_color': get_user_color,
+        'get_user_by_id': get_user_by_id
+    }
+    
 @app.route('/get_transaction_details/<other_user_id>')
 @login_required_dev
 def get_transaction_details(other_user_id):
@@ -1068,7 +1136,37 @@ def signup():
             flash('Email already registered')
             return redirect(url_for('signup'))
         
-        user = User(id=email, name=name)
+        # Generate a consistent color for the user
+        def generate_user_color(user_id):
+            """
+            Generate a consistent color for a user based on their ID
+            """
+            import hashlib
+            
+            # Use MD5 hash to generate a consistent color
+            hash_object = hashlib.md5(user_id.encode())
+            hash_hex = hash_object.hexdigest()
+            
+            # Use the first 6 characters of the hash to create a color
+            r = int(hash_hex[:2], 16)
+            g = int(hash_hex[2:4], 16)
+            b = int(hash_hex[4:6], 16)
+            
+            # Ensure the color is not too light
+            brightness = (r * 299 + g * 587 + b * 114) / 1000
+            if brightness > 180:
+                # If too bright, darken the color
+                r = min(int(r * 0.7), 255)
+                g = min(int(g * 0.7), 255)
+                b = min(int(b * 0.7), 255)
+            
+            return f'#{r:02x}{g:02x}{b:02x}'
+        
+        user = User(
+            id=email, 
+            name=name, 
+            user_color=generate_user_color(email)
+        )
         user.set_password(password)
         
         # Make first user admin
@@ -2312,7 +2410,79 @@ def export_transactions():
         app.logger.error(f"Error exporting transactions: {str(e)}")
         return jsonify({"error": str(e)}), 500
     
+#--------------------
+# ROUTES: user 
+#--------------------
+@app.route('/profile')
+@login_required_dev
+def profile():
+    """User profile page with settings to change password and personal color"""
+    # Get user's account creation date (approximating from join date since we don't store it)
+    account_created = "Account creation date not available"
+    
+    # Get user color (default to app's primary green if not set)
+    user_color = current_user.user_color if hasattr(current_user, 'user_color') and current_user.user_color else "#15803d"
+    
+    # Get available currencies for default currency selection
+    currencies = Currency.query.all()
+    
+    return render_template('profile.html', 
+                          user_color=user_color,
+                          account_created=account_created,
+                          currencies=currencies)
 
+@app.route('/profile/change_password', methods=['POST'])
+@login_required_dev
+def change_password():
+    """Handle password change request"""
+    current_password = request.form.get('current_password')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+    
+    # Validate inputs
+    if not current_password or not new_password or not confirm_password:
+        flash('All password fields are required')
+        return redirect(url_for('profile'))
+    
+    if new_password != confirm_password:
+        flash('New passwords do not match')
+        return redirect(url_for('profile'))
+    
+    # Verify current password
+    if not current_user.check_password(current_password):
+        flash('Current password is incorrect')
+        return redirect(url_for('profile'))
+    
+    # Set new password
+    current_user.set_password(new_password)
+    db.session.commit()
+    
+    flash('Password updated successfully')
+    return redirect(url_for('profile'))
+
+@app.route('/profile/update_color', methods=['POST'])
+@login_required_dev
+def update_color():
+    """Update user's personal color"""
+    # Retrieve color from form, defaulting to primary green
+    user_color = request.form.get('user_color', '#15803d').strip()
+    
+    # Validate hex color format (supports 3 or 6 digit hex colors)
+    hex_pattern = r'^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$'
+    if not user_color or not re.match(hex_pattern, user_color):
+        flash('Invalid color format. Please use a valid hex color code.')
+        return redirect(url_for('profile'))
+    
+    # Normalize to 6-digit hex if 3-digit shorthand is used
+    if len(user_color) == 4:  # #RGB format
+        user_color = '#' + ''.join(2 * c for c in user_color[1:])
+    
+    # Update user's color
+    current_user.user_color = user_color
+    db.session.commit()
+    
+    flash('Your personal color has been updated')
+    return redirect(url_for('profile'))
 @app.route('/stats')
 @login_required_dev
 def stats():

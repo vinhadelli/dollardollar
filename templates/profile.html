@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2>My Profile</h2>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- User Information Card -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">User Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <div class="user-avatar mx-auto mb-3" style="width: 80px; height: 80px; font-size: 2rem; background-color: {{ user_color }};">
+                            {{ current_user.name[0] | upper }}
+                        </div>
+                        <h4>{{ current_user.name }}</h4>
+                        <p class="text-muted">{{ current_user.id }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Account Created</label>
+                        <p>{{ account_created }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Role</label>
+                        <p>{% if current_user.is_admin %}<span class="badge bg-warning">Administrator</span>{% else %}<span class="badge bg-secondary">User</span>{% endif %}</p>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
+                            <i class="fas fa-sign-out-alt me-2"></i>Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Profile Settings Column -->
+        <div class="col-md-8">
+            <!-- Change Color Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">My Color</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('update_color') }}" method="POST">
+                        <div class="mb-3">
+                            <label for="user_color" class="form-label">Personal Color</label>
+                            <div class="input-group">
+                                <input type="color" class="form-control form-control-color bg-dark" id="user_color" name="user_color" value="{{ user_color }}">
+                                <input type="text" class="form-control bg-dark text-light" id="colorHex" value="{{ user_color }}" readonly>
+                                <button type="submit" class="btn btn-primary">Save Color</button>
+                            </div>
+                            <div class="form-text text-muted mt-2">
+                                This color will be used to identify you in splits and group activities.
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Change Password Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Change Password</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('change_password') }}" method="POST">
+                        <div class="mb-3">
+                            <label for="current_password" class="form-label">Current Password</label>
+                            <input type="password" class="form-control bg-dark text-light" id="current_password" name="current_password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="new_password" class="form-label">New Password</label>
+                            <input type="password" class="form-control bg-dark text-light" id="new_password" name="new_password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirm_password" class="form-label">Confirm New Password</label>
+                            <input type="password" class="form-control bg-dark text-light" id="confirm_password" name="confirm_password" required>
+                            <div id="password-match-feedback" class="form-text" style="display: none;"></div>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary" id="password-submit-btn">Change Password</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Default Currency Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Default Currency</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('set_default_currency') }}" method="POST">
+                        <div class="mb-3">
+                            <label for="default_currency" class="form-label">Select Your Default Currency</label>
+                            <select class="form-select bg-dark text-light" name="default_currency" id="default_currency" required>
+                                {% for currency in currencies %}
+                                    <option value="{{ currency.code }}" {% if current_user.default_currency_code == currency.code %}selected{% endif %}>
+                                        {{ currency.code }} - {{ currency.name }} ({{ currency.symbol }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted mt-2">
+                                This currency will be pre-selected when creating new expenses.
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">Save Default Currency</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle color picker change
+    const colorPicker = document.getElementById('user_color');
+    const colorHex = document.getElementById('colorHex');
+    
+    if (colorPicker && colorHex) {
+        colorPicker.addEventListener('input', function() {
+            colorHex.value = this.value;
+            
+            // Update user avatar preview color in real-time
+            const userAvatar = document.querySelector('.user-avatar');
+            if (userAvatar) {
+                userAvatar.style.backgroundColor = this.value;
+            }
+        });
+    }
+    
+    // Password confirmation validation
+    const newPassword = document.getElementById('new_password');
+    const confirmPassword = document.getElementById('confirm_password');
+    const feedbackElement = document.getElementById('password-match-feedback');
+    const submitButton = document.getElementById('password-submit-btn');
+    
+    function validatePasswords() {
+        if (confirmPassword.value && confirmPassword.value !== newPassword.value) {
+            feedbackElement.textContent = "Passwords do not match";
+            feedbackElement.className = "form-text text-danger";
+            feedbackElement.style.display = "block";
+            submitButton.disabled = true;
+            return false;
+        } else if (confirmPassword.value) {
+            feedbackElement.textContent = "Passwords match";
+            feedbackElement.className = "form-text text-success";
+            feedbackElement.style.display = "block";
+            submitButton.disabled = false;
+            return true;
+        } else {
+            feedbackElement.style.display = "none";
+            submitButton.disabled = false;
+            return true;
+        }
+    }
+    
+    if (newPassword && confirmPassword) {
+        newPassword.addEventListener('input', validatePasswords);
+        confirmPassword.addEventListener('input', validatePasswords);
+    }
+});
+</script>
+{% endblock %}
