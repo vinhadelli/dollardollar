@@ -142,10 +142,10 @@ MIT License
 Here's a visual tour of DollarDollar Bill Y'all:
 
 ### Dashboard Overview
-<img width="1427" alt="Screenshot 2025-03-05 at 10 23 58 PM" src="https://github.com/user-attachments/assets/c12126a6-1295-4e5f-9e2a-2a970faca1c2" />
+<img width="1478" alt="Screenshot 2025-03-09 at 10 32 13 PM" src="https://github.com/user-attachments/assets/b1735fba-7181-49e3-b49b-c1cc3a5b4281" />
 
 ### Expense Splitting
-<img width="1427" alt="Screenshot 2025-03-05 at 10 34 05 PM" src="https://github.com/user-attachments/assets/0ee7e55c-621e-4eeb-ae2b-11b1218dd158" />
+<img width="1478" alt="Screenshot 2025-03-09 at 10 32 56 PM" src="https://github.com/user-attachments/assets/29f254a0-7773-4050-9251-ed8ba5b4df83" />
 
 ### Settling Splits
 <img width="1427" alt="Screenshot 2025-03-05 at 10 36 48 PM" src="https://github.com/user-attachments/assets/1ca55758-5390-413b-b8e6-bb85e31263c0" />
