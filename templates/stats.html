@@ -65,7 +65,7 @@
                     <h5 class="card-title text-muted mb-2">
                         <i class="fas fa-wallet me-2" style="color: #0ea5e9;"></i>Total Spending
                     </h5>
-                    <h3 class="mb-0" id="totalSpending" style="color: #0ea5e9;">${{ "%.2f"|format(total_expenses) }}</h3>
+                    <h3 class="mb-0" id="totalSpending" style="color: #0ea5e9;">{{ base_currency.symbol }}{{ "%.2f"|format(total_expenses) }}</h3>
                     <p class="text-muted mt-2" id="spendingTrend">
                         {% if spending_trend > 0 %}
                         <i class="fas fa-arrow-up text-danger"></i> {{ "%.1f"|format(spending_trend) }}% from last period
@@ -85,7 +85,7 @@
                         <i class="fas fa-balance-scale me-2" style="color: {{ '#10b981' if net_balance >= 0 else '#ef4444' }};"></i>Net Balance
                     </h5>
                     <h3 class="mb-0 {{ 'text-success' if net_balance >= 0 else 'text-danger' }}" id="netBalance">
-                        ${{ "%.2f"|format(net_balance|abs) }} {{ 'Owed' if net_balance >= 0 else 'Owing' }}
+                        {{ base_currency.symbol }}{{ "%.2f"|format(net_balance|abs) }} {{ 'Owed' if net_balance >= 0 else 'Owing' }}
                     </h3>
                     <p class="text-muted mt-2">From {{ balance_count }} active IOUs</p>
                 </div>
@@ -97,7 +97,7 @@
                     <h5 class="card-title text-muted mb-2">
                         <i class="fas fa-chart-line me-2" style="color: #8b5cf6;"></i>Monthly Average
                     </h5>
-                    <h3 class="mb-0" id="monthlyAverage" style="color: #8b5cf6;">${{ "%.2f"|format(monthly_average) }}</h3>
+                    <h3 class="mb-0" id="monthlyAverage" style="color: #8b5cf6;">{{ base_currency.symbol }}{{ "%.2f"|format(monthly_average) }}</h3>
                     <p class="text-muted mt-2">Based on the last {{ month_count }} months</p>
                 </div>
             </div>
@@ -108,7 +108,7 @@
                     <h5 class="card-title text-muted mb-2">
                         <i class="fas fa-crown me-2" style="color: #f97316;"></i>Largest Expense
                     </h5>
-                    <h3 class="mb-0" id="largestExpense" style="color: #f97316;">${{ "%.2f"|format(largest_expense.amount) }}</h3>
+                    <h3 class="mb-0" id="largestExpense" style="color: #f97316;">{{ base_currency.symbol }}{{ "%.2f"|format(largest_expense.amount) }}</h3>
                     <p class="text-muted mt-2">{{ largest_expense.description }}</p>
                 </div>
             </div>
@@ -220,8 +220,8 @@
                             <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.1);">
                                 <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
                                 <td>{{ expense.description }}</td>
-                                <td style="color: #38bdf8; font-weight: bold;">${{ "%.2f"|format(expense.user_portion) }}</td>
-                                <td>${{ "%.2f"|format(expense.total_amount) }}</td>
+                                <td style="color: #38bdf8; font-weight: bold;">{{ base_currency.symbol }}{{ "%.2f"|format(expense.user_portion) }}</td>
+                                <td>{{ base_currency.symbol }}{{ "%.2f"|format(expense.total_amount) }}</td>
                                 <td>
                                     {% if expense.paid_by == current_user.id %}
                                     <span class="badge" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">You</span>
@@ -251,6 +251,7 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    const baseCurrencySymbol = "{{ base_currency.symbol }}"; 
     document.addEventListener('DOMContentLoaded', function() {
         // Add some animation when the page loads
         document.querySelectorAll('.card').forEach((card, index) => {
@@ -349,7 +350,7 @@
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return `$${context.raw.toFixed(2)}`;
+                                return `${baseCurrencySymbol}${context.raw.toFixed(2)}`;
                             }
                         },
                         backgroundColor: 'rgba(15, 23, 42, 0.8)',
@@ -367,7 +368,7 @@
                         beginAtZero: true,
                         ticks: {
                             callback: function(value) {
-                                return '$' + value;
+                                return baseCurrencySymbol + value;
                             }
                         },
                         grid: {
@@ -412,7 +413,7 @@
                                 const value = context.raw;
                                 const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                 const percentage = ((value / total) * 100).toFixed(1);
-                                return `$${value.toFixed(2)} (${percentage}%)`;
+                                return `${baseCurrencySymbol}${value.toFixed(2)} (${percentage}%)`;
                             }
                         },
                         backgroundColor: 'rgba(15, 23, 42, 0.8)',
@@ -536,8 +537,8 @@
                             label: function(context) {
                                 const value = context.raw;
                                 return value >= 0 ? 
-                                    `Owed: $${value.toFixed(2)}` : 
-                                    `Owing: $${Math.abs(value).toFixed(2)}`;
+                                    `Owed: ${baseCurrencySymbol}${value.toFixed(2)}` : 
+                                    `Owing: ${baseCurrencySymbol}${Math.abs(value).toFixed(2)}`;
                             }
                         },
                         backgroundColor: 'rgba(15, 23, 42, 0.8)',
@@ -552,7 +553,7 @@
                     y: {
                         ticks: {
                             callback: function(value) {
-                                return '$' + value;
+                                return baseCurrencySymbol + value;
                             }
                         },
                         grid: {
@@ -603,7 +604,7 @@
                         beginAtZero: true,
                         ticks: {
                             callback: function(value) {
-                                return '$' + value;
+                                return baseCurrencySymbol + value;
                             }
                         },
                         grid: {
@@ -623,7 +624,7 @@
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return `$${context.raw.toFixed(2)}`;
+                                return `${baseCurrencySymbol}${context.raw.toFixed(2)}`;
                             }
                         },
                         backgroundColor: 'rgba(15, 23, 42, 0.8)',

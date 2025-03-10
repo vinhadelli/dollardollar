@@ -25,7 +25,7 @@
                                     <small class="text-muted">({{ balance.email }})</small>
                                 </div>
                                 <div class="d-flex align-items-center">
-                                    <span class="badge bg-danger me-2">${{ "%.2f"|format(balance.amount) }}</span>
+                                    <span class="badge bg-danger me-2">{{ base_currency.symbol }}{{ "%.2f"|format(balance.amount) }}</span>
                                     <button class="btn btn-success btn-sm" onclick="prepareSettlement('{{ balance.id }}', '{{ balance.name }}', {{ balance.amount }}, true)">
                                         <i class="fas fa-money-bill-wave me-1"></i>Pay
                                     </button>
@@ -55,7 +55,7 @@
                                     <small class="text-muted">({{ balance.email }})</small>
                                 </div>
                                 <div class="d-flex align-items-center">
-                                    <span class="badge bg-success me-2">${{ "%.2f"|format(balance.amount) }}</span>
+                                    <span class="badge bg-success me-2">{{ base_currency.symbol }}{{ "%.2f"|format(balance.amount) }}</span>
                                     <button class="btn btn-secondary btn-sm" onclick="prepareSettlement('{{ balance.id }}', '{{ balance.name }}', {{ balance.amount }}, false)">
                                         <i class="fas fa-check me-1"></i>Record
                                     </button>
@@ -100,7 +100,7 @@
                 </div>
                 <div class="row">
                     <div class="col-md-4 mb-3">
-                        <label for="amount" class="form-label">Amount ($)</label>
+                        <label for="amount" class="form-label">Amount ({{ base_currency.symbol }})</label>
                         <input type="number" step="0.01" class="form-control bg-dark text-light" id="amount" name="amount" required>
                     </div>
                     <div class="col-md-4 mb-3">
@@ -156,7 +156,7 @@
                                         {{ settlement.receiver.name }}
                                     {% endif %}
                                 </td>
-                                <td>${{ "%.2f"|format(settlement.amount) }}</td>
+                                <td>{{ base_currency.symbol }}{{ "%.2f"|format(settlement.amount) }}</td>
                             </tr>
                             {% endfor %}
                         {% else %}
@@ -174,6 +174,7 @@
 
 {% block scripts %}
 <script>
+    const baseCurrencySymbol = "{{ base_currency.symbol }}";   
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize today's date
         const today = new Date().toISOString().split('T')[0];

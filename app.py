@@ -808,6 +808,28 @@ def calculate_balances(user_id):
     
     # Return only non-zero balances
     return [balance for balance in balances.values() if abs(balance['amount']) > 0.01]
+
+def get_base_currency():
+    """Get the current user's default currency or fall back to base currency if not set"""
+    if current_user.is_authenticated and current_user.default_currency_code and current_user.default_currency:
+        # User has set a default currency, use that
+        return {
+            'code': current_user.default_currency.code,
+            'symbol': current_user.default_currency.symbol,
+            'name': current_user.default_currency.name
+        }
+    else:
+        # Fall back to system base currency if user has no preference
+        base_currency = Currency.query.filter_by(is_base=True).first()
+        if not base_currency:
+            # Default to USD if no base currency is set
+            return {'code': 'USD', 'symbol': '$', 'name': 'US Dollar'}
+        return {
+            'code': base_currency.code,
+            'symbol': base_currency.symbol,
+            'name': base_currency.name
+        }
+
 def send_welcome_email(user):
     """
     Send a welcome email to a newly registered user
@@ -1237,7 +1259,7 @@ def logout():
 @login_required_dev
 def dashboard():
     now = datetime.now()
-    
+    base_currency = get_base_currency()
     # Fetch all expenses where the user is either the creator or a split participant
     expenses = Expense.query.filter(
         or_(
@@ -1391,6 +1413,7 @@ def dashboard():
                          users=users,
                          groups=groups,
                          iou_data=iou_data,
+                         base_currency=base_currency,
                          currencies=currencies,
                          now=now)
 
@@ -1533,6 +1556,7 @@ def delete_tag(tag_id):
 @app.route('/recurring')
 @login_required_dev
 def recurring():
+    base_currency = get_base_currency()
     recurring_expenses = RecurringExpense.query.filter(
         or_(
             RecurringExpense.user_id == current_user.id,
@@ -1546,6 +1570,7 @@ def recurring():
                           recurring_expenses=recurring_expenses, 
                           users=users,
                           currencies=currencies,
+                          base_currency=base_currency,
                           groups=groups)
 
 @app.route('/add_recurring', methods=['POST'])
@@ -1711,7 +1736,9 @@ def create_group():
 @app.route('/groups/<int:group_id>')
 @login_required_dev
 def group_details(group_id):
+    base_currency = get_base_currency()
     group = Group.query.get_or_404(group_id)
+
     # Check if user is member of group
     if current_user not in group.members:
         flash('Access denied. You are not a member of this group.')
@@ -1720,7 +1747,7 @@ def group_details(group_id):
     expenses = Expense.query.filter_by(group_id=group_id).order_by(Expense.date.desc()).all()
     all_users = User.query.all()
     currencies = Currency.query.all()
-    return render_template('group_details.html', group=group, expenses=expenses,currencies=currencies, users=all_users)
+    return render_template('group_details.html', group=group, expenses=expenses,currencies=currencies, base_currency=base_currency,users=all_users)
 
 @app.route('/groups/<int:group_id>/add_member', methods=['POST'])
 @login_required_dev
@@ -1859,6 +1886,7 @@ def admin_reset_password():
 @login_required_dev
 def settlements():
     # Get all settlements involving the current user
+    base_currency = get_base_currency()
     settlements = Settlement.query.filter(
         or_(
             Settlement.payer_id == current_user.id,
@@ -1899,6 +1927,7 @@ def settlements():
                           users=users,
                           you_owe=you_owe,
                           you_are_owed=you_are_owed,
+                          base_currency=base_currency,
                           current_user_id=current_user.id)
 
 @app.route('/add_settlement', methods=['POST'])
@@ -2079,7 +2108,7 @@ def set_base_currency(code):
     # Ensure user is an admin
     if not current_user.is_admin:
         flash('Unauthorized. Admin access required.', 'error')
-        return redirect(url_for('currencies'))
+        return redirect(url_for('manage_currencies'))  # Changed 'currencies' to 'manage_currencies'
     
     try:
         # Find the currency to be set as base
@@ -2087,7 +2116,7 @@ def set_base_currency(code):
         
         if not new_base_currency:
             flash(f'Currency {code} not found.', 'error')
-            return redirect(url_for('currencies'))
+            return redirect(url_for('manage_currencies'))  # Changed 'currencies' to 'manage_currencies'
         
         # Find and unset the current base currency
         current_base_currency = Currency.query.filter_by(is_base=True).first()
@@ -2122,7 +2151,7 @@ def set_base_currency(code):
         
         flash('An error occurred while changing the base currency.', 'error')
     
-    return redirect(url_for('currencies'))
+    return redirect(url_for('manage_currencies'))  # Changed 'currencies' to 'manage_currencies'
 @app.route('/update_currency_rates', methods=['POST'])
 @login_required_dev
 def update_rates_route():
@@ -2162,6 +2191,7 @@ def set_default_currency():
 def transactions():
     """Display all transactions with filtering capabilities"""
     # Fetch all expenses where the user is either the creator or a split participant
+    base_currency = get_base_currency()
     expenses = Expense.query.filter(
         or_(
             Expense.user_id == current_user.id,
@@ -2278,6 +2308,7 @@ def transactions():
                         current_month_total=current_month_total,
                         unique_cards=unique_cards,
                         users=users,
+                        base_currency=base_currency,
                         currencies=currencies)
 
 #--------------------
@@ -2488,6 +2519,7 @@ def update_color():
 def stats():
     """Display financial statistics and visualizations that are user-centric"""
     # Get filter parameters from request
+    base_currency = get_base_currency()
     start_date_str = request.args.get('startDate', None)
     end_date_str = request.args.get('endDate', None)
     group_id = request.args.get('groupId', 'all')
@@ -2803,6 +2835,7 @@ def stats():
                         balance_amounts=balance_amounts,
                         group_names=group_names,
                         group_totals=group_totals,
+                        base_currency=base_currency,
                         top_expenses=top_expenses)
 
 

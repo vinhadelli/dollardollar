@@ -106,7 +106,7 @@
                                 <input type="text" class="form-control bg-dark text-light" id="description" name="description" required>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="amount" class="form-label">Amount ($)</label>
+                                <label for="amount" class="form-label">Amount ({{ base_currency.symbol }})</label>
                                 <input type="number" step="0.01" class="form-control bg-dark text-light" id="amount" name="amount" required>
                             </div>
                             <div class="col-md-6 mb-3">
@@ -188,8 +188,8 @@
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center mt-3">
                                         <div>
-                                            <span class="text-muted">Total: $<span id="split_total">0.00</span></span>
-                                            <span class="ms-2 text-muted">Expense: $<span id="expense_amount">0.00</span></span>
+                                            <span class="text-muted">Total: {{ base_currency.symbol }}<span id="split_total">0.00</span></span>
+                                            <span class="ms-2 text-muted">Expense: {{ base_currency.symbol }}<span id="expense_amount">0.00</span></span>
                                         </div>
                                         <div>
                                             <span class="badge bg-success" id="split_status">Balanced</span>
@@ -246,7 +246,7 @@
                                     <tr>
                                         <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
                                         <td>{{ expense.description }}</td>
-                                        <td>${{ "%.2f"|format(expense.amount) }}</td>
+                                        <td>{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</td>
                                         <td>{{ expense.user.name }}</td>
                                         <td>{{ expense.card_used }}</td>
                                         <td>
@@ -254,12 +254,12 @@
                                             
                                             <!-- Payer's portion -->
                                             {% if splits.payer.amount > 0 %}
-                                            <small class="d-block mb-1">{{ splits.payer.name }}: ${{ "%.2f"|format(splits.payer.amount) }}</small>
+                                            <small class="d-block mb-1">{{ splits.payer.name }}: {{ base_currency.symbol }}{{ "%.2f"|format(splits.payer.amount) }}</small>
                                             {% endif %}
                                             
                                             <!-- Everyone else's portion -->
                                             {% for split in splits.splits %}
-                                            <small class="d-block mb-1">{{ split.name }}: ${{ "%.2f"|format(split.amount) }}</small>
+                                            <small class="d-block mb-1">{{ split.name }}: {{ base_currency.symbol }}{{ "%.2f"|format(split.amount) }}</small>
                                             {% endfor %}
                                         </td>
                                     </tr>
@@ -281,7 +281,7 @@
 
 {% block scripts %}
 <script>
-    // Function to update split_with options based on paid_by selection
+const baseCurrencySymbol = "{{ base_currency.symbol }}";  
 // Toggle personal expense mode
 function togglePersonalExpense() {
     const personalExpenseCheck = document.getElementById('personal_expense_check');

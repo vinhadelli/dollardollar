@@ -23,7 +23,7 @@
                     <input type="text" class="form-control bg-dark text-light" id="description" name="description" required>
                 </div>
                 <div class="col-md-6 mb-3">
-                    <label for="amount" class="form-label">Amount ($)</label>
+                    <label for="amount" class="form-label">Amount ({{ base_currency.symbol }})</label>
                     <input type="number" step="0.01" class="form-control bg-dark text-light" id="amount" name="amount" required>
                 </div>
             </div>
@@ -109,8 +109,8 @@
                         </div>
                         <div class="d-flex justify-content-between align-items-center mt-3">
                             <div>
-                                <span class="text-muted">Total: $<span id="split_total">0.00</span></span>
-                                <span class="ms-2 text-muted">Expense: $<span id="expense_amount">0.00</span></span>
+                                <span class="text-muted">Total: {{ base_currency.symbol }}<span id="split_total">0.00</span></span>
+                                <span class="ms-2 text-muted">Expense: {{ base_currency.symbol }}<span id="expense_amount">0.00</span></span>
                             </div>
                             <div>
                                 <span class="badge bg-success" id="split_status">Balanced</span>
@@ -212,7 +212,7 @@
                     <div class="col-md-3 mb-3">
                         <label class="form-label">Amount Range</label>
                         <div class="input-group">
-                            <span class="input-group-text bg-dark text-light">$</span>
+                            <span class="input-group-text bg-dark text-light">{{ base_currency.symbol }}</span>
                             <input type="number" class="form-control bg-dark text-light" placeholder="Min" id="minAmount" name="minAmount" step="0.01">
                             <span class="input-group-text bg-dark text-light">to</span>
                             <input type="number" class="form-control bg-dark text-light" placeholder="Max" id="maxAmount" name="maxAmount" step="0.01">
@@ -270,7 +270,7 @@
                             <tr>
                                 <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
                                 <td>{{ expense.description }}</td>
-                                <td>${{ "%.2f"|format(expense.amount) }}</td>
+                                <td>{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</td>
                                 <td>{{ expense.card_used }}</td>
                                 <td>{{ expense.group.name if expense.group else "-" }}</td>
                                 <td>
@@ -287,7 +287,7 @@
                                             {% if splits.payer.amount > 0 %}
                                             <div class="mb-1">
                                                 <span class="badge bg-primary">{{ splits.payer.name }}</span>
-                                                <span class="badge bg-success">${{ "%.2f"|format(splits.payer.amount) }}</span>
+                                                <span class="badge bg-success">{{ base_currency.symbol }}{{ "%.2f"|format(splits.payer.amount) }}</span>
                                             </div>
                                             {% endif %}
                                             
@@ -295,7 +295,7 @@
                                             {% for split in splits.splits %}
                                             <div class="mb-1">
                                                 <span class="badge bg-primary">{{ split.name }}</span>
-                                                <span class="badge bg-success">${{ "%.2f"|format(split.amount) }}</span>
+                                                <span class="badge bg-success">{{ base_currency.symbol }}{{ "%.2f"|format(split.amount) }}</span>
                                             </div>
                                             {% endfor %}
                                         </div>
@@ -348,6 +348,7 @@
 
 {% block scripts %}
 <script>
+const baseCurrencySymbol = "{{ base_currency.symbol }}";    
 // Document ready - initialize all components and event handlers
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize today's date
