@@ -22,6 +22,8 @@ import ssl
 import requests
 import json
 from sqlalchemy import inspect, text
+from oidc_auth import setup_oidc_config, register_oidc_routes
+from oidc_user import extend_user_model
 
 os.environ['OPENSSL_LEGACY_PROVIDER'] = '1'
 
@@ -45,6 +47,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', 'sq
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['DEVELOPMENT_MODE'] = os.getenv('DEVELOPMENT_MODE', 'True').lower() == 'true'
 app.config['DISABLE_SIGNUPS'] = os.environ.get('DISABLE_SIGNUPS', 'False').lower() == 'true'  # Default to allowing signups
+app.config['LOCAL_LOGIN_DISABLE'] = os.getenv('LOCAL_LOGIN_DISABLE', 'False').lower() == 'true' # Default to false to allow local logins
+
 
 
 # Email configuration from environment variables
@@ -69,6 +73,7 @@ logging.basicConfig(level=getattr(logging, log_level))
 DEV_USER_EMAIL = os.getenv('DEV_USER_EMAIL', 'dev@example.com')
 DEV_USER_PASSWORD = os.getenv('DEV_USER_PASSWORD', 'dev')
 
+oidc_enabled = setup_oidc_config(app)
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -112,6 +117,11 @@ class User(UserMixin, db.Model):
     created_groups = db.relationship('Group', backref='creator', lazy=True,
         foreign_keys=[Group.created_by])
 
+    # OIDC related fields
+    oidc_id = db.Column(db.String(255), nullable=True, index=True, unique=True)
+    oidc_provider = db.Column(db.String(50), nullable=True)
+    last_login = db.Column(db.DateTime, nullable=True)        
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password,method='pbkdf2:sha256')
 
@@ -140,6 +150,10 @@ class User(UserMixin, db.Model):
         """Clear the reset token and expiry after use"""
         self.reset_token = None
         self.reset_token_expiry = None
+
+# Extend User model with OIDC functionality if needed
+if oidc_enabled:
+    User = extend_user_model(db, User)       
 
 class Settlement(db.Model):
     __tablename__ = 'settlements'
@@ -1022,10 +1036,34 @@ def check_db_structure():
             db.session.execute(text('ALTER TABLE users ADD COLUMN user_color VARCHAR(7) DEFAULT "#15803d"'))
             db.session.commit()
             app.logger.info("Added user_color column to users table")
-
-        # You can add more structure checks here as needed
-        # For example, checking for other missing columns or tables
-        
+            
+        # Check for OIDC columns
+        if 'oidc_id' not in users_columns:
+            app.logger.warning("Missing oidc_id column in users table - adding it now")
+            db.session.execute(text('ALTER TABLE users ADD COLUMN oidc_id VARCHAR(255)'))
+            db.session.commit()
+            app.logger.info("Added oidc_id column to users table")
+            
+            # Create index on oidc_id column
+            indexes = [idx['name'] for idx in inspector.get_indexes('users')]
+            if 'ix_users_oidc_id' not in indexes:
+                db.session.execute(text('CREATE UNIQUE INDEX ix_users_oidc_id ON users (oidc_id)'))
+                db.session.commit()
+                app.logger.info("Created index on oidc_id column")
+                
+        if 'oidc_provider' not in users_columns:
+            app.logger.warning("Missing oidc_provider column in users table - adding it now")
+            db.session.execute(text('ALTER TABLE users ADD COLUMN oidc_provider VARCHAR(50)'))
+            db.session.commit()
+            app.logger.info("Added oidc_provider column to users table")
+            
+        if 'last_login' not in users_columns:
+            app.logger.warning("Missing last_login column in users table - adding it now")
+            # Change DATETIME to TIMESTAMP for PostgreSQL compatibility
+            db.session.execute(text('ALTER TABLE users ADD COLUMN last_login TIMESTAMP'))
+            db.session.commit()
+            app.logger.info("Added last_login column to users table")
+            
         app.logger.info("Database structure check completed")
 
 @app.context_processor
@@ -1138,14 +1176,22 @@ def home():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     return render_template('landing.html')
-
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
+    # Check if local login is disabled
+    local_login_disabled = app.config.get('LOCAL_LOGIN_DISABLE', False) and app.config.get('OIDC_ENABLED', False)
+    
     # Check if signups are disabled
-    if app.config['DISABLE_SIGNUPS'] and not app.config['DEVELOPMENT_MODE']:
+    if app.config.get('DISABLE_SIGNUPS', False) and not app.config.get('DEVELOPMENT_MODE', False):
         flash('New account registration is currently disabled.')
         return redirect(url_for('login'))
     
+    # If local login is disabled, redirect to login with message
+    if local_login_disabled:
+        flash('Direct account creation is disabled. Please use SSO.')
+        return redirect(url_for('login'))
+    
+    # Redirect to dashboard if already logged in
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
         
@@ -1209,10 +1255,22 @@ def signup():
         flash('Account created successfully!')
         return redirect(url_for('dashboard'))
     
-    return render_template('signup.html')
+    return render_template('signup.html', 
+                          oidc_enabled=app.config.get('OIDC_ENABLED', False),
+                          local_login_disabled=local_login_disabled)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # Check if we should show a logout message
+    if session.pop('show_logout_message', False):
+        flash('You have been successfully logged out. You can log in again below.')
+    
+    # Check if local login is disabled
+    oidc_enabled = app.config.get('OIDC_ENABLED', False)
+    local_login_disable = app.config.get('LOCAL_LOGIN_DISABLE', False)
+    local_login_disabled = local_login_disable and oidc_enabled
+    
+    # Use development mode auto-login if enabled
     if app.config['DEVELOPMENT_MODE'] and not current_user.is_authenticated:
         dev_user = User.query.filter_by(id=DEV_USER_EMAIL).first()
         if not dev_user:
@@ -1227,28 +1285,44 @@ def login():
         login_user(dev_user)
         return redirect(url_for('dashboard'))
     
+    # Redirect to dashboard if already logged in
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-        
+    # Handle login form submission
     if request.method == 'POST':
+        # If local login is disabled and user tries to use the form
+        if local_login_disabled:
+            flash(f'Password login is disabled. Please use {app.config.get("OIDC_PROVIDER_NAME", "SSO")}.')
+            return redirect(url_for('login'))
+            
         email = request.form.get('email')
         password = request.form.get('password')
         user = User.query.filter_by(id=email).first()
         
         if user and user.check_password(password):
             login_user(user)
+            # Update last login time
+            user.last_login = datetime.utcnow()
+            db.session.commit()
             return redirect(url_for('dashboard'))
         
         flash('Invalid email or password')
-    # Pass the signup status to the template
-    return render_template('login.html', signups_disabled=app.config['DISABLE_SIGNUPS'])
+    
+    # Render the login template with appropriate flags
+    return render_template('login.html', 
+                          signups_disabled=app.config.get('DISABLE_SIGNUPS', False),
+                          oidc_enabled=oidc_enabled,
+                          local_login_disabled=local_login_disabled)
 
 @app.route('/logout')
 @login_required_dev
 def logout():
+    # If user was logged in via OIDC, use the OIDC logout route
+    if hasattr(current_user, 'oidc_id') and current_user.oidc_id and app.config.get('OIDC_ENABLED', False):
+        return redirect(url_for('logout_oidc'))
+    
+    # Standard logout for local accounts
     logout_user()
     return redirect(url_for('login'))
 
@@ -2457,10 +2531,14 @@ def profile():
     # Get available currencies for default currency selection
     currencies = Currency.query.all()
     
+    # Check if OIDC is enabled
+    oidc_enabled = app.config.get('OIDC_ENABLED', False)
+    
     return render_template('profile.html', 
                           user_color=user_color,
                           account_created=account_created,
-                          currencies=currencies)
+                          currencies=currencies,
+                          oidc_enabled=oidc_enabled)
 
 @app.route('/profile/change_password', methods=['POST'])
 @login_required_dev
@@ -2954,6 +3032,10 @@ with app.app_context():
         print("Tables created successfully")
     except Exception as e:
         print(f"ERROR CREATING TABLES: {str(e)}")
+
+# Register OIDC routes
+if oidc_enabled:
+    register_oidc_routes(app, User, db)        
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)

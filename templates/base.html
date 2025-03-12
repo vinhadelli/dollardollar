@@ -261,6 +261,31 @@
                 padding-top: 5rem;
             }
 
+        /* OIDC-specific divider styling */
+        .oidc-divider-text {
+            position: relative;
+            display: inline-block;
+            padding: 0 10px;
+            color: #adb5bd;
+        }
+
+        .oidc-divider-text:before, .oidc-divider-text:after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 100px;
+            height: 1px;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .oidc-divider-text:before {
+            right: 100%;
+        }
+
+        .oidc-divider-text:after {
+            left: 100%;
+        }            
+
         
         /* Media queries for responsive behavior */
         @media (min-width: 992px) {

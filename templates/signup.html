@@ -8,6 +8,11 @@
                 <h4 class="mb-0">Create Account</h4>
             </div>
             <div class="card-body">
+                {% if oidc_enabled and local_login_disabled %}
+                <div class="alert alert-info text-center">
+                    Direct account creation is disabled. Please <a href="{{ url_for('login') }}" class="alert-link">login with SSO</a> instead.
+                </div>
+                {% else %}
                 <form method="POST">
                     <div class="mb-3">
                         <label for="name" class="form-label">Full Name</label>
@@ -25,8 +30,10 @@
                         <button type="submit" class="btn btn-primary">Create Account</button>
                     </div>
                 </form>
+                {% endif %}
+                
                 <p class="text-center mt-3">
-                    Already have an account? <a href="{{ url_for('login') }}" class="text-warning">Login</a>
+                    Already have an account? <a href="{{ url_for('login') }}" class="text-warning auth-text-accent">Login</a>
                 </p>
             </div>
         </div>
