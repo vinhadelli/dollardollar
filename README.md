@@ -8,7 +8,7 @@ If you are encountering issues after updating/pulling the recent docker, please 
 - `flask db upgrade`
 
 If you wish to reset the database
-- 'Python reset.py'
+- `python reset.py`
 
 
 ## 🌟 Why DollarDollar?
@@ -43,6 +43,12 @@ Born from a desire to move beyond restrictive financial tracking platforms, this
 - 🔍 Detailed transaction filters
 - 📈 Expense trends visualization
 
+### Authentication & Security
+- 🔑 Local username/password authentication
+- 🔒 OpenID Connect (OIDC) integration for SSO capabilities
+- 🛡️ Enterprise-ready authentication with any OIDC provider (Auth0, Okta, Keycloak, etc.)
+- 🔐 Password reset and account recovery flows
+
 ### Privacy & Control
 - 🔒 Self-hosted solution
 - 🛡️ No third-party data sharing
@@ -55,7 +61,7 @@ Born from a desire to move beyond restrictive financial tracking platforms, this
 ## 🛠 Tech Stack
 - **Backend**: Python, Flask
 - **Database**: PostgreSQL
-- **Authentication**: Flask-Login
+- **Authentication**: Flask-Login, OpenID Connect
 - **Frontend**: Bootstrap, HTML5
 - **Deployment**: Docker
 
@@ -87,6 +93,19 @@ Born from a desire to move beyond restrictive financial tracking platforms, this
 
 4. Access the app at `http://localhost:5006`
 
+### Unraid Installation
+
+DollarDollar is available as a community template for Unraid users:
+
+1. In the Unraid web UI, go to the Docker tab
+2. Click "Add Container"
+3. In the Template URL field, paste:
+   ```
+   https://github.com/jordan-dalby/unraidtemplates/blob/main/my-dollardollar.xml
+   ```
+4. Click "Apply Template"
+5. Configure your settings and click "Apply"
+
 ## 💼 Usage
 
 ### Recurring Transactions
@@ -112,6 +131,47 @@ Set up transactions that repeat on a regular schedule:
 - Add users to groups via email invitations
 - User role management within groups
 - Account recovery via password reset
+
+### OIDC Authentication
+- Seamless integration with existing identity providers
+- Support for major OIDC providers (Auth0, Okta, Keycloak, etc.)
+- Single Sign-On capabilities
+- Configuration options:
+  - Enable/disable local logins
+  - Force OIDC-only authentication
+  - Customizable provider name display
+
+## 🔧 Configuration
+
+### OIDC Setup (Optional)
+To enable OpenID Connect authentication:
+
+1. Add the following to your `.env` file:
+   ```
+   OIDC_ENABLED=True
+   OIDC_CLIENT_ID=your_client_id
+   OIDC_CLIENT_SECRET=your_client_secret
+   OIDC_PROVIDER_NAME=Your Provider Name
+   
+   # Either use Discovery URL (recommended)
+   OIDC_DISCOVERY_URL=https://your-provider/.well-known/openid-configuration
+   
+   # Or manually configure endpoints
+   OIDC_ISSUER=https://your-provider/
+   OIDC_AUTH_URI=https://your-provider/auth
+   OIDC_TOKEN_URI=https://your-provider/token
+   OIDC_USERINFO_URI=https://your-provider/userinfo
+   OIDC_LOGOUT_URI=https://your-provider/logout
+   ```
+
+2. Optional settings:
+   ```
+   # Disable password-based logins
+   LOCAL_LOGIN_DISABLE=True
+   
+   # Disable new user registration
+   DISABLE_SIGNUPS=True
+   ```
 
 ## 🤝 Development Approach
 
@@ -142,24 +202,26 @@ MIT License
 Here's a visual tour of DollarDollar Bill Y'all:
 
 ### Dashboard Overview
-<img width="1478" alt="Screenshot 2025-03-09 at 10 32 13 PM" src="https://github.com/user-attachments/assets/b1735fba-7181-49e3-b49b-c1cc3a5b4281" />
+<img width="1478" alt="Screenshot 2025-03-09 at 10 32 13 PM" src="https://github.com/user-attachments/assets/b1735fba-7181-49e3-b49b-c1cc3a5b4281" />
 
 ### Expense Splitting
-<img width="1478" alt="Screenshot 2025-03-09 at 10 32 56 PM" src="https://github.com/user-attachments/assets/29f254a0-7773-4050-9251-ed8ba5b4df83" />
+<img width="1478" alt="Screenshot 2025-03-09 at 10 32 56 PM" src="https://github.com/user-attachments/assets/29f254a0-7773-4050-9251-ed8ba5b4df83" />
 
 ### Settling Splits
-<img width="1427" alt="Screenshot 2025-03-05 at 10 36 48 PM" src="https://github.com/user-attachments/assets/1ca55758-5390-413b-b8e6-bb85e31263c0" />
+<img width="1427" alt="Screenshot 2025-03-05 at 10 36 48 PM" src="https://github.com/user-attachments/assets/1ca55758-5390-413b-b8e6-bb85e31263c0" />
 
 ### Group Management
-<img width="1427" alt="Screenshot 2025-03-05 at 10 24 14 PM" src="https://github.com/user-attachments/assets/33507573-2fb8-4727-9451-509c606bcc91" />
+<img width="1427" alt="Screenshot 2025-03-05 at 10 24 14 PM" src="https://github.com/user-attachments/assets/33507573-2fb8-4727-9451-509c606bcc91" />
 
-### Muti Currency Support
-<img width="1427" alt="Screenshot 2025-03-05 at 10 25 09 PM" src="https://github.com/user-attachments/assets/c965ccc6-4514-4b88-b3d1-7755373bd3ee" />
+### Multi Currency Support
+<img width="1427" alt="Screenshot 2025-03-05 at 10 25 09 PM" src="https://github.com/user-attachments/assets/c965ccc6-4514-4b88-b3d1-7755373bd3ee" />
 
 ### Recurring expenses
-<img width="1427" alt="Screenshot 2025-03-05 at 10 24 59 PM" src="https://github.com/user-attachments/assets/b0992c09-ea21-4f45-b85d-ce5378fdbdbc" />
+<img width="1427" alt="Screenshot 2025-03-05 at 10 24 59 PM" src="https://github.com/user-attachments/assets/b0992c09-ea21-4f45-b85d-ce5378fdbdbc" />
 
 ## 🙏 Acknowledgements
 
 - Inspired by the need for transparent, flexible expense tracking
 - Special thanks to my wife, who endured countless late nights of coding, provided unwavering support, and maintained patience during endless debugging sessions. This project wouldn't exist without her understanding and encouragement.
+- Thanks to Jordan Dalby for creating and maintaining the Unraid template
+- Thanks to @elmerfds for the OIDC support!

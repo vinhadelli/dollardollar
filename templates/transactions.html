@@ -265,57 +265,56 @@
                     </thead>
                     <tbody>
                         {% if expenses %}
-                            {% for expense in expenses %}
-                            {% set splits = expense_splits[expense.id] %}
-                            <tr>
-                                <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
-                                <td>{{ expense.description }}</td>
-                                <td>{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</td>
-                                <td>{{ expense.card_used }}</td>
-                                <td>{{ expense.group.name if expense.group else "-" }}</td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-light" type="button" 
-                                            data-bs-toggle="collapse" data-bs-target="#split{{ expense.id }}" 
-                                            aria-expanded="false">
-                                        <i class="fas fa-chevron-down"></i> View Split
-                                    </button>
-                                    <div class="collapse mt-2" id="split{{ expense.id }}">
-                                        <div class="card card-body bg-dark border-secondary">
-                                            <small class="d-block mb-1">Method: {{ expense.split_method }}</small>
-                                            
-                                            <!-- Payer's share -->
-                                            {% if splits.payer.amount > 0 %}
-                                            <div class="mb-1">
-                                                <span class="badge bg-primary">{{ splits.payer.name }}</span>
-                                                <span class="badge bg-success">{{ base_currency.symbol }}{{ "%.2f"|format(splits.payer.amount) }}</span>
-                                            </div>
-                                            {% endif %}
-                                            
-                                            <!-- Everyone else's share -->
-                                            {% for split in splits.splits %}
-                                            <div class="mb-1">
-                                                <span class="badge bg-primary">{{ split.name }}</span>
-                                                <span class="badge bg-success">{{ base_currency.symbol }}{{ "%.2f"|format(split.amount) }}</span>
-                                            </div>
-                                            {% endfor %}
+                        {% for expense in expenses %}
+                        {% set splits = expense_splits[expense.id] %}
+                        <tr data-expense-id="{{ expense.id }}" data-paid-by="{{ expense.paid_by }}">
+                            <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ expense.description }}</td>
+                            <td>{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</td>
+                            <td>{{ expense.card_used }}</td>
+                            <td>{{ expense.group.name if expense.group else "-" }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-light" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#split{{ expense.id }}" 
+                                        aria-expanded="false">
+                                    <i class="fas fa-chevron-down"></i> View Split
+                                </button>
+                                <div class="collapse mt-2" id="split{{ expense.id }}">
+                                    <div class="card card-body bg-dark border-secondary">
+                                        <small class="d-block mb-1">Method: {{ expense.split_method }}</small>
+                                        
+                                        <!-- Payer's share -->
+                                        {% if splits.payer.amount > 0 %}
+                                        <div class="mb-1">
+                                            <span class="badge bg-primary">{{ splits.payer.name }}</span>
+                                            <span class="badge bg-success">{{ base_currency.symbol }}{{ "%.2f"|format(splits.payer.amount) }}</span>
                                         </div>
+                                        {% endif %}
+                                        
+                                        <!-- Everyone else's share -->
+                                        {% for split in splits.splits %}
+                                        <div class="mb-1">
+                                            <span class="badge bg-primary">{{ split.name }}</span>
+                                            <span class="badge bg-success">{{ base_currency.symbol }}{{ "%.2f"|format(split.amount) }}</span>
+                                        </div>
+                                        {% endfor %}
                                     </div>
-                                </td>
-                                <td>
-                                    <div class="dropdown">
-                                        <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" id="actionDropdown{{ expense.id }}" data-bs-toggle="dropdown" aria-expanded="false">
-                                            <i class="fas fa-ellipsis-v"></i>
-                                        </button>
-                                        <ul class="dropdown-menu dropdown-menu-end bg-dark" aria-labelledby="actionDropdown{{ expense.id }}">
-                                            <li><a class="dropdown-item text-light" href="#"><i class="fas fa-edit me-2"></i>Edit</a></li>
-                                            <li><a class="dropdown-item text-light" href="#"><i class="fas fa-copy me-2"></i>Duplicate</a></li>
-                                            <li><hr class="dropdown-divider border-secondary"></li>
-                                            <li><a class="dropdown-item text-danger" href="#" onclick="deleteExpense({{ expense.id }})"><i class="fas fa-trash-alt me-2"></i>Delete</a></li>
-                                        </ul>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" id="actionDropdown{{ expense.id }}" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end bg-dark" aria-labelledby="actionDropdown{{ expense.id }}">
+                                        <li><a class="dropdown-item text-light" href="#" onclick="editExpense({{ expense.id }}); return false;"><i class="fas fa-edit me-2"></i>Edit</a></li>
+                                        <li><hr class="dropdown-divider border-secondary"></li>
+                                        <li><a class="dropdown-item text-danger" href="#" onclick="deleteExpense({{ expense.id }}); return false;"><i class="fas fa-trash-alt me-2"></i>Delete</a></li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
                         {% else %}
                             <tr>
                                 <td colspan="7" class="text-center">No transactions found</td>
@@ -484,6 +483,155 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleSplitOptions();
     }
 });
+
+// Function to handle editing an expense
+function editExpense(expenseId) {
+    // Make an AJAX call to get the expense data
+    fetch(`/get_expense/${expenseId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to retrieve expense data');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                populateEditForm(data.expense);
+            } else {
+                alert(data.message || 'Failed to load expense data');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert(`Error loading expense data: ${error.message}`);
+        });
+}
+
+// Function to populate the edit form with expense data
+function populateEditForm(expense) {
+    // Toggle the form to edit mode
+    const form = document.getElementById('expenseFormContainer');
+    const toggleButton = document.getElementById('toggleExpenseForm');
+    
+    if (form && toggleButton) {
+        // Show the form
+        form.style.display = 'block';
+        toggleButton.innerHTML = '<i class="fas fa-times me-2"></i>Cancel';
+        toggleButton.classList.replace('btn-primary', 'btn-secondary');
+        
+        // Change form action to update route instead of add
+        const formElement = form.querySelector('form');
+        if (formElement) {
+            formElement.action = `/update_expense/${expense.id}`;
+            
+            // Set form fields
+            formElement.querySelector('#description').value = expense.description;
+            formElement.querySelector('#amount').value = expense.amount;
+            formElement.querySelector('#date').value = expense.date;
+            formElement.querySelector('#card_used').value = expense.card_used;
+            
+            // Set paid_by dropdown
+            const paidBySelect = formElement.querySelector('#paid_by');
+            if (paidBySelect) {
+                for (let i = 0; i < paidBySelect.options.length; i++) {
+                    if (paidBySelect.options[i].value === expense.paid_by) {
+                        paidBySelect.options[i].selected = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Set split_method dropdown
+            const splitMethodSelect = formElement.querySelector('#split_method');
+            if (splitMethodSelect) {
+                splitMethodSelect.value = expense.split_method;
+            }
+            
+            // Set split_value if applicable
+            const splitValueInput = formElement.querySelector('#split_value');
+            if (splitValueInput && expense.split_value) {
+                splitValueInput.value = expense.split_value;
+            }
+            
+            // Set split_details if applicable
+            const splitDetailsInput = formElement.querySelector('#split_details');
+            if (splitDetailsInput && expense.split_details) {
+                splitDetailsInput.value = expense.split_details;
+            }
+            
+            // Set personal expense checkbox based on whether there's split_with
+            const personalExpenseCheck = formElement.querySelector('#personal_expense_check');
+            if (personalExpenseCheck) {
+                personalExpenseCheck.checked = !expense.split_with || expense.split_with.length === 0;
+                togglePersonalExpense(); // Update the UI based on checkbox state
+            }
+            
+            // Handle split_with multiselect
+            const splitWithSelect = formElement.querySelector('#split_with');
+            if (splitWithSelect) {
+                // First, deselect all options
+                for (let i = 0; i < splitWithSelect.options.length; i++) {
+                    splitWithSelect.options[i].selected = false;
+                }
+                
+                // Then select only the ones in the expense.split_with array
+                if (expense.split_with && expense.split_with.length > 0) {
+                    for (let i = 0; i < splitWithSelect.options.length; i++) {
+                        if (expense.split_with.includes(splitWithSelect.options[i].value)) {
+                            splitWithSelect.options[i].selected = true;
+                        }
+                    }
+                }
+                
+                // If we have a custom multiselect initialized, update it
+                if (typeof initializeMultiSelect === 'function') {
+                    initializeMultiSelect(true);
+                }
+            }
+            
+            // Set currency if applicable
+            const currencySelect = formElement.querySelector('#currency_code');
+            if (currencySelect && expense.currency_code) {
+                currencySelect.value = expense.currency_code;
+            }
+            
+            // Set group_id if applicable
+            const groupSelect = formElement.querySelector('select[name="group_id"]');
+            if (groupSelect) {
+                groupSelect.value = expense.group_id || '';
+            }
+            
+            // Set tags if applicable
+            if (expense.tag_ids && expense.tag_ids.length > 0) {
+                expense.tag_ids.forEach(tagId => {
+                    const tagCheckbox = formElement.querySelector(`#tag${tagId}`);
+                    if (tagCheckbox) {
+                        tagCheckbox.checked = true;
+                        // Update styling if we have tag checkboxes with colors
+                        if (tagCheckbox.style.backgroundColor) {
+                            tagCheckbox.style.backgroundColor = tagCheckbox.style.borderColor;
+                        }
+                    }
+                });
+            }
+            
+            // Trigger split method change to update UI
+            if (typeof toggleSplitOptions === 'function') {
+                toggleSplitOptions();
+            }
+            
+            // Update form submit button text
+            const submitButton = formElement.querySelector('button[type="submit"]');
+            if (submitButton) {
+                submitButton.textContent = 'Update Expense';
+            }
+            
+            // Scroll to the form
+            form.scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+}
+
 
 // Toggle expense form visibility
 function toggleExpenseForm() {
@@ -1142,11 +1290,11 @@ function initializeTagCheckboxes() {
 // Function to handle deleting an expense
 function deleteExpense(expenseId) {
     if (confirm('Are you sure you want to delete this expense?')) {
-        // You would normally implement an AJAX call to delete the expense here
         fetch(`/delete_expense/${expenseId}`, {
             method: 'POST',
             headers: {
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
             }
         })
         .then(response => {
@@ -1157,12 +1305,24 @@ function deleteExpense(expenseId) {
         })
         .then(data => {
             if (data.success) {
-                // Remove the row from the table
+                // Find and remove the row from the table
                 const row = document.querySelector(`tr[data-expense-id="${expenseId}"]`);
-                if (row) row.remove();
+                if (row) {
+                    row.remove();
+                } else {
+                    // Try finding the row by looping through all rows and checking cells
+                    const rows = document.querySelectorAll('#expensesTable tbody tr');
+                    for (const row of rows) {
+                        if (row.querySelector(`#actionDropdown${expenseId}`)) {
+                            row.remove();
+                            break;
+                        }
+                    }
+                }
                 
                 // Show success message
                 alert('Expense deleted successfully');
+                location.reload(); // Reload the page to update counts and list
             } else {
                 alert(data.message || 'Failed to delete expense');
             }
@@ -1173,6 +1333,7 @@ function deleteExpense(expenseId) {
         });
     }
 }
+
 
 // Implement the improved multiselect dropdown
 function initializeMultiSelect(rebuild = false) {

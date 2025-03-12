@@ -1491,6 +1491,13 @@ def dashboard():
                          currencies=currencies,
                          now=now)
 
+
+
+#--------------------
+# ROUTES: EXPENSES MANAGEMENT
+#--------------------
+
+
 @app.route('/add_expense', methods=['GET', 'POST'])
 @login_required_dev
 def add_expense():
@@ -1586,6 +1593,215 @@ def add_expense():
             flash(f'Error: {str(e)}')
             
     return redirect(url_for('dashboard'))
+
+
+@app.route('/delete_expense/<int:expense_id>', methods=['POST'])
+@login_required_dev
+def delete_expense(expense_id):
+    """Delete an expense by ID"""
+    try:
+        # Find the expense
+        expense = Expense.query.get_or_404(expense_id)
+        
+        # Security check: Only the creator can delete the expense
+        if expense.user_id != current_user.id:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': False,
+                    'message': 'You do not have permission to delete this expense'
+                }), 403
+            else:
+                flash('You do not have permission to delete this expense')
+                return redirect(url_for('transactions'))
+        
+        # Delete the expense
+        db.session.delete(expense)
+        db.session.commit()
+        
+        # Handle AJAX and regular requests
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': True,
+                'message': 'Expense deleted successfully'
+            })
+        else:
+            flash('Expense deleted successfully')
+            return redirect(url_for('transactions'))
+            
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting expense {expense_id}: {str(e)}")
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': False,
+                'message': f'Error: {str(e)}'
+            }), 500
+        else:
+            flash(f'Error: {str(e)}')
+            return redirect(url_for('transactions'))
+
+@app.route('/get_expense/<int:expense_id>', methods=['GET'])
+@login_required_dev
+def get_expense(expense_id):
+    """Get expense details for editing"""
+    try:
+        # Find the expense
+        expense = Expense.query.get_or_404(expense_id)
+        
+        # Security check: Only the creator or participants can view the expense details
+        if expense.user_id != current_user.id and current_user.id not in (expense.split_with or ''):
+            return jsonify({
+                'success': False,
+                'message': 'You do not have permission to view this expense'
+            }), 403
+        
+        # Format the expense data
+        split_with_ids = expense.split_with.split(',') if expense.split_with else []
+        
+        # Format the date in YYYY-MM-DD format
+        formatted_date = expense.date.strftime('%Y-%m-%d')
+        
+        # Get tag IDs
+        tag_ids = [tag.id for tag in expense.tags]
+        
+        # Return the expense data
+        return jsonify({
+            'success': True,
+            'expense': {
+                'id': expense.id,
+                'description': expense.description,
+                'amount': expense.amount,
+                'date': formatted_date,
+                'card_used': expense.card_used,
+                'split_method': expense.split_method,
+                'split_value': expense.split_value,
+                'split_details': expense.split_details,
+                'paid_by': expense.paid_by,
+                'split_with': split_with_ids,
+                'group_id': expense.group_id,
+                'currency_code': expense.currency_code or current_user.default_currency_code or 'USD',
+                'tag_ids': tag_ids
+            }
+        })
+            
+    except Exception as e:
+        app.logger.error(f"Error retrieving expense {expense_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+@app.route('/update_expense/<int:expense_id>', methods=['POST'])
+@login_required_dev
+def update_expense(expense_id):
+    """Update an existing expense"""
+    try:
+        # Find the expense
+        expense = Expense.query.get_or_404(expense_id)
+        
+        # Security check: Only the creator can update the expense
+        if expense.user_id != current_user.id:
+            flash('You do not have permission to edit this expense')
+            return redirect(url_for('transactions'))
+        
+        # Check if this is a personal expense (no splits)
+        is_personal_expense = request.form.get('personal_expense') == 'on'
+        
+        # Handle split_with based on whether it's a personal expense
+        if is_personal_expense:
+            # For personal expenses, we set split_with to empty
+            split_with_str = None
+        else:
+            # Handle multi-select for split_with
+            split_with_ids = request.form.getlist('split_with')
+            if not split_with_ids:
+                flash('Please select at least one person to split with or mark as personal expense.')
+                return redirect(url_for('transactions'))
+            
+            split_with_str = ','.join(split_with_ids) if split_with_ids else None
+        
+        # Parse date with error handling
+        try:
+            expense_date = datetime.strptime(request.form['date'], '%Y-%m-%d')
+        except ValueError:
+            flash('Invalid date format. Please use YYYY-MM-DD format.')
+            return redirect(url_for('transactions'))
+        
+        # Process split details if provided
+        split_details = None
+        if request.form.get('split_details'):
+            split_details = request.form.get('split_details')
+        
+        # Get currency information
+        currency_code = request.form.get('currency_code', 'USD')
+        if not currency_code:
+            # Use user's default currency or system default (USD)
+            currency_code = current_user.default_currency_code or 'USD'
+        
+        # Get original amount in the selected currency
+        original_amount = float(request.form['amount'])
+        
+        # Find the currencies
+        selected_currency = Currency.query.filter_by(code=currency_code).first()
+        base_currency = Currency.query.filter_by(is_base=True).first()
+        
+        if not selected_currency or not base_currency:
+            flash('Currency configuration error.')
+            return redirect(url_for('transactions'))
+        
+        # Convert original amount to base currency
+        amount = original_amount * selected_currency.rate_to_base
+        
+        # Update expense fields
+        expense.description = request.form['description']
+        expense.amount = amount
+        expense.original_amount = original_amount
+        expense.currency_code = currency_code
+        expense.date = expense_date
+        expense.card_used = request.form['card_used']
+        expense.split_method = request.form['split_method']
+        expense.split_value = float(request.form.get('split_value', 0)) if request.form.get('split_value') else 0
+        expense.split_details = split_details
+        expense.paid_by = request.form['paid_by']
+        expense.group_id = request.form.get('group_id') if request.form.get('group_id') and request.form.get('group_id') != '' else None
+        expense.split_with = split_with_str
+        
+        # Handle tags - first remove all existing tags
+        expense.tags = []
+        
+        # Add new tags
+        tag_ids = request.form.getlist('tags')
+        if tag_ids:
+            for tag_id in tag_ids:
+                tag = Tag.query.get(int(tag_id))
+                if tag and tag.user_id == current_user.id:
+                    expense.tags.append(tag)
+        
+        # Save changes
+        db.session.commit()
+        flash('Expense updated successfully!')
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating expense {expense_id}: {str(e)}")
+        flash(f'Error: {str(e)}')
+        
+    return redirect(url_for('transactions'))
+
+
+
+
+
+
+
+
+
+#--------------------
+# ROUTES: tags
+#--------------------
+
+
 @app.route('/tags')
 @login_required_dev
 def manage_tags():
