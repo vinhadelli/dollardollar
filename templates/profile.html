@@ -67,7 +67,8 @@
                 </div>
             </div>
             
-            <!-- Change Password Card -->
+            <!-- Change Password Card - Only show for non-OIDC users -->
+            {% if not (current_user.oidc_id and oidc_enabled) %}
             <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">Change Password</h5>
@@ -93,6 +94,29 @@
                     </form>
                 </div>
             </div>
+            {% elif current_user.oidc_id and oidc_enabled %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Authentication Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Your account uses SSO authentication. To change your password, please update your credentials on the identify provider end.
+                    </div>
+                    {% if current_user.oidc_provider %}
+                    <p class="text-muted mt-3">
+                        <strong>Identity Provider:</strong> {{ current_user.oidc_provider }}
+                    </p>
+                    {% endif %}
+                    {% if current_user.last_login %}
+                    <p class="text-muted">
+                        <strong>Last Login:</strong> {{ current_user.last_login.strftime('%Y-%m-%d %H:%M:%S') }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
             
             <!-- Default Currency Card -->
             <div class="card">

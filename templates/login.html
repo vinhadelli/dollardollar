@@ -8,6 +8,21 @@
                 <h4 class="mb-0">Login</h4>
             </div>
             <div class="card-body">
+                {% if oidc_enabled %}
+                <div class="d-grid mb-4">
+                    <a href="{{ url_for('login_oidc') }}" class="btn btn-lg btn-primary">
+                        <i class="fas fa-sign-in-alt me-2"></i>Login with {{ config.get('OIDC_PROVIDER_NAME', 'SSO') }}
+                    </a>
+                </div>
+                
+                {% if not local_login_disabled %}
+                <div class="text-center mb-4">
+                    <span class="oidc-divider-text">OR</span>
+                </div>
+                {% endif %}
+                {% endif %}
+                
+                {% if not local_login_disabled %}
                 <form method="POST">
                     <div class="mb-3">
                         <label for="email" class="form-label">Email address</label>
@@ -24,6 +39,12 @@
                         <button type="submit" class="btn btn-primary">Login</button>
                     </div>
                 </form>
+                {% else %}
+                <div class="alert alert-info text-center mt-3">
+                    Local login has been disabled. Please use {{ config.get('OIDC_PROVIDER_NAME', 'SSO') }}.
+                </div>
+                {% endif %}
+                
                 <p class="text-center mt-3">
                     {% if not signups_disabled %}
                         Don't have an account? <a href="{{ url_for('signup') }}" class="text-warning">Sign up</a>
