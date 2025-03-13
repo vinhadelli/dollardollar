@@ -1,3 +1,4 @@
+r"""29a41de6a866d56c36aba5159f45257c"""
 import os
 from dotenv import load_dotenv
 from flask import Flask, render_template, send_file, request, jsonify, request, redirect, url_for, flash, session
@@ -3756,6 +3757,10 @@ def stats():
     end_date_str = request.args.get('endDate', None)
     group_id = request.args.get('groupId', 'all')
     chart_type = request.args.get('chartType', 'all')
+    is_comparison = request.args.get('compare', 'false') == 'true'
+
+    if is_comparison:
+        return handle_comparison_request()
     
     # Parse dates or use defaults (last 6 months)
     try:
@@ -4029,11 +4034,12 @@ def stats():
     
     # Converting month labels to datetime objects for comparison
     month_dates = [datetime.strptime(f"{label} 01", "%b %Y %d") for label in monthly_labels]
-    
+   
+    # Create a copy for processing
+    items_to_process = chronological_items.copy()
     for month_date in month_dates:
-        # Add all items that occurred before this month
-        while chronological_items and chronological_items[0]['date'] < month_date:
-            item = chronological_items.pop(0)
+        while items_to_process and items_to_process[0]['date'] < month_date:
+            item = items_to_process.pop(0)
             running_balance += item['amount']
         
         balance_amounts.append(running_balance)
@@ -4234,6 +4240,292 @@ def stats():
                           tag_names=tag_names,
                           tag_totals=tag_totals,
                           tag_colors=tag_colors)
+
+  
+def handle_comparison_request():
+    """Handle time frame comparison requests within the stats route"""
+    # Get parameters from request
+    primary_start = request.args.get('primaryStart')
+    primary_end = request.args.get('primaryEnd')
+    comparison_start = request.args.get('comparisonStart')
+    comparison_end = request.args.get('comparisonEnd')
+    metric = request.args.get('metric', 'spending')
+    
+    # Convert string dates to datetime objects
+    try:
+        primary_start_date = datetime.strptime(primary_start, '%Y-%m-%d')
+        primary_end_date = datetime.strptime(primary_end, '%Y-%m-%d')
+        comparison_start_date = datetime.strptime(comparison_start, '%Y-%m-%d')
+        comparison_end_date = datetime.strptime(comparison_end, '%Y-%m-%d')
+    except ValueError:
+        return jsonify({'error': 'Invalid date format'}), 400
+    
+    # Initialize response data structure
+    result = {
+        'primary': {
+            'totalSpending': 0,
+            'transactionCount': 0,
+            'topCategory': 'None'
+        },
+        'comparison': {
+            'totalSpending': 0,
+            'transactionCount': 0,
+            'topCategory': 'None'
+        }
+    }
+    
+    # Get expenses for both periods - reuse your existing query logic
+    primary_query_filters = [
+        or_(
+            Expense.user_id == current_user.id,
+            Expense.split_with.like(f'%{current_user.id}%')
+        ),
+        Expense.date >= primary_start_date,
+        Expense.date <= primary_end_date
+    ]
+    primary_expenses_raw = Expense.query.filter(and_(*primary_query_filters)).order_by(Expense.date).all()
+    
+    comparison_query_filters = [
+        or_(
+            Expense.user_id == current_user.id,
+            Expense.split_with.like(f'%{current_user.id}%')
+        ),
+        Expense.date >= comparison_start_date,
+        Expense.date <= comparison_end_date
+    ]
+    comparison_expenses_raw = Expense.query.filter(and_(*comparison_query_filters)).order_by(Expense.date).all()
+    
+    # Process expenses to get user's portion - similar to your existing code
+    primary_expenses = []
+    comparison_expenses = []
+    primary_total = 0
+    comparison_total = 0
+    
+    # Process primary period expenses
+    for expense in primary_expenses_raw:
+        splits = expense.calculate_splits()
+        user_portion = 0
+        
+        if expense.paid_by == current_user.id:
+            user_portion = splits['payer']['amount']
+        else:
+            for split in splits['splits']:
+                if split['email'] == current_user.id:
+                    user_portion = split['amount']
+                    break
+        
+        if user_portion > 0:
+            expense_data = {
+                'id': expense.id,
+                'description': expense.description,
+                'date': expense.date,
+                'total_amount': expense.amount,
+                'user_portion': user_portion,
+                'paid_by': expense.paid_by,
+                'category_name': get_category_name(expense)
+            }
+            primary_expenses.append(expense_data)
+            primary_total += user_portion
+    
+    # Process comparison period expenses
+    for expense in comparison_expenses_raw:
+        splits = expense.calculate_splits()
+        user_portion = 0
+        
+        if expense.paid_by == current_user.id:
+            user_portion = splits['payer']['amount']
+        else:
+            for split in splits['splits']:
+                if split['email'] == current_user.id:
+                    user_portion = split['amount']
+                    break
+        
+        if user_portion > 0:
+            expense_data = {
+                'id': expense.id,
+                'description': expense.description,
+                'date': expense.date,
+                'total_amount': expense.amount,
+                'user_portion': user_portion,
+                'paid_by': expense.paid_by,
+                'category_name': get_category_name(expense)
+            }
+            comparison_expenses.append(expense_data)
+            comparison_total += user_portion
+    
+    # Update basic metrics
+    result['primary']['totalSpending'] = primary_total
+    result['primary']['transactionCount'] = len(primary_expenses)
+    result['comparison']['totalSpending'] = comparison_total
+    result['comparison']['transactionCount'] = len(comparison_expenses)
+    
+    # Process data based on the selected metric
+    if metric == 'spending':
+        # Daily spending data
+        primary_daily = process_daily_spending(primary_expenses, primary_start_date, primary_end_date)
+        comparison_daily = process_daily_spending(comparison_expenses, comparison_start_date, comparison_end_date)
+        
+        # Normalize to 10 data points for consistent display
+        result['primary']['dailyAmounts'] = normalize_time_series(primary_daily, 10)
+        result['comparison']['dailyAmounts'] = normalize_time_series(comparison_daily, 10)
+        result['dateLabels'] = [f'Day {i+1}' for i in range(10)]
+        
+    elif metric == 'categories':
+        # Get category spending for both periods
+        primary_categories = {}
+        comparison_categories = {}
+        
+        # Process primary period categories
+        for expense in primary_expenses:
+            category = expense['category_name'] or 'Uncategorized'
+            if category not in primary_categories:
+                primary_categories[category] = 0
+            primary_categories[category] += expense['user_portion']
+            
+        # Process comparison period categories
+        for expense in comparison_expenses:
+            category = expense['category_name'] or 'Uncategorized'
+            if category not in comparison_categories:
+                comparison_categories[category] = 0
+            comparison_categories[category] += expense['user_portion']
+        
+        # Get top categories across both periods
+        all_categories = set(list(primary_categories.keys()) + list(comparison_categories.keys()))
+        top_categories = sorted(
+            all_categories,
+            key=lambda c: (primary_categories.get(c, 0) + comparison_categories.get(c, 0)),
+            reverse=True
+        )[:5]
+        
+        result['categoryLabels'] = top_categories
+        result['primary']['categoryAmounts'] = [primary_categories.get(cat, 0) for cat in top_categories]
+        result['comparison']['categoryAmounts'] = [comparison_categories.get(cat, 0) for cat in top_categories]
+        
+        # Set top category
+        result['primary']['topCategory'] = max(primary_categories.items(), key=lambda x: x[1])[0] if primary_categories else 'None'
+        result['comparison']['topCategory'] = max(comparison_categories.items(), key=lambda x: x[1])[0] if comparison_categories else 'None'
+        
+    elif metric == 'tags':
+        # Similar logic for tags - adapt based on your data model
+        # You'll need to adjust this based on how tags are stored in your database
+        primary_tags = {}
+        comparison_tags = {}
+        
+        # For primary period
+        for expense in primary_expenses:
+            # Get tags for this expense - adapt to your model
+            expense_obj = Expense.query.get(expense['id'])
+            if expense_obj and hasattr(expense_obj, 'tags'):
+                for tag in expense_obj.tags:
+                    if tag.name not in primary_tags:
+                        primary_tags[tag.name] = 0
+                    primary_tags[tag.name] += expense['user_portion']
+        
+        # For comparison period
+        for expense in comparison_expenses:
+            expense_obj = Expense.query.get(expense['id'])
+            if expense_obj and hasattr(expense_obj, 'tags'):
+                for tag in expense_obj.tags:
+                    if tag.name not in comparison_tags:
+                        comparison_tags[tag.name] = 0
+                    comparison_tags[tag.name] += expense['user_portion']
+        
+        # Get top tags
+        all_tags = set(list(primary_tags.keys()) + list(comparison_tags.keys()))
+        top_tags = sorted(
+            all_tags,
+            key=lambda t: (primary_tags.get(t, 0) + comparison_tags.get(t, 0)),
+            reverse=True
+        )[:5]
+        
+        result['tagLabels'] = top_tags
+        result['primary']['tagAmounts'] = [primary_tags.get(tag, 0) for tag in top_tags]
+        result['comparison']['tagAmounts'] = [comparison_tags.get(tag, 0) for tag in top_tags]
+        
+    elif metric == 'payment':
+        # Payment method comparison
+        primary_payment = {}
+        comparison_payment = {}
+        
+        # For primary period - only count what the user paid directly
+        for expense in primary_expenses:
+            if expense['paid_by'] == current_user.id:
+                # Get the payment method (assuming it's stored as card_used)
+                expense_obj = Expense.query.get(expense['id'])
+                if expense_obj and hasattr(expense_obj, 'card_used'):
+                    card = expense_obj.card_used
+                    if card not in primary_payment:
+                        primary_payment[card] = 0
+                    primary_payment[card] += expense['user_portion']
+        
+        # For comparison period
+        for expense in comparison_expenses:
+            if expense['paid_by'] == current_user.id:
+                expense_obj = Expense.query.get(expense['id'])
+                if expense_obj and hasattr(expense_obj, 'card_used'):
+                    card = expense_obj.card_used
+                    if card not in comparison_payment:
+                        comparison_payment[card] = 0
+                    comparison_payment[card] += expense['user_portion']
+        
+        # Combine payment methods
+        all_methods = set(list(primary_payment.keys()) + list(comparison_payment.keys()))
+        
+        result['paymentLabels'] = list(all_methods)
+        result['primary']['paymentAmounts'] = [primary_payment.get(method, 0) for method in all_methods]
+        result['comparison']['paymentAmounts'] = [comparison_payment.get(method, 0) for method in all_methods]
+    
+    return jsonify(result)
+
+
+def get_category_name(expense):
+    """Helper function to get the category name for an expense"""
+    if hasattr(expense, 'category_id') and expense.category_id:
+        category = Category.query.get(expense.category_id)
+        if category:
+            return category.name
+    return None
+
+
+def process_daily_spending(expenses, start_date, end_date):
+    """Process expenses into daily totals"""
+    days = (end_date - start_date).days + 1
+    daily_spending = [0] * days
+    
+    for expense in expenses:
+        day_index = (expense['date'] - start_date).days
+        if 0 <= day_index < days:
+            daily_spending[day_index] += expense['user_portion']
+    
+    return daily_spending
+
+
+def normalize_time_series(data, target_length):
+    """Normalize a time series to a target length for better comparison"""
+    if len(data) == 0:
+        return [0] * target_length
+    
+    if len(data) == target_length:
+        return data
+    
+    # Use resampling to normalize the data
+    result = []
+    ratio = len(data) / target_length
+    
+    for i in range(target_length):
+        start_idx = int(i * ratio)
+        end_idx = int((i + 1) * ratio)
+        if end_idx > len(data):
+            end_idx = len(data)
+        
+        if start_idx == end_idx:
+            segment_avg = data[start_idx] if start_idx < len(data) else 0
+        else:
+            segment_avg = sum(data[start_idx:end_idx]) / (end_idx - start_idx)
+        
+        result.append(segment_avg)
+    
+    return result
 
 
 #--------------------
