@@ -628,6 +628,12 @@
                     <span class="nav-text">Statistics</span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a href="{{ url_for('budgets') }}" class="nav-link {% if request.path == url_for('budgets') %}active{% endif %}">
+                    <span class="nav-icon"><i class="fas fa-chart-pie"></i></span>
+                    <span class="nav-text">Budgets</span>
+                </a>
+            </li>
             
             <div class="sidebar-section-divider"></div>
             
