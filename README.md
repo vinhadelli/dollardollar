@@ -2,7 +2,7 @@
 
 An open-source, self-hosted expense tracking and bill-splitting application designed for privacy, flexibility, and financial transparency.
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-yellow.svg?style=flat&logo=buy-me-a-coffee)](https://buymeacoffee.com/ccfw6gzz28)
+<a href="https://buymeacoffee.com/ccfw6gzz28"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=ccfw6gzz28&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" /></a>
 
 ## NOTE:
 If you are encountering issues after updating/pulling the recent docker, please run:
