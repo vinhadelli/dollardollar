@@ -199,9 +199,11 @@ Contributions are welcome! Please check out our contributing guidelines.
 4. Push to the branch
 5. Create a Pull Request
 
-## 📜 License
+## License
 
-MIT License
+This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+This license requires anyone who runs a modified version of this software, including running it on a server as a service, to make the complete source code available to users of that service.
 
 ## 📸 Screenshots
 
