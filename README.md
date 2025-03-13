@@ -4,7 +4,6 @@ An open-source, self-hosted expense tracking and bill-splitting application desi
 
 
 If you like this project and would like to support my work, you can buy me a coffee!! Your support helps me continue creating resources like this one. No pressure at all, and thank you for being here!
-=======
 <a href="https://buymeacoffee.com/ccfw6gzz28"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=ccfw6gzz28&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" /></a>
 
 ## NOTE:
@@ -134,6 +133,20 @@ Set up transactions that repeat on a regular schedule:
   - Force OIDC-only authentication
   - Customizable provider name display
 
+### Budget Management
+- Set monthly or annual budget targets
+- Create category-based budgeting
+- Track spending against budget limits
+- Get notifications when approaching budget thresholds
+- Visualize budget progress with interactive charts
+
+### Advanced Categorization
+- Create unlimited custom categories for transactions
+- Configure category hierarchies (main categories with sub-categories)
+- Auto-categorize transactions based on patterns
+- Generate category-based reports for tax purposes
+- Compare spending across categories over time
+
 ## 🔧 Configuration
 
 ### OIDC Setup (Optional)
@@ -221,6 +234,7 @@ Here's a visual tour of DollarDollar Bill Y'all:
 
 
 If you like this project and would like to support my work, you can buy me a coffee!! Your support helps me continue creating resources like this one. No pressure at all, and thank you for being here!
-=======
+
 <a href="https://buymeacoffee.com/ccfw6gzz28"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=ccfw6gzz28&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" /></a>
 
+# 29a41de6a866d56c36aba5159f45257c
