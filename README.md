@@ -2,6 +2,8 @@
 
 An open-source, self-hosted expense tracking and bill-splitting application designed for privacy, flexibility, and financial transparency.
 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-yellow.svg?style=flat&logo=buy-me-a-coffee)](https://buymeacoffee.com/ccfw6gzz28)
+
 ## NOTE:
 If you are encountering issues after updating/pulling the recent docker, please run:
 - `flask db migrate` 
