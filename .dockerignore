@@ -40,7 +40,7 @@ env/
 Dockerfile
 docker-compose*.yml
 .dockerignore
-
+signature.sh
 # Local development
 instance/
 .env
@@ -56,4 +56,4 @@ docs/
 
 # Tests
 tests/
-test/
+test/# 29a41de6a866d56c36aba5159f45257c

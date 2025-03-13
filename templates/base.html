@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+    <meta name="dev-signature" content="29a41de6a866d56c36aba5159f45257c">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,7 +17,7 @@
             --bg-dark: #111827;
             --bg-darker: #030712;
             --sidebar-width: 250px;
-            --sidebar-collapsed-width: 70px;
+            --sidebar-mini-width: 70px;
             --header-height: 60px;
             --transition-speed: 0.3s;
         }
@@ -92,7 +93,7 @@
             width: var(--sidebar-width);
             background-color: rgba(17, 24, 39, 0.95);
             backdrop-filter: blur(8px);
-            transition: transform var(--transition-speed);
+            transition: transform var(--transition-speed), width var(--transition-speed);
             z-index: 1020;
             overflow-x: hidden;
             box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
@@ -103,6 +104,54 @@
             transform: translateX(0);
         }
         
+        /* Mini Sidebar Styles */
+        .sidebar.mini {
+            width: var(--sidebar-mini-width);
+            overflow: hidden;
+        }
+        
+        .sidebar.mini .sidebar-user {
+            padding: 1rem 0;
+            justify-content: center;
+        }
+        
+        .sidebar.mini .user-details {
+            display: none;
+        }
+        
+        .sidebar.mini .sidebar-collapse-btn {
+            display: none;
+        }
+        
+        .sidebar-mini-toggle {
+            display: none;
+            text-align: center;
+            padding: 10px 0;
+        }
+        
+        .sidebar.mini .sidebar-mini-toggle {
+            display: block;
+        }
+        
+        /* Navigation items in mini mode */
+        .sidebar.mini .nav-text,
+        .sidebar.mini .nav-caret {
+            display: none;
+        }
+        
+        .sidebar.mini .nav-icon {
+            margin-right: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 1.25rem;
+        }
+        
+        .sidebar.mini .nav-link {
+            padding: 0.75rem 0;
+            justify-content: center;
+        }
+        
+        /* Main navigation */
         .sidebar-nav {
             list-style: none;
             padding: 0;
@@ -113,13 +162,13 @@
         }
         
         .sidebar-nav .nav-item {
-            margin-bottom: 0.2rem;
+            margin-bottom: 0;
         }
         
         .sidebar-nav .nav-link {
             display: flex;
             align-items: center;
-            padding: 0.75rem 1.5rem;
+            padding: 0.6rem 1.25rem;
             color: rgba(255, 255, 255, 0.8);
             text-decoration: none;
             transition: all 0.2s;
@@ -150,8 +199,111 @@
             transition: opacity var(--transition-speed);
         }
         
+        /* Submenu styling */
+        .nav-section > a {
+            position: relative;
+        }
+        
+        .nav-caret {
+            position: absolute;
+            right: 15px;
+            transition: transform 0.3s;
+        }
+        
+        .nav-link:not(.collapsed) .nav-caret i {
+            transform: rotate(180deg);
+        }
+        
+        .nav-submenu {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+            background-color: rgba(0, 0, 0, 0.15);
+            border-left: 3px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .nav-submenu .nav-link {
+            padding-left: 3.25rem;
+            font-size: 0.95rem;
+        }
+        
+        .sidebar.mini .nav-submenu {
+            display: none !important;
+        }
+        
+        /* Hover tooltips for mini sidebar */
+        .sidebar.mini .nav-item {
+            position: relative;
+        }
+        
+        .sidebar.mini .nav-item:hover::after {
+            content: attr(data-title);
+            position: absolute;
+            left: 100%;
+            top: 0;
+            z-index: 1100;
+            margin-left: 5px;
+            padding: 5px 8px;
+            background-color: #333;
+            color: white;
+            border-radius: 4px;
+            white-space: nowrap;
+            font-size: 0.8rem;
+            opacity: 0.9;
+        }
+        
+        /* More compact vertical spacing */
+        .sidebar-section-divider {
+            height: 1px;
+            margin: 0.5rem 1rem;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* User profile in sidebar */
+        .sidebar-user {
+            display: flex;
+            align-items: center;
+            padding: 1.25rem;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--primary-green);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .user-details {
+            overflow: hidden;
+        }
+        
+        .user-name {
+            font-weight: bold;
+            margin-bottom: 2px;
+            color: white;
+        }
+        
+        .user-email {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 170px;
+        }
+        
+        /* Sidebar sections */
         .sidebar-section {
-            margin-top: 1.5rem;
+            margin-top: 1rem;
         }
         
         .sidebar-section-title {
@@ -199,48 +351,6 @@
             display: block;
         }
         
-        /* User profile in sidebar */
-        .sidebar-user {
-            display: flex;
-            align-items: center;
-            padding: 1.5rem;
-            margin-bottom: 0.5rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background-color: var(--primary-green);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            margin-right: 12px;
-            flex-shrink: 0;
-        }
-        
-        .user-details {
-            overflow: hidden;
-        }
-        
-        .user-name {
-            font-weight: bold;
-            margin-bottom: 2px;
-            color: white;
-        }
-        
-        .user-email {
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.7);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 170px;
-        }
-        
         /* Main content area */
         .main-content {
             margin-top: var(--header-height);
@@ -254,12 +364,16 @@
             margin-left: var(--sidebar-width);
         }
         
+        .main-content.sidebar-mini-open {
+            margin-left: var(--sidebar-mini-width);
+        }
+        
         /* Center content for auth pages */
         .auth-page .main-content {
             display: block; /* Remove flexbox behavior */
-                min-height: calc(100vh - var(--header-height));
-                padding-top: 5rem;
-            }
+            min-height: calc(100vh - var(--header-height));
+            padding-top: 5rem;
+        }
 
         /* OIDC-specific divider styling */
         .oidc-divider-text {
@@ -430,87 +544,142 @@
     </header>
     
     {% if current_user.is_authenticated %}
-    <!-- Sidebar -->
+    <!-- Sidebar with Improved Navigation Structure -->
     <div class="sidebar" id="sidebar">
         <!-- User profile at the top of sidebar -->
         <div class="sidebar-user">
-            <div class="user-avatar">
+            <div class="user-avatar" style="background-color: {{ current_user.user_color }};">
                 {{ current_user.name[0] | upper }}
             </div>
             <div class="user-details">
                 <div class="user-name">{{ current_user.name }}</div>
                 <div class="user-email">{{ current_user.id }}</div>
             </div>
+            <button id="collapseSidebar" class="btn btn-sm btn-outline-light ms-auto sidebar-collapse-btn">
+                <i class="fas fa-angles-left"></i>
+            </button>
+        </div>
+        
+        <!-- Toggle full/mini sidebar for mini mode -->
+        <div class="sidebar-mini-toggle">
+            <button id="expandSidebar" class="btn btn-outline-light btn-sm sidebar-expand-btn">
+                <i class="fas fa-angles-right"></i>
+            </button>
         </div>
         
         <ul class="sidebar-nav">
-            <!-- Add this as the first item in the sidebar-nav list, right after the <ul class="sidebar-nav"> opening tag -->
+            <!-- Main Dashboard -->
             <li class="nav-item">
                 <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.path == url_for('dashboard') %}active{% endif %}">
                     <span class="nav-icon"><i class="fas fa-tachometer-alt"></i></span>
                     <span class="nav-text">Dashboard</span>
                 </a>
             </li>
-            <li class="nav-item">
-                <a href="{{ url_for('transactions') }}" class="nav-link {% if request.path == url_for('transactions') %}active{% endif %}">
-                    <span class="nav-icon"><i class="fas fa-exchange-alt"></i></span>
-                    <span class="nav-text">Transactions</span>
+            
+            <!-- Expenses Section (Collapsible) -->
+            <li class="nav-item nav-section">
+                <a href="#expensesSubmenu" data-bs-toggle="collapse" class="nav-link {% if 'transactions' in request.path or 'recurring' in request.path %}{% else %}collapsed{% endif %}">
+                    <span class="nav-icon"><i class="fas fa-file-invoice-dollar"></i></span>
+                    <span class="nav-text">Expenses</span>
+                    <span class="nav-caret"><i class="fas fa-angle-down ms-auto"></i></span>
                 </a>
+                <ul class="collapse nav-submenu {% if 'transactions' in request.path or 'recurring' in request.path %}show{% endif %}" id="expensesSubmenu">
+                    <li class="nav-item">
+                        <a href="{{ url_for('transactions') }}" class="nav-link {% if request.path == url_for('transactions') %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-exchange-alt"></i></span>
+                            <span class="nav-text">Transactions</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('recurring') }}" class="nav-link {% if request.path == url_for('recurring') %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-calendar-alt"></i></span>
+                            <span class="nav-text">Recurring</span>
+                        </a>
+                    </li>
+                </ul>
             </li>
-            <li class="nav-item">
-                <a href="{{ url_for('settlements') }}" class="nav-link {% if request.path == url_for('settlements') %}active{% endif %}">
-                    <span class="nav-icon"><i class="fas fa-money-bill-wave"></i></span>
-                    <span class="nav-text">Settle Up</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a href="{{ url_for('groups') }}" class="nav-link {% if request.path == url_for('groups') %}active{% endif %}">
+            
+            <!-- Groups & Social -->
+            <li class="nav-item nav-section">
+                <a href="#socialSubmenu" data-bs-toggle="collapse" class="nav-link {% if 'groups' in request.path or 'settlements' in request.path %}{% else %}collapsed{% endif %}">
                     <span class="nav-icon"><i class="fas fa-users"></i></span>
-                    <span class="nav-text">Groups</span>
+                    <span class="nav-text">Social</span>
+                    <span class="nav-caret"><i class="fas fa-angle-down ms-auto"></i></span>
                 </a>
+                <ul class="collapse nav-submenu {% if 'groups' in request.path or 'settlements' in request.path %}show{% endif %}" id="socialSubmenu">
+                    <li class="nav-item">
+                        <a href="{{ url_for('groups') }}" class="nav-link {% if 'groups' in request.path %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-user-friends"></i></span>
+                            <span class="nav-text">Groups</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('settlements') }}" class="nav-link {% if request.path == url_for('settlements') %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-money-bill-wave"></i></span>
+                            <span class="nav-text">Settle Up</span>
+                        </a>
+                    </li>
+                </ul>
             </li>
-            <li class="nav-item">
-                <a href="{{ url_for('recurring') }}" class="nav-link {% if request.path == url_for('recurring') %}active{% endif %}">
-                    <span class="nav-icon"><i class="fas fa-calendar-alt"></i></span>
-                    <span class="nav-text">Recurring Expenses</span>
-                </a>
-            </li>
+            
+            <!-- Analysis -->
             <li class="nav-item">
                 <a href="{{ url_for('stats') }}" class="nav-link {% if request.path == url_for('stats') %}active{% endif %}">
                     <span class="nav-icon"><i class="fas fa-chart-bar"></i></span>
                     <span class="nav-text">Statistics</span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a href="{{ url_for('budgets') }}" class="nav-link {% if request.path == url_for('budgets') %}active{% endif %}">
+                    <span class="nav-icon"><i class="fas fa-chart-pie"></i></span>
+                    <span class="nav-text">Budgets</span>
+                </a>
+            </li>
             
-            <div class="sidebar-section">
-                <div class="sidebar-section-title">Settings</div>
-                <li class="nav-item">
-                    <a href="{{ url_for('manage_tags') }}" class="nav-link {% if request.path == url_for('manage_tags') %}active{% endif %}">
-                        <span class="nav-icon"><i class="fas fa-tags"></i></span>
-                        <span class="nav-text">Manage Tags</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="{{ url_for('manage_currencies') }}" class="nav-link {% if request.path == url_for('manage_currencies') %}active{% endif %}">
-                        <span class="nav-icon"><i class="fas fa-dollar-sign"></i></span>
-                        <span class="nav-text">Currencies</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="{{ url_for('profile') }}" class="nav-link {% if request.path == url_for('profile') %}active{% endif %}">
-                        <span class="nav-icon"><i class="fas fa-user-circle"></i></span>
-                        <span class="nav-text">Profile</span>
-                    </a>
-                </li>
-                {% if current_user.is_admin %}
-                <li class="nav-item">
-                    <a href="{{ url_for('admin') }}" class="nav-link {% if request.path == url_for('admin') %}active{% endif %}">
-                        <span class="nav-icon"><i class="fas fa-user-shield"></i></span>
-                        <span class="nav-text">Admin</span>
-                    </a>
-                </li>
-                {% endif %}
-            </div>
+            <div class="sidebar-section-divider"></div>
+            
+            <!-- Settings Section -->
+            <li class="nav-item nav-section">
+                <a href="#settingsSubmenu" data-bs-toggle="collapse" class="nav-link {% if 'categories' in request.path or 'tags' in request.path or 'currencies' in request.path or 'profile' in request.path or 'admin' in request.path %}{% else %}collapsed{% endif %}">
+                    <span class="nav-icon"><i class="fas fa-cog"></i></span>
+                    <span class="nav-text">Settings</span>
+                    <span class="nav-caret"><i class="fas fa-angle-down ms-auto"></i></span>
+                </a>
+                <ul class="collapse nav-submenu {% if 'categories' in request.path or 'tags' in request.path or 'currencies' in request.path or 'profile' in request.path or 'admin' in request.path %}show{% endif %}" id="settingsSubmenu">
+                    <li class="nav-item">
+                        <a href="{{ url_for('manage_categories') }}" class="nav-link {% if 'categories' in request.path %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-sitemap"></i></span>
+                            <span class="nav-text">Categories</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('manage_tags') }}" class="nav-link {% if 'tags' in request.path %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-tags"></i></span>
+                            <span class="nav-text">Tags</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('manage_currencies') }}" class="nav-link {% if 'currencies' in request.path %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-dollar-sign"></i></span>
+                            <span class="nav-text">Currencies</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('profile') }}" class="nav-link {% if request.path == url_for('profile') %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-user-circle"></i></span>
+                            <span class="nav-text">Profile</span>
+                        </a>
+                    </li>
+                    {% if current_user.is_admin %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('admin') }}" class="nav-link {% if request.path == url_for('admin') %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-user-shield"></i></span>
+                            <span class="nav-text">Admin</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </li>
             
             <!-- Logout option at the bottom of sidebar -->
             <div class="sidebar-logout">
@@ -541,6 +710,7 @@
         {% block content %}
         <!-- Page content will go here -->
         {% endblock %}
+
         
         <!-- Footer -->
         <footer>
@@ -550,96 +720,298 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Only initialize sidebar functionality if user is authenticated
-            {% if current_user.is_authenticated %}
+   document.addEventListener('DOMContentLoaded', function() {
+    // Only initialize sidebar functionality if user is authenticated
+    if (!document.querySelector('.sidebar')) return;
+    
+    // Get DOM elements
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.querySelector('.main-content');
+    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+    const collapseSidebarBtn = document.getElementById('collapseSidebar');
+    const expandSidebarBtn = document.getElementById('expandSidebar');
+    
+    // Make the username/avatar clickable to go to profile
+    const userSection = document.querySelector('.sidebar-user');
+    const userDetails = document.querySelector('.sidebar-user .user-details');
+    const userAvatar = document.querySelector('.sidebar-user .user-avatar');
+    
+    // Set up submenu data-title attributes for mini-mode tooltips
+    const navItems = document.querySelectorAll('.sidebar-nav .nav-item');
+    navItems.forEach(item => {
+        const navLink = item.querySelector('.nav-link');
+        if (navLink) {
+            const navText = navLink.querySelector('.nav-text');
+            if (navText) {
+                item.setAttribute('data-title', navText.textContent.trim());
+            }
+        }
+    });
+    
+    // Toggle sidebar visibility (show/hide)
+    function toggleSidebar() {
+        // Toggle classes for visibility
+        sidebar.classList.toggle('show');
+        sidebarBackdrop.classList.toggle('show');
+        if (sidebarToggle) sidebarToggle.classList.toggle('active');
+        
+        // Toggle main content margin
+        mainContent.classList.toggle('sidebar-open', sidebar.classList.contains('show') && !sidebar.classList.contains('mini'));
+        mainContent.classList.toggle('sidebar-mini-open', sidebar.classList.contains('show') && sidebar.classList.contains('mini'));
+        
+        // Store sidebar state
+        sessionStorage.setItem('sidebarState', sidebar.classList.contains('show') ? 'open' : 'closed');
+    }
+    
+    // Toggle mini sidebar (full/collapsed)
+    function toggleMiniSidebar() {
+        sidebar.classList.toggle('mini');
+        
+        // Toggle main content margin
+        if (sidebar.classList.contains('show')) {
+            mainContent.classList.toggle('sidebar-mini-open', sidebar.classList.contains('mini'));
+            mainContent.classList.toggle('sidebar-open', !sidebar.classList.contains('mini'));
+        }
+        
+        // Store sidebar mode
+        sessionStorage.setItem('sidebarMode', sidebar.classList.contains('mini') ? 'mini' : 'full');
+    }
+    
+    // Close sidebar function
+    function closeSidebar() {
+        if (sidebar.classList.contains('show')) {
+            sidebar.classList.remove('show');
+            sidebarBackdrop.classList.remove('show');
+            if (sidebarToggle) sidebarToggle.classList.remove('active');
+            mainContent.classList.remove('sidebar-open');
+            mainContent.classList.remove('sidebar-mini-open');
             
-            // Get DOM elements
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            const sidebar = document.getElementById('sidebar');
-            const mainContent = document.querySelector('.main-content');
-            const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+            // Update stored state
+            sessionStorage.setItem('sidebarState', 'closed');
+        }
+    }
+    
+    // Collapse sidebar to mini mode
+    function collapseToMini() {
+        if (!sidebar.classList.contains('mini')) {
+            sidebar.classList.add('mini');
             
-            // Toggle sidebar visibility
-            function toggleSidebar() {
-                // Toggle classes for visibility
-                sidebar.classList.toggle('show');
-                sidebarBackdrop.classList.toggle('show');
-                sidebarToggle.classList.toggle('active');
-                
-                // Toggle main content margin
-                mainContent.classList.toggle('sidebar-open', sidebar.classList.contains('show'));
-                
-                // Store sidebar state
-                sessionStorage.setItem('sidebarState', 
-                    sidebar.classList.contains('show') ? 'open' : 'closed');
+            // Update margin classes
+            if (sidebar.classList.contains('show')) {
+                mainContent.classList.add('sidebar-mini-open');
+                mainContent.classList.remove('sidebar-open');
             }
             
-            // Close sidebar function
-            function closeSidebar() {
-                if (sidebar.classList.contains('show')) {
-                    sidebar.classList.remove('show');
-                    sidebarBackdrop.classList.remove('show');
-                    sidebarToggle.classList.remove('active');
-                    mainContent.classList.remove('sidebar-open');
+            // Store mode
+            sessionStorage.setItem('sidebarMode', 'mini');
+        }
+    }
+    
+    // Expand sidebar from mini mode
+    function expandFromMini() {
+        if (sidebar.classList.contains('mini')) {
+            sidebar.classList.remove('mini');
+            
+            // Update margin classes
+            if (sidebar.classList.contains('show')) {
+                mainContent.classList.remove('sidebar-mini-open');
+                mainContent.classList.add('sidebar-open');
+            }
+            
+            // Store mode
+            sessionStorage.setItem('sidebarMode', 'full');
+        }
+    }
+    
+    // Handle sidebar submenu toggles in mini mode
+    function setupMiniModeSubmenuHandlers() {
+        const submenuToggles = document.querySelectorAll('.sidebar .nav-section > a');
+        
+        submenuToggles.forEach(toggle => {
+            toggle.addEventListener('click', function(e) {
+                // If in mini mode and this is a submenu toggle link
+                if (sidebar.classList.contains('mini') && toggle.getAttribute('data-bs-toggle') === 'collapse') {
+                    e.preventDefault(); // Prevent default Bootstrap behavior
+                    e.stopPropagation(); // Stop event propagation
+                    expandFromMini(); // Expand sidebar
                     
-                    // Update stored state
-                    sessionStorage.setItem('sidebarState', 'closed');
-                }
-            }
-            
-            // Add event listeners
-            if (sidebarToggle && sidebar) {
-                sidebarToggle.addEventListener('click', toggleSidebar);
-            }
-            
-            // Close sidebar when clicking backdrop
-            if (sidebarBackdrop) {
-                sidebarBackdrop.addEventListener('click', closeSidebar);
-            }
-            
-            // Close sidebar when clicking anywhere in the main content
-            mainContent.addEventListener('click', function(e) {
-                // Close sidebar regardless of screen size
-                closeSidebar();
-            });
-            
-            // Handle resize events
-            window.addEventListener('resize', function() {
-                const savedState = sessionStorage.getItem('sidebarState');
-                
-                if (window.innerWidth >= 992) {
-                    // For desktop, respect saved state if it exists
-                    if (savedState === 'open') {
-                        sidebar.classList.add('show');
-                        mainContent.classList.add('sidebar-open');
-                        sidebarToggle.classList.add('active');
-                    } else if (savedState === 'closed') {
-                        sidebar.classList.remove('show');
-                        mainContent.classList.remove('sidebar-open');
-                        sidebarToggle.classList.remove('active');
-                    } else {
-                        // Default to open on first load
-                        sidebar.classList.add('show');
-                        mainContent.classList.add('sidebar-open');
-                        sidebarToggle.classList.add('active');
-                        sessionStorage.setItem('sidebarState', 'open');
-                    }
-                    sidebarBackdrop.classList.remove('show');
-                } else {
-                    // On mobile, always hide sidebar
-                    sidebar.classList.remove('show');
-                    mainContent.classList.remove('sidebar-open');
-                    sidebarBackdrop.classList.remove('show');
-                    sidebarToggle.classList.remove('active');
+                    // After expanding, trigger the submenu toggle
+                    setTimeout(() => {
+                        const targetId = toggle.getAttribute('href');
+                        const target = document.querySelector(targetId);
+                        if (target) {
+                            // Bootstrap 5 collapse functionality
+                            new bootstrap.Collapse(target, { toggle: true });
+                        }
+                    }, 300); // Wait for transition to complete
+                    
+                    return false;
                 }
             });
-            
-            // Trigger resize event once to set initial state
-            window.dispatchEvent(new Event('resize'));
-            
-            {% endif %}
         });
+    }
+    
+    // Add click handler to main content area to collapse sidebar to mini mode
+    function setupContentClickHandler() {
+        mainContent.addEventListener('click', function(e) {
+            // Don't trigger if clicking within a form, dropdown or modal
+            if (e.target.closest('form') || e.target.closest('.dropdown-menu') || e.target.closest('.modal')) {
+                return;
+            }
+            
+            // Ensure sidebar is open and not already in mini mode
+            if (sidebar.classList.contains('show') && !sidebar.classList.contains('mini')) {
+                collapseToMini();
+            }
+        });
+    }
+    
+    // Add visual hover effect to user section
+    function setupUserSectionHoverEffects() {
+        if (!userDetails || !userAvatar) return;
+        
+        function addHoverEffect() {
+            userDetails.classList.add('user-hover');
+            // Apply subtle highlight effect
+            userDetails.style.transition = 'background-color 0.2s';
+            
+            userDetails.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                this.style.borderRadius = '4px';
+            });
+            
+            userDetails.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = 'transparent';
+            });
+            
+            // Also add hover for avatar for consistency
+            userAvatar.style.transition = 'transform 0.2s';
+            
+            userAvatar.addEventListener('mouseenter', function() {
+                this.style.transform = 'scale(1.1)';
+            });
+            
+            userAvatar.addEventListener('mouseleave', function() {
+                this.style.transform = 'scale(1)';
+            });
+        }
+        
+        addHoverEffect();
+    }
+    
+    // Add event listeners
+    if (sidebarToggle && sidebar) {
+        sidebarToggle.addEventListener('click', toggleSidebar);
+    }
+    
+    // Collapse sidebar to mini mode
+    if (collapseSidebarBtn) {
+        collapseSidebarBtn.addEventListener('click', collapseToMini);
+    }
+    
+    // Expand sidebar from mini mode
+    if (expandSidebarBtn) {
+        expandSidebarBtn.addEventListener('click', expandFromMini);
+    }
+    
+    // Close sidebar when clicking backdrop
+    if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener('click', closeSidebar);
+    }
+    
+    // Set up mini mode menu behavior
+    setupMiniModeSubmenuHandlers();
+    
+    // Set up main content click handler
+    setupContentClickHandler();
+    
+    // Set up user section hover effects
+    setupUserSectionHoverEffects();
+    
+    // Make user details section clickable for profile
+    if (userDetails) {
+        userDetails.style.cursor = 'pointer';
+        userDetails.title = 'Go to Profile';
+        userDetails.addEventListener('click', function(e) {
+            // Get the profile URL - assuming there's a profile link in the sidebar we can reference
+            const profileLink = document.querySelector('a[href*="profile"]');
+            if (profileLink) {
+                window.location.href = profileLink.getAttribute('href');
+            }
+        });
+    }
+    
+    // Make avatar clickable too
+    if (userAvatar) {
+        userAvatar.style.cursor = 'pointer';
+        userAvatar.title = 'Go to Profile';
+        userAvatar.addEventListener('click', function(e) {
+            // Get the profile URL
+            const profileLink = document.querySelector('a[href*="profile"]');
+            if (profileLink) {
+                window.location.href = profileLink.getAttribute('href');
+            }
+        });
+    }
+    
+    // Handle resize events
+    window.addEventListener('resize', function() {
+        const savedState = sessionStorage.getItem('sidebarState');
+        const savedMode = sessionStorage.getItem('sidebarMode');
+        
+        if (window.innerWidth >= 992) {
+            // For desktop, respect saved state if it exists
+            if (savedState === 'open') {
+                sidebar.classList.add('show');
+                
+                // Apply correct margin based on sidebar mode
+                if (savedMode === 'mini') {
+                    sidebar.classList.add('mini');
+                    mainContent.classList.add('sidebar-mini-open');
+                    mainContent.classList.remove('sidebar-open');
+                } else {
+                    sidebar.classList.remove('mini');
+                    mainContent.classList.add('sidebar-open');
+                    mainContent.classList.remove('sidebar-mini-open');
+                }
+                
+                if (sidebarToggle) sidebarToggle.classList.add('active');
+            } else if (savedState === 'closed') {
+                sidebar.classList.remove('show');
+                mainContent.classList.remove('sidebar-open');
+                mainContent.classList.remove('sidebar-mini-open');
+                if (sidebarToggle) sidebarToggle.classList.remove('active');
+            } else {
+                // Default to open on first load
+                sidebar.classList.add('show');
+                
+                // Apply correct margin based on sidebar mode
+                if (savedMode === 'mini') {
+                    sidebar.classList.add('mini');
+                    mainContent.classList.add('sidebar-mini-open');
+                } else {
+                    mainContent.classList.add('sidebar-open');
+                }
+                
+                if (sidebarToggle) sidebarToggle.classList.add('active');
+                sessionStorage.setItem('sidebarState', 'open');
+            }
+            if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
+        } else {
+            // On mobile, always hide sidebar
+            sidebar.classList.remove('show');
+            mainContent.classList.remove('sidebar-open');
+            mainContent.classList.remove('sidebar-mini-open');
+            if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
+            if (sidebarToggle) sidebarToggle.classList.remove('active');
+        }
+    });
+    
+    // Trigger resize event once to set initial state
+    window.dispatchEvent(new Event('resize'));
+});
+
     </script>
     {% block scripts %}{% endblock %}
 </body>
