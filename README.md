@@ -2,9 +2,6 @@
 
 An open-source, self-hosted expense tracking and bill-splitting application designed for privacy, flexibility, and financial transparency.
 
-If you like this project and would like to support my work, you can buy me a coffee!! Your support helps me continue creating resources like this one. No pressure at all, and thank you for being here!
-<a href="https://buymeacoffee.com/ccfw6gzz28"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=ccfw6gzz28&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" /></a>
-
 ## NOTE:
 If you are encountering issues after updating/pulling the recent docker, please run:
 - `flask db migrate` 
@@ -216,8 +213,3 @@ Here's a visual tour of DollarDollar Bill Y'all:
 - Special thanks to my wife, who endured countless late nights of coding, provided unwavering support, and maintained patience during endless debugging sessions. This project wouldn't exist without her understanding and encouragement.
 - Thanks to Jordan Dalby for creating and maintaining the Unraid template
 - Thanks to @elmerfds for the OIDC support!
-
-
-If you like this project and would like to support my work, you can buy me a coffee!! Your support helps me continue creating resources like this one. No pressure at all, and thank you for being here!
-<a href="https://buymeacoffee.com/ccfw6gzz28"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=ccfw6gzz28&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" /></a>
-# 29a41de6a866d56c36aba5159f45257c
