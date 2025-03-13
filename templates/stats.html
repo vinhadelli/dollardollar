@@ -43,6 +43,7 @@
                             <option value="all">Show All</option>
                             <option value="spending">Spending Patterns</option>
                             <option value="categories">Category Breakdown</option>
+                            <option value="tags">Tag Analysis</option>
                             <option value="balance">Balance Trends</option>
                             <option value="paymentMethod">Payment Methods</option>
                         </select>
@@ -131,6 +132,50 @@
         </div>
     </div>
 
+    <!-- NEW SECTION: Category Visualization -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header" style="background: rgba(15, 23, 42, 0.7);">
+                    <h5 class="mb-0"><i class="fas fa-layer-group me-2" style="color: #ec4899;"></i>Spending by Category</h5>
+                </div>
+                <div class="card-body" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));">
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header" style="background: rgba(15, 23, 42, 0.7);">
+                    <h5 class="mb-0"><i class="fas fa-tags me-2" style="color: #f43f5e;"></i>Top Tags Analysis</h5>
+                </div>
+                <div class="card-body" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));">
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="tagChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW SECTION: Category Trends Over Time -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header" style="background: rgba(15, 23, 42, 0.7);">
+                    <h5 class="mb-0"><i class="fas fa-stream me-2" style="color: #a855f7;"></i>Category Spending Over Time</h5>
+                </div>
+                <div class="card-body" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));">
+                    <div class="chart-container" style="position: relative; height:360px;">
+                        <canvas id="categoryTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Spending Breakdown and Payment Methods -->
     <div class="row mb-4">
         <div class="col-md-6 mb-3">
@@ -192,62 +237,72 @@
     </div>
 
     <!-- Top Expenses Table -->
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center" style="background: rgba(15, 23, 42, 0.7);">
-                <h5 class="mb-0"><i class="fas fa-star me-2" style="color: #facc15;"></i>Your Top Expenses</h5>
-                <div>
-                    <span class="badge" style="background: linear-gradient(135deg, #f97316, #facc15);">Top {{ top_expenses|length }} transactions</span>
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center" style="background: rgba(15, 23, 42, 0.7);">
+                    <h5 class="mb-0"><i class="fas fa-star me-2" style="color: #facc15;"></i>Your Top Expenses</h5>
+                    <div>
+                        <span class="badge" style="background: linear-gradient(135deg, #f97316, #facc15);">Top {{ top_expenses|length }} transactions</span>
+                    </div>
                 </div>
-            </div>
-            <div class="card-body" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));">
-                <div class="table-responsive">
-                    <table class="table table-borderless">
-                        <thead>
-                            <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.2);">
-                                <th style="color: #94a3b8;"><i class="far fa-calendar-alt me-2"></i>Date</th>
-                                <th style="color: #94a3b8;"><i class="fas fa-tag me-2"></i>Description</th>
-                                <th style="color: #94a3b8;"><i class="fas fa-dollar-sign me-2"></i>Your Portion</th>
-                                <th style="color: #94a3b8;"><i class="fas fa-dollar-sign me-2"></i>Total Amount</th>
-                                <th style="color: #94a3b8;"><i class="fas fa-user me-2"></i>Paid By</th>
-                                <th style="color: #94a3b8;"><i class="fas fa-credit-card me-2"></i>Card Used</th>
-                                <th style="color: #94a3b8;"><i class="fas fa-users me-2"></i>Group</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for expense in top_expenses %}
-                            <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.1);">
-                                <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
-                                <td>{{ expense.description }}</td>
-                                <td style="color: #38bdf8; font-weight: bold;">{{ base_currency.symbol }}{{ "%.2f"|format(expense.user_portion) }}</td>
-                                <td>{{ base_currency.symbol }}{{ "%.2f"|format(expense.total_amount) }}</td>
-                                <td>
-                                    {% if expense.paid_by == current_user.id %}
-                                    <span class="badge" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">You</span>
-                                    {% else %}
-                                    {{ expense.paid_by_name }}
-                                    {% endif %}
-                                </td>
-                                <td><span class="badge bg-dark text-light">{{ expense.card_used }}</span></td>
-                                <td>
-                                    {% if expense.group_name %}
-                                    <span class="badge" style="background: linear-gradient(135deg, #10b981, #34d399);">{{ expense.group_name }}</span>
-                                    {% else %}
-                                    <span class="badge bg-secondary">-</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                <div class="card-body" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));">
+                    <div class="table-responsive">
+                        <table class="table table-borderless">
+                            <thead>
+                                <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.2);">
+                                    <th style="color: #94a3b8;"><i class="far fa-calendar-alt me-2"></i>Date</th>
+                                    <th style="color: #94a3b8;"><i class="fas fa-tag me-2"></i>Description</th>
+                                    <th style="color: #94a3b8;"><i class="fas fa-dollar-sign me-2"></i>Your Portion</th>
+                                    <th style="color: #94a3b8;"><i class="fas fa-dollar-sign me-2"></i>Total Amount</th>
+                                    <th style="color: #94a3b8;"><i class="fas fa-user me-2"></i>Paid By</th>
+                                    <th style="color: #94a3b8;"><i class="fas fa-credit-card me-2"></i>Card Used</th>
+                                    <th style="color: #94a3b8;"><i class="fas fa-layer-group me-2"></i>Category</th>
+                                    <th style="color: #94a3b8;"><i class="fas fa-users me-2"></i>Group</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for expense in top_expenses %}
+                                <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.1);">
+                                    <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ expense.description }}</td>
+                                    <td style="color: #38bdf8; font-weight: bold;">{{ base_currency.symbol }}{{ "%.2f"|format(expense.user_portion) }}</td>
+                                    <td>{{ base_currency.symbol }}{{ "%.2f"|format(expense.total_amount) }}</td>
+                                    <td>
+                                        {% if expense.paid_by == current_user.id %}
+                                        <span class="badge" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">You</span>
+                                        {% else %}
+                                        {{ expense.paid_by_name }}
+                                        {% endif %}
+                                    </td>
+                                    <td><span class="badge bg-dark text-light">{{ expense.card_used }}</span></td>
+                                    <td>
+                                        {% if expense.category_name %}
+                                        <span class="badge" style="background-color: {{ expense.category_color|default('#6c757d') }};">
+                                            <i class="fas {{ expense.category_icon|default('fa-tag') }} me-1"></i> {{ expense.category_name }}
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Uncategorized</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if expense.group_name %}
+                                        <span class="badge" style="background: linear-gradient(135deg, #10b981, #34d399);">{{ expense.group_name }}</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
@@ -385,7 +440,192 @@
             }
         });
         
-        // Payment Methods Pie Chart (cards used)
+        // NEW: Category Chart
+        const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+        const categoryChart = new Chart(categoryCtx, {
+            type: 'pie',
+            data: {
+                labels: {{ category_names|default(['Food', 'Housing', 'Transport', 'Entertainment', 'Shopping', 'Others'])|tojson }},
+                datasets: [{
+                    data: {{ category_totals|default([350, 1200, 250, 180, 320, 150])|tojson }},
+                    backgroundColor: [
+                        '#ec4899', '#d946ef', '#a855f7', '#8b5cf6', 
+                        '#6366f1', '#3b82f6', '#0ea5e9', '#06b6d4',
+                        '#14b8a6', '#10b981', '#22c55e', '#84cc16'
+                    ],
+                    borderColor: 'rgba(30, 41, 59, 0.7)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            font: {
+                                size: 11
+                            },
+                            padding: 20,
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.raw;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `${context.label}: ${baseCurrencySymbol}${value.toFixed(2)} (${percentage}%)`;
+                            }
+                        },
+                        backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                        titleColor: '#ec4899',
+                        bodyColor: '#f8fafc',
+                        borderColor: '#1e40af',
+                        borderWidth: 1,
+                        padding: 10
+                    }
+                },
+                animation: chartAnimations
+            }
+        });
+        
+        // NEW: Tag Chart
+        const tagCtx = document.getElementById('tagChart').getContext('2d');
+        const tagChart = new Chart(tagCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ tag_names|default(['Groceries', 'Dining', 'Bills', 'Rent', 'Gas', 'Coffee'])|tojson }},
+                datasets: [{
+                    label: 'Spending by Tag',
+                    data: {{ tag_totals|default([280, 320, 150, 950, 120, 75])|tojson }},
+                    backgroundColor: {{ tag_colors|default(['#f43f5e', '#fb7185', '#f97316', '#fb923c', '#f59e0b', '#fbbf24'])|tojson }},
+                    borderColor: 'rgba(30, 41, 59, 0.7)',
+                    borderWidth: 2,
+                    borderRadius: 6,
+                    maxBarThickness: 35
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${baseCurrencySymbol}${context.raw.toFixed(2)}`;
+                            }
+                        },
+                        backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                        titleColor: '#f43f5e',
+                        bodyColor: '#f8fafc',
+                        borderColor: '#1e40af',
+                        borderWidth: 1,
+                        padding: 10
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return baseCurrencySymbol + value;
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        }
+                    },
+                    y: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                },
+                animation: chartAnimations
+            }
+        });
+        
+        // NEW: Category Trend Chart
+        const categoryTrendCtx = document.getElementById('categoryTrendChart').getContext('2d');
+        const categoryTrendChart = new Chart(categoryTrendCtx, {
+            type: 'line',
+            data: {
+                labels: {{ monthly_labels|default(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'])|tojson }},
+                datasets: [
+                        // Generate datasets for each major category
+                        {% for category in category_trend_data if category_trend_data is defined and category_trend_data %}
+                        {
+                            label: '{{ category.name }}',
+                            data: {{ category.data|default([])|tojson }},
+                            borderColor: '{{ category.color }}',
+                            backgroundColor: '{{ category.color }}20',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: false,
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        }{% if not loop.last %},{% endif %}
+                        {% endfor %}
+                    ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            boxWidth: 12,
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${baseCurrencySymbol}${context.raw.toFixed(2)}`;
+                            }
+                        },
+                        backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                        titleColor: '#a855f7',
+                        bodyColor: '#f8fafc',
+                        borderColor: '#1e40af',
+                        borderWidth: 1,
+                        padding: 10
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return baseCurrencySymbol + value;
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        }
+                    }
+                },
+                animation: chartAnimations
+            }
+        });
+
+        // Payment Methods (cards used) chart
         const paymentMethodCtx = document.getElementById('paymentMethodChart').getContext('2d');
         const paymentMethodChart = new Chart(paymentMethodCtx, {
             type: 'doughnut',
@@ -639,5 +879,6 @@
             }
         });
     }
+
 </script>
 {% endblock %}

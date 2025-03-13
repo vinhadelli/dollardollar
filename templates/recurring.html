@@ -38,7 +38,6 @@
                     </select>
                 </div>
             </div>
-            
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="card_used" class="form-label">Card Used</label>
@@ -133,6 +132,25 @@
                 </div>
                 <!-- Hidden input to store the split details as JSON -->
                 <input type="hidden" id="split_details" name="split_details">
+            </div>
+            <!-- Category Selection-->
+            <div class="mb-3">
+                <label for="category_id" class="form-label">Category</label>
+                <select class="form-select bg-dark text-light" id="category_id" name="category_id">
+                    <option value="">Select a category (optional)</option>
+                    {% for category in categories %}
+                        {% if not category.parent_id %}
+                        <optgroup label="{{ category.name }}">
+                            <!-- Subcategories -->
+                            {% for subcategory in category.subcategories %}
+                            <option value="{{ subcategory.id }}">{{ subcategory.name }}</option>
+                            {% endfor %}
+                            <!-- Parent category itself -->
+                            <option value="{{ category.id }}">{{ category.name }} (general)</option>
+                        </optgroup>
+                        {% endif %}
+                    {% endfor %}
+                </select>
             </div>
             
             <!-- Group Selection -->

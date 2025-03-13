@@ -117,6 +117,28 @@
                 <!-- Hidden input to store the split details as JSON -->
                 <input type="hidden" id="split_details" name="split_details">
             </div>
+            <div class="mb-3">
+                <label for="category_id" class="form-label">Category</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-dark text-light" id="category-icon-preview">
+                        <i class="fas fa-tag"></i>
+                    </span>
+                    <select class="form-select bg-dark text-light" id="category_id" name="category_id">
+                        <option value="">Select a category</option>
+                        {% for top_category in current_user.categories if not top_category.parent_id %}
+                            <optgroup label="{{ top_category.name }}">
+                                {% for subcat in top_category.subcategories %}
+                                    <option value="{{ subcat.id }}" 
+                                            data-icon="{{ subcat.icon }}" 
+                                            data-color="{{ subcat.color }}">
+                                        {{ subcat.name }}
+                                    </option>
+                                {% endfor %}
+                            </optgroup>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
             
             <!-- Group Selection -->
             <div class="mb-3">
@@ -152,8 +174,6 @@
         </form>
     </div>
 
-
-    <!-- Summary Cards -->
 <!-- Summary Cards -->
 <div class="row mb-4">
     <div class="col-md-4">
@@ -451,6 +471,21 @@
 {% block scripts %}
 
 <script>
+    const categorySelect = document.getElementById('category_id');
+    const categoryIconPreview = document.getElementById('category-icon-preview');
+
+    if (categorySelect && categoryIconPreview) {
+        categorySelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.value) {
+                const icon = selectedOption.getAttribute('data-icon');
+                const color = selectedOption.getAttribute('data-color');
+                categoryIconPreview.innerHTML = `<i class="fas ${icon}" style="color: ${color};"></i>`;
+            } else {
+                categoryIconPreview.innerHTML = `<i class="fas fa-tag"></i>`;
+            }
+        });
+    }
     const baseCurrencySymbol = "{{ base_currency.symbol }}";
 
     function initializeTagCheckboxes() {

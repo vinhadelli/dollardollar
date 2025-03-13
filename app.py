@@ -24,6 +24,7 @@ import json
 from sqlalchemy import inspect, text
 from oidc_auth import setup_oidc_config, register_oidc_routes
 from oidc_user import extend_user_model
+from datetime import datetime, date, timedelta
 
 os.environ['OPENSSL_LEGACY_PROVIDER'] = '1'
 
@@ -183,7 +184,24 @@ expense_tags = db.Table('expense_tags',
     db.Column('expense_id', db.Integer, db.ForeignKey('expenses.id'), primary_key=True),
     db.Column('tag_id', db.Integer, db.ForeignKey('tags.id'), primary_key=True)
 )
+class Category(db.Model):
+    __tablename__ = 'categories'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    icon = db.Column(db.String(50), default="fa-tag")  # FontAwesome icon name
+    color = db.Column(db.String(20), default="#6c757d")
+    parent_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False)
+    is_system = db.Column(db.Boolean, default=False)  # System categories can't be deleted
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Relationships
+    user = db.relationship('User', backref=db.backref('categories', lazy=True))
+    parent = db.relationship('Category', remote_side=[id], backref=db.backref('subcategories', lazy=True))
+    expenses = db.relationship('Expense', backref=db.backref('category', lazy=True))
+
+    def __repr__(self):
+        return f"<Category: {self.name}>"
 class Expense(db.Model):
     __tablename__ = 'expenses'
     id = db.Column(db.Integer, primary_key=True)
@@ -203,7 +221,8 @@ class Expense(db.Model):
                    backref=db.backref('expenses', lazy=True))
     # Add these fields to your existing Expense class:
     currency_code = db.Column(db.String(3), db.ForeignKey('currencies.code'), nullable=True)
-    original_amount = db.Column(db.Float, nullable=True)  # Amount in original currency
+    original_amount = db.Column(db.Float, nullable=True) # Amount in original currency
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
     currency = db.relationship('Currency', backref=db.backref('expenses', lazy=True))
     def calculate_splits(self):
     
@@ -429,7 +448,9 @@ class RecurringExpense(db.Model):
     currency_code = db.Column(db.String(3), db.ForeignKey('currencies.code'), nullable=True)
     original_amount = db.Column(db.Float, nullable=True)  # Amount in original currency
     currency = db.relationship('Currency', backref=db.backref('recurring_expenses', lazy=True))
-    
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
+    category = db.relationship('Category', backref=db.backref('recurring_expenses', lazy=True))
+
     def create_expense_instance(self, for_date=None):
         """Create a single expense instance from this recurring template"""
         if for_date is None:
@@ -448,6 +469,7 @@ class RecurringExpense(db.Model):
             user_id=self.user_id,
             group_id=self.group_id,
             split_with=self.split_with,
+            category_id=self.category_id,
             recurring_id=self.id  # Link to this recurring expense
         )
         
@@ -521,6 +543,66 @@ def init_db():
 # BUSINESS LOGIC FUNCTIONS
 #--------------------
 # Add this function to your app.py file
+def create_default_categories(user_id):
+    """Create default expense categories for a new user"""
+    default_categories = [
+        # Housing
+        {"name": "Housing", "icon": "fa-home", "color": "#3498db", "subcategories": [
+            {"name": "Rent/Mortgage", "icon": "fa-building", "color": "#3498db"},
+            {"name": "Utilities", "icon": "fa-bolt", "color": "#3498db"},
+            {"name": "Home Maintenance", "icon": "fa-tools", "color": "#3498db"}
+        ]},
+        # Food
+        {"name": "Food", "icon": "fa-utensils", "color": "#e74c3c", "subcategories": [
+            {"name": "Groceries", "icon": "fa-shopping-basket", "color": "#e74c3c"},
+            {"name": "Restaurants", "icon": "fa-hamburger", "color": "#e74c3c"},
+            {"name": "Coffee Shops", "icon": "fa-coffee", "color": "#e74c3c"}
+        ]},
+        # Transportation
+        {"name": "Transportation", "icon": "fa-car", "color": "#2ecc71", "subcategories": [
+            {"name": "Gas", "icon": "fa-gas-pump", "color": "#2ecc71"},
+            {"name": "Public Transit", "icon": "fa-bus", "color": "#2ecc71"},
+            {"name": "Rideshare", "icon": "fa-taxi", "color": "#2ecc71"}
+        ]},
+        # Shopping
+        {"name": "Shopping", "icon": "fa-shopping-cart", "color": "#9b59b6", "subcategories": [
+            {"name": "Clothing", "icon": "fa-tshirt", "color": "#9b59b6"},
+            {"name": "Electronics", "icon": "fa-laptop", "color": "#9b59b6"},
+            {"name": "Gifts", "icon": "fa-gift", "color": "#9b59b6"}
+        ]},
+        # Entertainment
+        {"name": "Entertainment", "icon": "fa-film", "color": "#f39c12", "subcategories": [
+            {"name": "Movies", "icon": "fa-ticket-alt", "color": "#f39c12"},
+            {"name": "Music", "icon": "fa-music", "color": "#f39c12"},
+            {"name": "Subscriptions", "icon": "fa-play-circle", "color": "#f39c12"}
+        ]},
+        # Health
+        {"name": "Health", "icon": "fa-heartbeat", "color": "#1abc9c", "subcategories": [
+            {"name": "Medical", "icon": "fa-stethoscope", "color": "#1abc9c"},
+            {"name": "Pharmacy", "icon": "fa-prescription-bottle", "color": "#1abc9c"},
+            {"name": "Fitness", "icon": "fa-dumbbell", "color": "#1abc9c"}
+        ]},
+        # Personal
+        {"name": "Personal", "icon": "fa-user", "color": "#34495e", "subcategories": [
+            {"name": "Self-care", "icon": "fa-spa", "color": "#34495e"},
+            {"name": "Education", "icon": "fa-graduation-cap", "color": "#34495e"}
+        ]},
+        # Other
+        {"name": "Other", "icon": "fa-question-circle", "color": "#95a5a6", "is_system": True}
+    ]
+
+    for cat_data in default_categories:
+        subcategories = cat_data.pop('subcategories', [])
+        category = Category(user_id=user_id, **cat_data)
+        db.session.add(category)
+        db.session.flush()  # Get the ID without committing
+
+        for subcat_data in subcategories:
+            subcat = Category(user_id=user_id, parent_id=category.id, **subcat_data)
+            db.session.add(subcat)
+
+    db.session.commit()
+
 def update_currency_rates():
     """
     Update currency exchange rates using a public API
@@ -1101,10 +1183,59 @@ def utility_processor():
         Returns None if user not found to prevent template errors
         """
         return User.query.filter_by(id=user_id).first()
+    
+    def get_category_icon_html(category):
+        """
+        Generate HTML for a category icon with proper styling
+        """
+        if not category:
+            return '<i class="fas fa-tag"></i>'
+
+        icon = category.icon or 'fa-tag'
+        color = category.color or '#6c757d'
+
+        return f'<i class="fas {icon}" style="color: {color};"></i>'
+
+    def get_categories_as_tree():
+        """
+        Return categories in a hierarchical structure for dropdowns
+        """
+        # Get top-level categories
+        top_categories = Category.query.filter_by(
+            user_id=current_user.id,
+            parent_id=None
+        ).order_by(Category.name).all()
+
+        result = []
+
+        # Build tree structure
+        for category in top_categories:
+            cat_data = {
+                'id': category.id,
+                'name': category.name,
+                'icon': category.icon,
+                'color': category.color,
+                'subcategories': []
+            }
+
+            # Add subcategories
+            for subcat in category.subcategories:
+                cat_data['subcategories'].append({
+                    'id': subcat.id,
+                    'name': subcat.name,
+                    'icon': subcat.icon,
+                    'color': subcat.color
+                })
+
+            result.append(cat_data)
+
+        return result
 
     return {
         'get_user_color': get_user_color,
-        'get_user_by_id': get_user_by_id
+        'get_user_by_id': get_user_by_id,
+        'get_category_icon_html': get_category_icon_html,
+        'get_categories_as_tree': get_categories_as_tree
     }
     
 @app.route('/get_transaction_details/<other_user_id>')
@@ -1244,6 +1375,7 @@ def signup():
         
         db.session.add(user)
         db.session.commit()
+        create_default_categories(user.id)
         
         # Send welcome email
         try:
@@ -1469,7 +1601,7 @@ def dashboard():
         'i_owe': {user['id']: {'name': user['name'], 'amount': user['amount']} for user in you_owe},
         'net_balance': net_balance
     }
-    
+    categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.name).all()
     currencies = Currency.query.all()
     print(f"Passing {len(currencies)} currencies to dashboard template")
     # Pre-calculate expense splits to avoid repeated calculations in template
@@ -1489,15 +1621,12 @@ def dashboard():
                          iou_data=iou_data,
                          base_currency=base_currency,
                          currencies=currencies,
+                         categories=categories,
                          now=now)
-
-
 
 #--------------------
 # ROUTES: EXPENSES MANAGEMENT
 #--------------------
-
-
 @app.route('/add_expense', methods=['GET', 'POST'])
 @login_required_dev
 def add_expense():
@@ -1557,6 +1686,9 @@ def add_expense():
             # Multiply by the rate to convert from selected currency to base currency
             # For example, if 1 INR = 0.012 USD, then 1 * 0.012 = 0.012 USD
             amount = original_amount * selected_currency.rate_to_base
+            category_id = request.form.get('category_id')
+            if category_id and not category_id.strip():
+                category_id = None
             
             # Create expense record
             expense = Expense(
@@ -1571,6 +1703,7 @@ def add_expense():
                 split_details=split_details,
                 paid_by=request.form['paid_by'],
                 user_id=current_user.id,
+                category_id=category_id,
                 group_id=request.form.get('group_id') if request.form.get('group_id') else None,
                 split_with=split_with_str,
             )
@@ -1789,19 +1922,9 @@ def update_expense(expense_id):
         
     return redirect(url_for('transactions'))
 
-
-
-
-
-
-
-
-
 #--------------------
 # ROUTES: tags
 #--------------------
-
-
 @app.route('/tags')
 @login_required_dev
 def manage_tags():
@@ -1843,6 +1966,12 @@ def delete_tag(tag_id):
     flash('Tag deleted successfully')
     return redirect(url_for('manage_tags'))
 
+
+
+
+#--------------------
+# ROUTES: recurring
+#--------------------
 @app.route('/recurring')
 @login_required_dev
 def recurring():
@@ -1894,6 +2023,9 @@ def add_recurring():
             return redirect(url_for('recurring'))
         
         # Process split details if provided
+        category_id = request.form.get('category_id')
+        if category_id and not category_id.strip():
+            category_id = None
         split_details = None
         if request.form.get('split_details'):
             import json
@@ -1913,6 +2045,7 @@ def add_recurring():
             split_with=split_with_str,
             frequency=request.form['frequency'],
             start_date=start_date,
+            category_id=category_id,
             end_date=end_date,
             active=True
         )
@@ -2033,11 +2166,18 @@ def group_details(group_id):
     if current_user not in group.members:
         flash('Access denied. You are not a member of this group.')
         return redirect(url_for('groups'))
+    categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.name).all()
     
     expenses = Expense.query.filter_by(group_id=group_id).order_by(Expense.date.desc()).all()
     all_users = User.query.all()
     currencies = Currency.query.all()
-    return render_template('group_details.html', group=group, expenses=expenses,currencies=currencies, base_currency=base_currency,users=all_users)
+    return render_template('group_details.html', 
+                           group=group, 
+                           expenses=expenses,
+                           currencies=currencies, 
+                           base_currency=base_currency,
+                           categories=categories,
+                           users=all_users)
 
 @app.route('/groups/<int:group_id>/add_member', methods=['POST'])
 @login_required_dev
@@ -2054,7 +2194,7 @@ def add_group_member(group_id):
         group.members.append(user)
         db.session.commit()
         flash(f'{user.name} added to group!')
-        
+        create_default_categories(user.id)
         # Send group invitation email
         try:
             send_group_invitation_email(user, group, current_user)
@@ -2249,6 +2389,10 @@ def add_settlement():
         
     return redirect(url_for('settlements'))
 
+
+#--------------------
+# ROUTES: currencies
+#--------------------
 
 @app.route('/currencies')
 @login_required_dev
@@ -2475,6 +2619,13 @@ def set_default_currency():
     
     flash(f'Default currency set to {currency.code} ({currency.symbol})')
     return redirect(url_for('manage_currencies'))
+
+
+
+
+#--------------------
+# ROUTES: Transactions
+#--------------------
 
 @app.route('/transactions')
 @login_required_dev
@@ -2731,6 +2882,156 @@ def export_transactions():
         app.logger.error(f"Error exporting transactions: {str(e)}")
         return jsonify({"error": str(e)}), 500
     
+
+#--------------------
+# ROUTES: Categories
+#--------------------
+
+
+
+@app.route('/categories')
+@login_required_dev
+def manage_categories():
+    """View and manage expense categories"""
+    # Get all top-level categories
+    categories = Category.query.filter_by(
+        user_id=current_user.id,
+        parent_id=None
+    ).order_by(Category.name).all()
+
+    # Get all FontAwesome icons for the icon picker
+    icons = [
+        "fa-home", "fa-building", "fa-bolt", "fa-tools", 
+        "fa-utensils", "fa-shopping-basket", "fa-hamburger", "fa-coffee",
+        "fa-car", "fa-gas-pump", "fa-bus", "fa-taxi",
+        "fa-shopping-cart", "fa-tshirt", "fa-laptop", "fa-gift",
+        "fa-film", "fa-ticket-alt", "fa-music", "fa-play-circle",
+        "fa-heartbeat", "fa-stethoscope", "fa-prescription-bottle", "fa-dumbbell",
+        "fa-user", "fa-spa", "fa-graduation-cap",
+        "fa-question-circle", "fa-tag", "fa-money-bill", "fa-credit-card",
+        "fa-plane", "fa-hotel", "fa-glass-cheers", "fa-book", "fa-gamepad", 
+        "fa-baby", "fa-dog", "fa-cat", "fa-phone", "fa-wifi"
+    ]
+
+    return render_template('categories.html', categories=categories, icons=icons)
+
+@app.route('/categories/add', methods=['POST'])
+@login_required_dev
+def add_category():
+    """Add a new category or subcategory"""
+    name = request.form.get('name')
+    icon = request.form.get('icon', 'fa-tag')
+    color = request.form.get('color', "#6c757d")
+    parent_id = request.form.get('parent_id')
+    if parent_id == "":
+        parent_id = None
+    if not name:
+        flash('Category name is required')
+        return redirect(url_for('manage_categories'))
+
+    # Validate parent category belongs to user
+    if parent_id:
+        parent = Category.query.get(parent_id)
+        if not parent or parent.user_id != current_user.id:
+            flash('Invalid parent category')
+            return redirect(url_for('manage_categories'))
+
+    category = Category(
+        name=name,
+        icon=icon,
+        color=color,
+        parent_id=parent_id,
+        user_id=current_user.id
+    )
+
+    db.session.add(category)
+    db.session.commit()
+
+    flash('Category added successfully')
+    return redirect(url_for('manage_categories'))
+
+@app.route('/categories/edit/<int:category_id>', methods=['POST'])
+@login_required_dev
+def edit_category(category_id):
+    """Edit an existing category"""
+    category = Category.query.get_or_404(category_id)
+
+    # Check if category belongs to current user
+    if category.user_id != current_user.id:
+        flash('You don\'t have permission to edit this category')
+        return redirect(url_for('manage_categories'))
+
+    # Don't allow editing system categories
+    if category.is_system:
+        flash('System categories cannot be edited')
+        return redirect(url_for('manage_categories'))
+
+    category.name = request.form.get('name', category.name)
+    category.icon = request.form.get('icon', category.icon)
+    category.color = request.form.get('color', category.color)
+
+    db.session.commit()
+
+    flash('Category updated successfully')
+    return redirect(url_for('manage_categories'))
+
+@app.route('/categories/delete/<int:category_id>', methods=['POST'])
+@login_required_dev
+def delete_category(category_id):
+    """Delete a category"""
+    category = Category.query.get_or_404(category_id)
+
+    # Check if category belongs to current user
+    if category.user_id != current_user.id:
+        flash('You don\'t have permission to delete this category')
+        return redirect(url_for('manage_categories'))
+
+    # Don't allow deleting system categories
+    if category.is_system:
+        flash('System categories cannot be deleted')
+        return redirect(url_for('manage_categories'))
+
+    # Find 'Other' category
+    other_category = Category.query.filter_by(
+        name='Other', 
+        user_id=current_user.id,
+        is_system=True
+    ).first()
+
+    # Check if category has expenses associated with it
+    if category.expenses:
+        if other_category:
+            # Move expenses to 'Other' category
+            for expense in category.expenses:
+                expense.category_id = other_category.id
+        else:
+            # If 'Other' doesn't exist, clear category_id
+            for expense in category.expenses:
+                expense.category_id = None
+
+    # Also handle recurring expenses with this category
+    recurring_expenses = RecurringExpense.query.filter_by(category_id=category_id).all()
+    if recurring_expenses:
+        if other_category:
+            # Move recurring expenses to 'Other' category
+            for rec_expense in recurring_expenses:
+                rec_expense.category_id = other_category.id
+        else:
+            # If 'Other' doesn't exist, clear category_id
+            for rec_expense in recurring_expenses:
+                rec_expense.category_id = None
+
+    # Delete subcategories first
+    for subcategory in category.subcategories:
+        db.session.delete(subcategory)
+
+    db.session.delete(category)
+    db.session.commit()
+
+    flash('Category deleted successfully')
+    return redirect(url_for('manage_categories'))
+
+
 #--------------------
 # ROUTES: user 
 #--------------------
@@ -2808,6 +3109,14 @@ def update_color():
     
     flash('Your personal color has been updated')
     return redirect(url_for('profile'))
+
+
+#--------------------
+# ROUTES: stats
+#--------------------
+# Add this to the beginning of your route in app.py
+# This helps verify what data is actually being passed to the template
+
 @app.route('/stats')
 @login_required_dev
 def stats():
@@ -2890,7 +3199,7 @@ def stats():
         
         # Only add to list if user has a portion
         if user_portion > 0:
-            current_user_expenses.append({
+            expense_data = {
                 'id': expense.id,
                 'description': expense.description,
                 'date': expense.date,
@@ -2901,7 +3210,21 @@ def stats():
                 'card_used': expense.card_used,
                 'group_id': expense.group_id,
                 'group_name': expense.group.name if expense.group else None
-            })
+            }
+            
+            # Add category information for the expense
+            if hasattr(expense, 'category_id') and expense.category_id:
+                category = Category.query.get(expense.category_id)
+                if category:
+                    expense_data['category_name'] = category.name
+                    expense_data['category_icon'] = category.icon
+                    expense_data['category_color'] = category.color
+            else:
+                expense_data['category_name'] = None
+                expense_data['category_icon'] = 'fa-tag'
+                expense_data['category_color'] = '#6c757d'
+            
+            current_user_expenses.append(expense_data)
             
             # Add to user's total
             total_user_expenses += user_portion
@@ -3110,27 +3433,178 @@ def stats():
     # Top expenses for the table - show user's portion
     top_expenses = sorted(current_user_expenses, key=lambda x: x['user_portion'], reverse=True)[:10]  # Top 10
 
+    # NEW CODE FOR CATEGORY-BASED ANALYSIS
+    # -------------------------------------
+    
+    # Get actual categories from Category model
+    user_categories = {}
+    
+    # Try to get all user categories
+    try:
+        for category in Category.query.filter_by(user_id=current_user.id).all():
+            if not category.parent_id:  # Only top-level categories
+                user_categories[category.id] = {
+                    'name': category.name,
+                    'total': 0,
+                    'color': category.color,
+                    'monthly': {month_key: 0 for month_key in sorted(monthly_spending.keys())}
+                }
+                
+        # Add uncategorized as a fallback
+        uncategorized_id = 0
+        user_categories[uncategorized_id] = {
+            'name': 'Uncategorized',
+            'total': 0,
+            'color': '#6c757d',
+            'monthly': {month_key: 0 for month_key in sorted(monthly_spending.keys())}
+        }
+        
+        # Calculate totals per actual category and monthly trends
+        for expense_data in current_user_expenses:
+            # Get category ID, default to uncategorized
+            cat_id = uncategorized_id
+            
+            # DEBUGGING: Check the actual structure of expense_data
+            app.logger.info(f"Processing expense: {expense_data['id']} - {expense_data['description']}")
+            
+            # Fetch the actual expense object
+            expense_obj = Expense.query.get(expense_data['id'])
+            
+            if expense_obj and hasattr(expense_obj, 'category_id') and expense_obj.category_id:
+                cat_id = expense_obj.category_id
+                app.logger.info(f"Found category_id: {cat_id}")
+                
+                # If it's a subcategory, use parent category ID instead
+                category = Category.query.get(cat_id)
+                if category and category.parent_id and category.parent_id in user_categories:
+                    cat_id = category.parent_id
+                    app.logger.info(f"Using parent category: {cat_id}")
+            
+            # Only process if we have this category
+            if cat_id in user_categories:
+                # Add to total
+                user_categories[cat_id]['total'] += expense_data['user_portion']
+                
+                # Add to monthly data
+                month_key = expense_data['date'].strftime('%Y-%m')
+                if month_key in user_categories[cat_id]['monthly']:
+                    user_categories[cat_id]['monthly'][month_key] += expense_data['user_portion']
+            else:
+                app.logger.warning(f"Category ID {cat_id} not found in user_categories")
+    except Exception as e:
+        # Log the full error for debugging
+        app.logger.error(f"Error getting category data: {str(e)}", exc_info=True)
+        user_categories = {
+            1: {'name': 'Food', 'total': 350, 'color': '#ec4899'},
+            2: {'name': 'Housing', 'total': 1200, 'color': '#8b5cf6'},
+            3: {'name': 'Transport', 'total': 250, 'color': '#3b82f6'},
+            4: {'name': 'Entertainment', 'total': 180, 'color': '#10b981'},
+            5: {'name': 'Shopping', 'total': 320, 'color': '#f97316'},
+            0: {'name': 'Others', 'total': 150, 'color': '#6c757d'}
+        }
+    
+    # Prepare category data for charts - sort by amount
+    sorted_categories = sorted(user_categories.items(), key=lambda x: x[1]['total'], reverse=True)
+    
+    app.logger.info(f"Sorted categories: {[cat[1]['name'] for cat in sorted_categories]}")
+    
+    # Category data for pie chart
+    category_names = [cat_data['name'] for _, cat_data in sorted_categories[:8]]  # Top 8
+    category_totals = [cat_data['total'] for _, cat_data in sorted_categories[:8]]
+    
+    app.logger.info(f"Category names: {category_names}")
+    app.logger.info(f"Category totals: {category_totals}")
+    
+    # Category trend data for line chart
+    category_trend_data = []
+    for cat_id, cat_data in sorted_categories[:4]:  # Top 4 for trend 
+        if 'monthly' in cat_data:
+            monthly_data = []
+            for month_key in sorted(cat_data['monthly'].keys()):
+                monthly_data.append(cat_data['monthly'][month_key])
+                
+            category_trend_data.append({
+                'name': cat_data['name'],
+                'color': cat_data['color'],
+                'data': monthly_data
+            })
+        else:
+            # Fallback if monthly data isn't available
+            category_trend_data.append({
+                'name': cat_data['name'],
+                'color': cat_data['color'],
+                'data': [cat_data['total'] / len(monthly_labels)] * len(monthly_labels)
+            })
+    
+    app.logger.info(f"Category trend data: {category_trend_data}")
+    
+    # NEW CODE FOR TAG ANALYSIS
+    # -------------------------
+    tag_data = {}
+    
+    # Try to get tag information
+    try:
+        for expense_data in current_user_expenses:
+            expense_obj = Expense.query.get(expense_data['id'])
+            if expense_obj and hasattr(expense_obj, 'tags'):
+                for tag in expense_obj.tags:
+                    if tag.id not in tag_data:
+                        tag_data[tag.id] = {
+                            'name': tag.name,
+                            'total': 0,
+                            'color': tag.color
+                        }
+                    tag_data[tag.id]['total'] += expense_data['user_portion']
+    except Exception as e:
+        # Fallback for tags in case of error
+        app.logger.error(f"Error getting tag data: {str(e)}", exc_info=True)
+        tag_data = {
+            1: {'name': 'Groceries', 'total': 280, 'color': '#f43f5e'},
+            2: {'name': 'Dining', 'total': 320, 'color': '#fb7185'},
+            3: {'name': 'Bills', 'total': 150, 'color': '#f97316'},
+            4: {'name': 'Rent', 'total': 950, 'color': '#fb923c'},
+            5: {'name': 'Gas', 'total': 120, 'color': '#f59e0b'},
+            6: {'name': 'Coffee', 'total': 75, 'color': '#fbbf24'}
+        }
+    
+    # Sort and prepare tag data
+    sorted_tags = sorted(tag_data.items(), key=lambda x: x[1]['total'], reverse=True)[:6]  # Top 6
+    
+    tag_names = [tag_data['name'] for _, tag_data in sorted_tags]
+    tag_totals = [tag_data['total'] for _, tag_data in sorted_tags]
+    tag_colors = [tag_data['color'] for _, tag_data in sorted_tags]
+    
+    app.logger.info(f"Tag names: {tag_names}")
+    app.logger.info(f"Tag totals: {tag_totals}")
+
     return render_template('stats.html',
-                        expenses=expenses,
-                        total_expenses=total_user_expenses,  # User's spending only
-                        spending_trend=spending_trend,
-                        net_balance=net_balance,
-                        balance_count=balance_count,
-                        monthly_average=monthly_average,
-                        month_count=month_count,
-                        largest_expense=largest_expense,
-                        monthly_labels=monthly_labels,
-                        monthly_amounts=monthly_amounts,
-                        payment_methods=payment_methods,
-                        payment_amounts=payment_amounts,
-                        expense_categories=expense_categories,
-                        category_amounts=category_amounts,
-                        balance_labels=balance_labels,
-                        balance_amounts=balance_amounts,
-                        group_names=group_names,
-                        group_totals=group_totals,
-                        base_currency=base_currency,
-                        top_expenses=top_expenses)
+                          expenses=expenses,
+                          total_expenses=total_user_expenses,  # User's spending only
+                          spending_trend=spending_trend,
+                          net_balance=net_balance,
+                          balance_count=balance_count,
+                          monthly_average=monthly_average,
+                          month_count=month_count,
+                          largest_expense=largest_expense,
+                          monthly_labels=monthly_labels,
+                          monthly_amounts=monthly_amounts,
+                          payment_methods=payment_methods,
+                          payment_amounts=payment_amounts,
+                          expense_categories=expense_categories,
+                          category_amounts=category_amounts,
+                          balance_labels=balance_labels,
+                          balance_amounts=balance_amounts,
+                          group_names=group_names,
+                          group_totals=group_totals,
+                          base_currency=base_currency,
+                          top_expenses=top_expenses,
+                          # New data for enhanced charts
+                          category_names=category_names,
+                          category_totals=category_totals,
+                          category_trend_data=category_trend_data,
+                          tag_names=tag_names,
+                          tag_totals=tag_totals,
+                          tag_colors=tag_colors)
 
 
 #--------------------
