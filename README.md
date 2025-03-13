@@ -225,6 +225,11 @@ Here's a visual tour of DollarDollar Bill Y'all:
 ### Recurring expenses
 <img width="1427" alt="Screenshot 2025-03-05 at 10 24 59 PM" src="https://github.com/user-attachments/assets/b0992c09-ea21-4f45-b85d-ce5378fdbdbc" />
 
+### Budgets
+<img width="1499" alt="Screenshot 2025-03-13 at 4 15 12 PM" src="https://github.com/user-attachments/assets/b387e51d-53e5-4bd7-80e8-da5c66dfefcd" />
+### Categories
+<img width="1499" alt="Screenshot 2025-03-13 at 4 15 28 PM" src="https://github.com/user-attachments/assets/23d17592-b440-49f2-a0c5-dca9e8b57b2f" />
+
 ## 🙏 Acknowledgements
 
 - Inspired by the need for transparent, flexible expense tracking
