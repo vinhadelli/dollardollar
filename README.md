@@ -93,18 +93,6 @@ Born from a desire to move beyond restrictive financial tracking platforms, this
 
 4. Access the app at `http://localhost:5006`
 
-### Unraid Installation
-
-DollarDollar is available as a community template for Unraid users:
-
-1. In the Unraid web UI, go to the Docker tab
-2. Click "Add Container"
-3. In the Template URL field, paste:
-   ```
-   https://github.com/jordan-dalby/unraidtemplates/blob/main/my-dollardollar.xml
-   ```
-4. Click "Apply Template"
-5. Configure your settings and click "Apply"
 
 ## 💼 Usage
 
