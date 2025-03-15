@@ -2019,6 +2019,19 @@ def update_expense(expense_id):
         split_details = None
         if request.form.get('split_details'):
             split_details = request.form.get('split_details')
+        category_id = request.form.get('category_id')
+
+        #catrgory section
+        if not category_id or not category_id.strip():
+            # Find "Other" category (system category)
+            other_category = Category.query.filter_by(
+                name='Other', 
+                user_id=current_user.id,
+                is_system=True
+            ).first()
+            
+            # Use Other category id if found, otherwise leave as None
+            category_id = other_category.id if other_category else None
         
         # Get currency information
         currency_code = request.form.get('currency_code', 'USD')
@@ -2053,6 +2066,8 @@ def update_expense(expense_id):
         expense.paid_by = request.form['paid_by']
         expense.group_id = request.form.get('group_id') if request.form.get('group_id') and request.form.get('group_id') != '' else None
         expense.split_with = split_with_str
+        expense.category_id = category_id
+        
         
         # Handle tags - first remove all existing tags
         expense.tags = []

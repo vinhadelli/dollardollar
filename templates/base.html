@@ -546,19 +546,6 @@
     {% if current_user.is_authenticated %}
     <!-- Sidebar with Improved Navigation Structure -->
     <div class="sidebar" id="sidebar">
-        <!-- User profile at the top of sidebar -->
-        <div class="sidebar-user">
-            <div class="user-avatar" style="background-color: {{ current_user.user_color }};">
-                {{ current_user.name[0] | upper }}
-            </div>
-            <div class="user-details">
-                <div class="user-name">{{ current_user.name }}</div>
-                <div class="user-email">{{ current_user.id }}</div>
-            </div>
-            <button id="collapseSidebar" class="btn btn-sm btn-outline-light ms-auto sidebar-collapse-btn">
-                <i class="fas fa-angles-left"></i>
-            </button>
-        </div>
         
         <!-- Toggle full/mini sidebar for mini mode -->
         <div class="sidebar-mini-toggle">
@@ -680,9 +667,23 @@
                     {% endif %}
                 </ul>
             </li>
+    
+
             
             <!-- Logout option at the bottom of sidebar -->
             <div class="sidebar-logout">
+                <div class="sidebar-user mb-2">
+                    <div class="user-avatar" style="background-color: {{ current_user.user_color }};">
+                        {{ current_user.name[0] | upper }}
+                    </div>
+                    <div class="user-details">
+                        <div class="user-name">{{ current_user.name }}</div>
+                        <div class="user-email">{{ current_user.id }}</div>
+                    </div>
+                    <button id="collapseSidebar" class="btn btn-sm btn-outline-light ms-auto sidebar-collapse-btn">
+                        <i class="fas fa-angles-left"></i>
+                    </button>
+                </div>
                 <li class="nav-item">
                     <a href="{{ url_for('logout') }}" class="nav-link">
                         <span class="nav-icon"><i class="fas fa-sign-out-alt"></i></span>
