@@ -98,6 +98,13 @@
             overflow-x: hidden;
             box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
             transform: translateX(-100%);
+            
+            /* Add these flex properties */
+            display: flex;
+            flex-direction: column;
+            
+            /* Ensure it takes full height */
+            height: calc(100vh - var(--header-height));
         }
         
         .sidebar.show {
@@ -156,9 +163,15 @@
             list-style: none;
             padding: 0;
             margin: 1rem 0;
+            
+            /* Change these properties */
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0; /* Important for Firefox */
+            
+            /* Keep these */
             display: flex;
             flex-direction: column;
-            height: 100%;
         }
         
         .sidebar-nav .nav-item {
@@ -315,10 +328,18 @@
         }
         
         .sidebar-logout {
-            margin-top: auto;
+            /* Remove margin-top: auto */
             border-top: 1px solid rgba(255, 255, 255, 0.1);
-            padding-top: 1rem;
+            padding-top: 0.5rem;
+            
+            /* Add these properties */
+            position: relative; /* Not using sticky to ensure it's always at the bottom */
+            margin-top: auto; /* Push it to the bottom of the flex container */
+            background-color: rgba(17, 24, 39, 0.95);
+            box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+            z-index: 5;
         }
+
         
         /* Toggle button */
         .sidebar-toggle {
@@ -334,7 +355,16 @@
         .sidebar-toggle:hover {
             transform: scale(1.1);
         }
-        
+        .sidebar.mini .sidebar-logout {
+            padding: 0.5rem 0;
+            justify-content: center;
+        }
+
+        /* Ensure the user section remains visible in mini mode */
+        .sidebar.mini .sidebar-user {
+            padding: 0.5rem 0;
+            margin-bottom: 0;
+        }
         .sidebar-toggle .fa-bars {
             display: block;
         }
