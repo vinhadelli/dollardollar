@@ -2129,11 +2129,13 @@ def recurring():
     users = User.query.all()
     groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
     currencies = Currency.query.all()
+    categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.name).all()
     return render_template('recurring.html', 
                           recurring_expenses=recurring_expenses, 
                           users=users,
                           currencies=currencies,
                           base_currency=base_currency,
+                          categories=categories,
                           groups=groups)
 
 @app.route('/add_recurring', methods=['POST'])
