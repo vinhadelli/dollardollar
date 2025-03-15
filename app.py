@@ -1830,9 +1830,19 @@ def add_expense():
             # Multiply by the rate to convert from selected currency to base currency
             # For example, if 1 INR = 0.012 USD, then 1 * 0.012 = 0.012 USD
             amount = original_amount * selected_currency.rate_to_base
+            
+            # Process category - set to "Other" if not provided
             category_id = request.form.get('category_id')
-            if category_id and not category_id.strip():
-                category_id = None
+            if not category_id or category_id.strip() == '':
+                # Find the "Other" category for this user
+                other_category = Category.query.filter_by(
+                    name='Other',
+                    user_id=current_user.id,
+                    is_system=True
+                ).first()
+                
+                # If "Other" category doesn't exist, leave as None
+                category_id = other_category.id if other_category else None
             
             # Create expense record
             expense = Expense(
@@ -2168,13 +2178,22 @@ def add_recurring():
             flash('Invalid date format. Please use YYYY-MM-DD format.')
             return redirect(url_for('recurring'))
         
-        # Process split details if provided
+        # Process category - set to "Other" if not provided
         category_id = request.form.get('category_id')
-        if category_id and not category_id.strip():
-            category_id = None
+        if not category_id or category_id.strip() == '':
+            # Find the "Other" category for this user
+            other_category = Category.query.filter_by(
+                name='Other',
+                user_id=current_user.id,
+                is_system=True
+            ).first()
+            
+            # If "Other" category doesn't exist, leave as None
+            category_id = other_category.id if other_category else None
+            
+        # Process split details if provided
         split_details = None
         if request.form.get('split_details'):
-            import json
             split_details = request.form.get('split_details')
         
         # Create new recurring expense
