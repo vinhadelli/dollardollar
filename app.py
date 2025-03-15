@@ -2258,6 +2258,120 @@ def delete_recurring(recurring_id):
     flash('Recurring expense deleted successfully')
     
     return redirect(url_for('recurring'))
+
+@app.route('/edit_recurring/<int:recurring_id>')
+@login_required_dev
+def edit_recurring_page(recurring_id):
+    """Load the recurring expenses page with form pre-filled for editing"""
+    # Find the recurring expense
+    recurring = RecurringExpense.query.get_or_404(recurring_id)
+    
+    # Security check: Only the creator can edit
+    if recurring.user_id != current_user.id:
+        flash('You do not have permission to edit this recurring expense')
+        return redirect(url_for('recurring'))
+    
+    # Prepare the same data needed for the recurring page
+    base_currency = get_base_currency()
+    recurring_expenses = RecurringExpense.query.filter(
+        or_(
+            RecurringExpense.user_id == current_user.id,
+            RecurringExpense.split_with.like(f'%{current_user.id}%')
+        )
+    ).all()
+    users = User.query.all()
+    groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
+    currencies = Currency.query.all()
+    categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.name).all()
+    
+    # Return the template with the recurring expense data and flags for edit mode
+    return render_template('recurring.html', 
+                          recurring_expenses=recurring_expenses, 
+                          users=users,
+                          currencies=currencies,
+                          base_currency=base_currency,
+                          groups=groups,
+                          categories=categories,
+                          edit_recurring=recurring,  # Pass the recurring expense to edit
+                          auto_open_form=True)       # Flag to auto-open the form
+
+@app.route('/update_recurring/<int:recurring_id>', methods=['POST'])
+@login_required_dev
+def update_recurring(recurring_id):
+    """Update an existing recurring expense"""
+    try:
+        # Find the recurring expense
+        recurring = RecurringExpense.query.get_or_404(recurring_id)
+        
+        # Security check: Only the creator can update the recurring expense
+        if recurring.user_id != current_user.id:
+            flash('You do not have permission to edit this recurring expense')
+            return redirect(url_for('recurring'))
+        
+        # Check if this is a personal expense (no splits)
+        is_personal_expense = request.form.get('personal_expense') == 'on'
+        
+        # Handle split_with based on whether it's a personal expense
+        if is_personal_expense:
+            # For personal expenses, we set split_with to empty
+            split_with_str = None
+        else:
+            # Handle multi-select for split_with
+            split_with_ids = request.form.getlist('split_with')
+            if not split_with_ids:
+                flash('Please select at least one person to split with or mark as personal expense.')
+                return redirect(url_for('recurring'))
+            
+            split_with_str = ','.join(split_with_ids) if split_with_ids else None
+        
+        # Parse date with error handling
+        try:
+            start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d')
+            end_date = None
+            if request.form.get('end_date'):
+                end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d')
+        except ValueError:
+            flash('Invalid date format. Please use YYYY-MM-DD format.')
+            return redirect(url_for('recurring'))
+        
+        # Process split details if provided
+        category_id = request.form.get('category_id')
+        if category_id and not category_id.strip():
+            category_id = None
+            
+        split_details = None
+        if request.form.get('split_details'):
+            split_details = request.form.get('split_details')
+        
+        # Update recurring expense fields
+        recurring.description = request.form['description']
+        recurring.amount = float(request.form['amount'])
+        recurring.card_used = request.form['card_used']
+        recurring.split_method = request.form['split_method']
+        recurring.split_value = float(request.form.get('split_value', 0)) if request.form.get('split_value') else 0
+        recurring.split_details = split_details
+        recurring.paid_by = request.form['paid_by']
+        recurring.group_id = request.form.get('group_id') if request.form.get('group_id') and request.form.get('group_id') != '' else None
+        recurring.split_with = split_with_str
+        recurring.frequency = request.form['frequency']
+        recurring.start_date = start_date
+        recurring.end_date = end_date
+        recurring.category_id = category_id
+        
+        # Handle currency if provided
+        if request.form.get('currency_code'):
+            recurring.currency_code = request.form.get('currency_code')
+        
+        # Save changes
+        db.session.commit()
+        flash('Recurring expense updated successfully!')
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating recurring expense {recurring_id}: {str(e)}")
+        flash(f'Error: {str(e)}')
+        
+    return redirect(url_for('recurring'))
 #--------------------
 # ROUTES: GROUPS
 #--------------------
