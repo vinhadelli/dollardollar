@@ -3030,7 +3030,37 @@ def export_transactions():
 #--------------------
 # ROUTES: Categories
 #--------------------
+# Add these functions to your app.py file
 
+def has_default_categories(user_id):
+    """Check if a user already has the default category set"""
+    # We'll check for a few specific default categories to determine if defaults were already created
+    default_category_names = ["Housing", "Food", "Transportation", "Shopping", "Entertainment", "Health"]
+    
+    # Count how many of these default categories the user has
+    match_count = Category.query.filter(
+        Category.user_id == user_id,
+        Category.name.in_(default_category_names),
+        Category.parent_id == None  # Top-level categories only
+    ).count()
+    
+    # If they have at least 4 of these categories, assume defaults were created
+    return match_count >= 4
+
+@app.route('/categories/create_defaults', methods=['POST'])
+@login_required_dev
+def user_create_default_categories():
+    """Allow a user to create default categories for themselves"""
+    # Check if user already has default categories
+    if has_default_categories(current_user.id):
+        flash('You already have the default categories.')
+        return redirect(url_for('manage_categories'))
+    
+    # Create default categories
+    create_default_categories(current_user.id)
+    flash('Default categories created successfully!')
+    
+    return redirect(url_for('manage_categories'))
 
 
 @app.route('/categories')
