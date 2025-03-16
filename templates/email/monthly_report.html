@@ -1,0 +1,108 @@
+<!-- templates/email/monthly_report.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .header { background-color: #15803d; color: white; padding: 20px; border-radius: 5px 5px 0 0; }
+        .content { background-color: #f9f9f9; padding: 20px; }
+        .section { margin-bottom: 25px; }
+        .chart { width: 100%; max-width: 500px; margin: 10px 0; }
+        .budget-item { margin-bottom: 10px; }
+        .progress-bar { height: 10px; background-color: #e0e0e0; border-radius: 5px; margin: 5px 0; }
+        .progress-fill { height: 100%; border-radius: 5px; }
+        .under { background-color: #15803d; }
+        .approaching { background-color: #f59e0b; }
+        .over { background-color: #dc2626; }
+        .footer { text-align: center; font-size: 12px; color: #666; margin-top: 20px; }
+        .expense-item { border-bottom: 1px solid #eee; padding: 8px 0; }
+        .expense-amount { font-weight: bold; float: right; }
+        .balance-card { background-color: #f0f0f0; padding: 15px; border-radius: 5px; margin-bottom: 10px; }
+        .balance-positive { color: #15803d; }
+        .balance-negative { color: #dc2626; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Your Monthly Finance Report</h1>
+            <h2>{{ month_name }} {{ year }}</h2>
+        </div>
+        <div class="content">
+            <div class="section">
+                <h3>Monthly Summary</h3>
+                <p>Total Expenses: {{ currency_symbol }}{{ "%.2f"|format(total_spent) }}</p>
+                <p>Number of Transactions: {{ expense_count }}</p>
+                {% if prev_total > 0 %}
+                <p>Compared to Last Month: 
+                    {% if spending_trend < 0 %}
+                    <span style="color:#15803d">▼ {{ "%.1f"|format(spending_trend|abs) }}%</span>
+                    {% else %}
+                    <span style="color:#dc2626">▲ {{ "%.1f"|format(spending_trend) }}%</span>
+                    {% endif %}
+                </p>
+                {% endif %}
+            </div>
+            
+            <div class="section">
+                <h3>Budget Status</h3>
+                {% if budget_status %}
+                    {% for budget in budget_status %}
+                    <div class="budget-item">
+                        <div>{{ budget.name }}: {{ currency_symbol }}{{ "%.2f"|format(budget.spent) }} / {{ currency_symbol }}{{ "%.2f"|format(budget.amount) }}</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill {{ budget.status }}" style="width: {{ min(budget.percentage, 100) }}%;"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p>You don't have any active budgets set up. <a href="{{ url_for('budgets', _external=True) }}">Create a budget</a> to track your spending against your financial goals.</p>
+                {% endif %}
+            </div>
+            
+            <div class="section">
+                <h3>Top Categories</h3>
+                <ul>
+                {% for category in category_data %}
+                    <li>{{ category.name }}: {{ currency_symbol }}{{ "%.2f"|format(category.amount) }} ({{ "%.1f"|format(category.percentage) }}%)</li>
+                {% endfor %}
+                </ul>
+            </div>
+            
+            <div class="section">
+                <h3>Balance Summary</h3>
+                <div class="balance-card">
+                    <p>You are owed: {{ currency_symbol }}{{ "%.2f"|format(sum(item.amount for item in you_are_owed)) }}</p>
+                    <p>You owe others: {{ currency_symbol }}{{ "%.2f"|format(sum(item.amount for item in you_owe)) }}</p>
+                    <p>Net balance: 
+                        <span class="{% if net_balance >= 0 %}balance-positive{% else %}balance-negative{% endif %}">
+                            {{ currency_symbol }}{{ "%.2f"|format(net_balance) }}
+                        </span>
+                    </p>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Top Expenses This Month</h3>
+                {% if top_expenses %}
+                    {% for expense in top_expenses %}
+                    <div class="expense-item">
+                        <span>{{ expense.date.strftime('%Y-%m-%d') }} - {{ expense.description }}</span>
+                        <span class="expense-amount">{{ currency_symbol }}{{ "%.2f"|format(expense.amount) }}</span>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p>No expenses recorded this month.</p>
+                {% endif %}
+            </div>
+            
+            <a href="{{ url_for('stats', _external=True) }}" style="display: inline-block; padding: 10px 20px; background-color: #15803d; color: white; text-decoration: none; border-radius: 5px;">View Detailed Report</a>
+        </div>
+        <div class="footer">
+            <p>This report was automatically generated by Dollar Dollar Bill Y'all.</p>
+            <p>To adjust your notification preferences, visit <a href="{{ url_for('profile', _external=True) }}">your profile settings</a>.</p>
+        </div>
+    </div>
+</body>
+</html>

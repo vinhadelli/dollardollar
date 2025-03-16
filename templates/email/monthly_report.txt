@@ -1,0 +1,43 @@
+<!-- templates/email/monthly_report.txt -->
+Monthly Expense Report - {{ month_name }} {{ year }}
+
+Hi {{ user.name }},
+
+Here's your monthly expense summary for {{ month_name }} {{ year }}.
+
+SUMMARY
+-------------------------------
+Total Spent: {{ currency_symbol }}{{ "%.2f"|format(total_spent) }}
+Number of Transactions: {{ expense_count }}
+{% if prev_total > 0 %}
+Compared to Last Month: {% if spending_trend < 0 %}▼ {{ "%.1f"|format(spending_trend|abs) }}% decrease{% else %}▲ {{ "%.1f"|format(spending_trend) }}% increase{% endif %}
+{% endif %}
+
+BUDGET STATUS
+-------------------------------
+{% for budget in budget_status %}
+{{ budget.name }}: {{ currency_symbol }}{{ "%.2f"|format(budget.spent) }} / {{ currency_symbol }}{{ "%.2f"|format(budget.amount) }} ({{ "%.1f"|format(budget.percentage) }}%)
+{% endfor %}
+
+TOP CATEGORIES
+-------------------------------
+{% for category in category_data %}
+{{ category.name }}: {{ currency_symbol }}{{ "%.2f"|format(category.amount) }} ({{ "%.1f"|format(category.percentage) }}%)
+{% endfor %}
+
+BALANCE SUMMARY
+-------------------------------
+You are owed: {{ currency_symbol }}{{ "%.2f"|format(sum(item.amount for item in you_are_owed)) }}
+You owe others: {{ currency_symbol }}{{ "%.2f"|format(sum(item.amount for item in you_owe)) }}
+Net balance: {{ currency_symbol }}{{ "%.2f"|format(net_balance) }}
+
+TOP EXPENSES
+-------------------------------
+{% for expense in top_expenses %}
+{{ expense.date.strftime('%Y-%m-%d') }} - {{ expense.description }}: {{ currency_symbol }}{{ "%.2f"|format(expense.amount) }}
+{% endfor %}
+
+To see more detailed statistics, visit: {{ url_for('stats', _external=True) }}
+
+You're receiving this email because you have monthly reports enabled.
+To adjust your notification preferences, visit your profile settings: {{ url_for('profile', _external=True) }}# 29a41de6a866d56c36aba5159f45257c
