@@ -340,65 +340,67 @@
             z-index: 5;
         }
 
+        /* Custom Scrollbar Styles */
+        /* Custom Scrollbar Styles - Dark Blue-Black Theme */
+
+        /* For WebKit browsers (Chrome, Safari, newer versions of Opera) */
         ::-webkit-scrollbar {
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
         }
 
         ::-webkit-scrollbar-track {
-            background: rgba(229, 231, 235, 0.2); /* Lighter track color */
+            background: #111827;  /* Dark blue-black to match your UI background */
             border-radius: 4px;
         }
 
         ::-webkit-scrollbar-thumb {
-            background: rgba(52, 211, 153, 0.7); /* Lighter green with transparency */
+            background: #1e293b;  /* Slightly lighter dark blue */
             border-radius: 4px;
-            border: 2px solid rgba(17, 24, 39, 0.3);
+            transition: background 0.3s ease;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: rgba(251, 191, 36, 0.8); /* Lighter gold with transparency */
+            background: #2d3748;  /* Even lighter on hover, but still dark */
         }
 
-        /* Firefox */
+        ::-webkit-scrollbar-corner {
+            background: #111827;
+        }
+
+        /* For Firefox */
         * {
             scrollbar-width: thin;
-            scrollbar-color: rgba(52, 211, 153, 0.7) rgba(229, 231, 235, 0.2);
+            scrollbar-color: #1e293b #111827;
         }
 
-        /* For the Sidebar Navigation specifically */
-        .sidebar-nav {
-            /* Make sure scrollbar always shows in sidebar */
+        /* For Edge and IE */
+        body {
+            -ms-overflow-style: none; /* IE and Edge */
+            scrollbar-width: thin; /* Firefox */
+        }
+
+        /* Alternative styling for containers with scrollable content */
+        .scrollable-container {
             scrollbar-width: thin;
-            scrollbar-color: rgba(52, 211, 153, 0.7) rgba(229, 231, 235, 0.2);
+            scrollbar-color: #1e293b #111827;
         }
 
-        .sidebar-nav::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .sidebar-nav::-webkit-scrollbar-track {
-            background: rgba(229, 231, 235, 0.15); /* Slightly darker for contrast in sidebar */
-        }
-
-        .sidebar-nav::-webkit-scrollbar-thumb {
-            background: rgba(52, 211, 153, 0.7);
-            border: none;
-        }
-
-        .sidebar-nav::-webkit-scrollbar-thumb:hover {
-            background: rgba(251, 191, 36, 0.8);
-        }
-
-        /* For code elements, modals, dropdowns etc. - slightly thinner scrollbar */
-        pre, .modal-body, .dropdown-menu {
-            scrollbar-width: thin;
-        }
-
-        pre::-webkit-scrollbar, .modal-body::-webkit-scrollbar, .dropdown-menu::-webkit-scrollbar {
+        .scrollable-container::-webkit-scrollbar {
             width: 8px;
             height: 8px;
-}
+        }
+
+        .scrollable-container::-webkit-scrollbar-track {
+            background: #111827;
+            border-radius: 4px;
+        }
+
+        .scrollable-container::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        
         /* Toggle button */
         .sidebar-toggle {
             background: none;
