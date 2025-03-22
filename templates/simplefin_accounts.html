@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Connect SimpleFin Accounts</h1>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Select Accounts to Import</h5>
+        </div>
+        <div class="card-body">
+            <p>The following accounts are available from your financial institutions. Select the ones you'd like to connect to Dollar Dollar Bill Y'all:</p>
+            
+            <form method="POST" action="{{ url_for('simplefin_add_accounts') }}">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th width="50">Select</th>
+                                <th>Institution</th>
+                                <th>Account Name</th>
+                                <th>Type</th>
+                                <th>Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for account in accounts %}
+                            <tr>
+                                <td>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="account_ids" value="{{ account.id }}" id="account-{{ loop.index }}" checked>
+                                        <label class="form-check-label" for="account-{{ loop.index }}"></label>
+                                    </div>
+                                </td>
+                                <td>{{ account.institution }}</td>
+                                <td>{{ account.name }}</td>
+                                <td>
+                                    <span class="badge 
+                                        {% if account.type == 'credit' %}bg-danger
+                                        {% elif account.type == 'savings' %}bg-success
+                                        {% elif account.type == 'investment' %}bg-warning
+                                        {% elif account.type == 'loan' %}bg-secondary
+                                        {% else %}bg-primary{% endif %}">
+                                        {{ account.type|capitalize }}
+                                    </span>
+                                </td>
+                                <td>{{ account.currency_code }} {{ "%.2f"|format(account.balance) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    By connecting these accounts, Dollar Dollar Bill Y'all will import transactions and account balances. Your bank credentials remain secure through SimpleFin and are never shared with us.
+                </div>
+                
+                <div class="d-flex justify-content-between">
+                    <a href="{{ url_for('advanced') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-check me-1"></i>Connect Selected Accounts
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

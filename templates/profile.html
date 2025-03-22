@@ -118,7 +118,72 @@
                 </div>
             </div>
             {% endif %}
-            
+            <!-- Timezone Preferences Card -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">Timezone Preferences</h5>
+    </div>
+    <div class="card-body">
+        <form action="{{ url_for('update_timezone') }}" method="POST">
+            <div class="mb-3">
+                <label for="timezone" class="form-label">Select Your Timezone</label>
+                <select class="form-select bg-dark text-light" name="timezone" id="timezone" required>
+                    {% set current_timezone = current_user.timezone or 'UTC' %}
+                    {% set timezone_groups = {
+                        'North America': [
+                            'America/New_York', 'America/Chicago', 
+                            'America/Denver', 'America/Los_Angeles', 
+                            'America/Anchorage', 'Pacific/Honolulu'
+                        ],
+                        'South America': [
+                            'America/Sao_Paulo', 'America/Buenos_Aires', 
+                            'America/Lima', 'America/Bogota'
+                        ],
+                        'Europe': [
+                            'Europe/London', 'Europe/Paris', 
+                            'Europe/Berlin', 'Europe/Moscow', 
+                            'Europe/Rome', 'Europe/Madrid'
+                        ],
+                        'Asia': [
+                            'Asia/Tokyo', 'Asia/Shanghai', 
+                            'Asia/Dubai', 'Asia/Singapore', 
+                            'Asia/Seoul', 'Asia/Kolkata', 
+                            'Asia/Jerusalem'
+                        ],
+                        'Australia/Oceania': [
+                            'Australia/Sydney', 'Australia/Melbourne', 
+                            'Pacific/Auckland', 'Pacific/Fiji'
+                        ],
+                        'Africa': [
+                            'Africa/Cairo', 'Africa/Johannesburg', 
+                            'Africa/Lagos', 'Africa/Nairobi'
+                        ]
+                    } %}
+                    
+                    <option value="UTC" {% if current_timezone == 'UTC' %}selected{% endif %}>
+                        UTC - Universal Coordinated Time
+                    </option>
+                    
+                    {% for region, timezones in timezone_groups.items() %}
+                    <optgroup label="{{ region }}">
+                        {% for tz in timezones %}
+                        <option value="{{ tz }}" {% if current_timezone == tz %}selected{% endif %}>
+                            {{ tz.replace('_', ' ') }}
+                        </option>
+                        {% endfor %}
+                    </optgroup>
+                    {% endfor %}
+                </select>
+                <div class="form-text text-muted mt-2">
+                    Your local timezone helps us display dates and times accurately for you.
+                </div>
+            </div>
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary">Save Timezone</button>
+            </div>
+        </form>
+    </div>
+</div>
             <!-- Default Currency Card -->
             <div class="card">
                 <div class="card-header">

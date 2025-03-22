@@ -21,14 +21,19 @@
             --header-height: 60px;
             --transition-speed: 0.3s;
         }
-        
+        .header-logo {
+            margin-right: 10px;
+            vertical-align: middle;
+        }
         body {
             background: linear-gradient(to bottom right, var(--primary-green), var(--bg-dark), var(--bg-darker));
             color: white;
             min-height: 100vh;
             overflow-x: hidden;
         }
-        
+        *:hover {
+                transition: color 0.2s ease, background-color 0.2s ease;
+            }
         /* Money Symbol Background Grid */
         .money-grid {
             position: fixed;
@@ -190,7 +195,7 @@
         
         .sidebar-nav .nav-link:hover {
             background-color: rgba(255, 255, 255, 0.1);
-            color: white;
+            color: var(--accent-gold);
             border-left-color: var(--accent-gold);
         }
         
@@ -294,7 +299,13 @@
             margin-right: 12px;
             flex-shrink: 0;
         }
-        
+        .user-details:hover .user-name {
+            color: var(--accent-gold); /* Use accent color for hover state */
+        }
+
+        .user-details:hover .user-email {
+            color: rgba(255, 215, 0, 0.7); /* Slightly transparent gold for email */
+        }
         .user-details {
             overflow: hidden;
         }
@@ -326,7 +337,17 @@
             color: rgba(255, 255, 255, 0.5);
             letter-spacing: 1px;
         }
-        
+        .sidebar-nav .nav-link.active {
+            background-color: rgba(21, 128, 61, 0.3);
+            color: var(--accent-gold); /* Ensure visibility of active link */
+        }
+        .slide-panel .slide-panel-header:hover {
+            background-color: rgba(0, 0, 0, 0.3);
+        }
+
+        .slide-panel .slide-panel-header:hover h4 {
+            color: var(--accent-gold);
+        }
         .sidebar-logout {
             /* Remove margin-top: auto */
             border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -601,6 +622,7 @@
         
         .table {
             color: white;
+
         }
         
         .table-striped tbody tr:nth-of-type(odd) {
@@ -617,6 +639,674 @@
             position: relative;
             z-index: 1;
         }
+
+        /* Modern Card Styling */
+        .modern-card {
+            background: #1e1e1e;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        .modern-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+        }
+
+        .modern-card .card-header {
+            padding: 15px 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .modern-card .card-header .card-title {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #f8f9fa;
+        }
+
+        .modern-card .card-body {
+            padding: 20px;
+        }
+
+        /* Chart and Stats Styling */
+        .chart-container {
+            position: relative;
+            height: 240px;
+            margin-bottom: 20px;
+        }
+
+        .chart-stats {
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 15px;
+        }
+
+        .stat-item {
+            flex: 1;
+            text-align: center;
+            padding: 0 10px;
+        }
+
+        .stat-name {
+            font-size: 0.85rem;
+            color: #adb5bd;
+            margin-bottom: 5px;
+            white-space: nowrap;
+        }
+
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .stat-value small {
+            display: block;
+            font-size: 0.75rem;
+            opacity: 0.7;
+            font-weight: normal;
+        }
+
+        /* Donut Chart Styling */
+        .donut-container {
+            position: relative;
+            height: 230px;
+            margin: 0 auto;
+            max-width: 230px;
+        }
+
+        .category-legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .category-name {
+            flex: 1;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .category-amount {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .legend-container {
+            max-height: 150px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        /* Scrollbar styling */
+        .legend-container::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .legend-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .legend-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        /* Welcome Card Styling */
+        .welcome-card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: all 0.3s ease;
+            background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
+        }
+
+        .welcome-card:hover {
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .welcome-title {
+            font-size: 1.85rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(90deg, #2c3e50, #4ca1af);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent !important;
+        }
+
+        .welcome-date {
+            color: #6c757d;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .quote-container {
+            position: relative;
+            padding-left: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .quote-text {
+            font-style: italic;
+            color: #6c757d;
+            font-size: 1.1rem;
+            margin: 0;
+            padding: 0;
+            border-left: none;
+        }
+
+        .quote-icon {
+            color: rgba(25, 135, 84, 0.2);
+            font-size: 1.5rem;
+            position: absolute;
+            left: 0;
+            top: -0.5rem;
+        }
+
+        /* Stats Cards */
+        .stats-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .stat-card {
+            background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
+            border-radius: 12px;
+            padding: 1.5rem;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.25rem;
+        }
+
+        .stat-icon {
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            background-color: rgba(25, 135, 84, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+        }
+
+        .stat-icon i {
+            color: #198754;
+            font-size: 1.25rem;
+        }
+
+        .stat-title {
+            font-size: 0.9rem;
+            color: #adb5bd;
+            margin: 0;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin: 0.25rem 0 0;
+        }
+
+        .stat-comparison {
+            display: flex;
+            align-items: center;
+            margin-top: auto;
+        }
+
+        .comparison-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            height: 28px;
+            border-radius: 24px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-right: 0.75rem;
+        }
+
+        .comparison-badge.success {
+            background-color: rgba(25, 135, 84, 0.15);
+            color: #20c997;
+        }
+
+        .comparison-badge.danger {
+            background-color: rgba(220, 53, 69, 0.15);
+            color: #dc3545;
+        }
+
+        .comparison-badge.info {
+            background-color: rgba(13, 110, 253, 0.15);
+            color: #0d6efd;
+        }
+
+        .comparison-badge.neutral {
+            background-color: rgba(108, 117, 125, 0.15);
+            color: #6c757d;
+        }
+
+        .comparison-text {
+            font-size: 0.9rem;
+            color: #adb5bd;
+            margin: 0;
+        }
+
+        .highlight {
+            color: #f8f9fa;
+            font-weight: 500;
+        }
+
+        .budget-quick-stat {
+            margin-top: 1.25rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Card with Icon Header */
+        .icon-header-card {
+            border-radius: 16px;
+            background: #1e1e1e;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            height: 100%;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .icon-header-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .icon-header-card .card-header {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .icon-header-card .header-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 1.2rem;
+        }
+
+        .icon-header-card .header-icon.primary {
+            background: linear-gradient(135deg, #3a7bd5, #00d2ff);
+            color: white;
+        }
+
+        .icon-header-card .header-icon.danger {
+            background: linear-gradient(135deg, #FF416C, #FF4B2B);
+            color: white;
+        }
+
+        .icon-header-card .header-icon.success {
+            background: linear-gradient(135deg, #11998e, #38ef7d);
+            color: white;
+        }
+
+        .icon-header-card .header-icon.warning {
+            background: linear-gradient(135deg, #f2994a, #f2c94c);
+            color: white;
+        }
+
+        .icon-header-card .header-content h5 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #f8f9fa;
+        }
+
+        .icon-header-card .header-content p {
+            margin: 5px 0 0;
+            font-size: 0.8rem;
+            color: #adb5bd;
+        }
+
+        .icon-header-card .card-body {
+            padding: 20px;
+        }
+
+        /* Updated Table Styling */
+        .table-modern {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .table-modern thead th {
+            background-color: rgba(0, 0, 0, 0.2);
+            color: #adb5bd;
+            font-weight: 600;
+            padding: 12px 15px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .table-modern tbody tr {
+            transition: background-color 0.2s;
+        }
+
+        .table-modern tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .table-modern td {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            vertical-align: middle;
+        }
+
+        /* Updated Form Styling */
+        .form-modern .form-label {
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            color: #adb5bd;
+        }
+
+        .form-modern .form-control,
+        .form-modern .form-select {
+            background-color: rgba(0, 0, 0, 0.2) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px 15px;
+            color: #f8f9fa !important;
+            transition: all 0.3s ease;
+        }
+
+        .form-modern .form-control:focus,
+        .form-modern .form-select:focus {
+            background-color: rgba(0, 0, 0, 0.3) !important;
+            border-color: rgba(21, 128, 61, 0.5);
+            box-shadow: 0 0 0 0.25rem rgba(21, 128, 61, 0.25);
+        }
+
+        .form-modern .input-group-text {
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #adb5bd;
+        }
+
+        /* Button Styling */
+        .btn-modern {
+            border-radius: 8px;
+            padding: 8px 18px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-modern.btn-primary {
+            background: linear-gradient(to right, #15803d, #166534);
+            border: none;
+        }
+
+        .btn-modern.btn-primary:hover {
+            background: linear-gradient(to right, #166534, #14532d);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-modern.btn-outline-light {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #f8f9fa;
+        }
+
+        .btn-modern.btn-outline-light:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        /* Badge Styling */
+        .badge-modern {
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        /* Progress Bar Styling */
+        .progress-modern {
+            height: 8px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-modern .progress-bar {
+            background: linear-gradient(to right, #15803d, #2ed573);
+            border-radius: 4px;
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 991.98px) {
+            .welcome-content {
+                margin-bottom: 2rem;
+            }
+            .toast-container {
+    position: fixed !important; 
+    bottom: 0 !important;
+    right: 0 !important;
+    padding: 1rem !important;
+    z-index: 9999 !important; /* Higher than any other elements */
+}
+
+/* Ensure toasts are visible */
+.toast {
+    background-color: rgba(40, 40, 40, 0.9) !important;
+    backdrop-filter: blur(5px) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Adjust z-index of slide panel and overlay */
+.slide-panel-overlay {
+    z-index: 1050 !important;
+}
+
+.slide-panel {
+    z-index: 1060 !important;
+}
+}
+    /* Seamless Rounded Tables and Cards */
+
+/* Main cards - rounded corners */
+.card {
+    border-radius: 16px !important;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Table containers inside cards - no borders or distinct separation */
+.card .table-responsive {
+    border: none;
+    background-color: transparent;
+    margin: 0;
+}
+
+/* Tables inside cards - remove borders that create separation */
+.card .table {
+    margin-bottom: 0;
+    background-color: transparent;
+}
+
+/* Remove borders between table rows and cells for a more seamless look */
+.card .table td, 
+.card .table th {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: none;
+}
+
+/* Remove first row top border for seamless look */
+.card .table tr:first-child td,
+.card .table tr:first-child th {
+    border-top: none;
+}
+
+/* For nested cards (cards inside cards) - no distinct separation */
+.card .card {
+    border: none;
+    box-shadow: none;
+    background-color: rgba(0, 0, 0, 0.1);
+    margin: 10px;
+}
+
+/* For collapsible content inside tables, keep seamless look */
+.collapse .card {
+    border: none;
+    border-radius: 0 !important;
+    background-color: rgba(0, 0, 0, 0.15);
+}
+
+/* For collapsible detail rows in tables, remove distinct separation */
+tr.bg-dark .collapse {
+    border-radius: 0;
+    border: none;
+}
+
+/* Ensure collapse sections blend seamlessly */
+tr.bg-dark .collapse .p-3 {
+    padding: 15px !important;
+}
+
+/* Remove distinct visual separation in nested tables */
+.table .table {
+    background-color: transparent;
+}
+
+/* Adjustments for striped tables to maintain seamless look */
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+/* Slide Panel Global Styles */
+.slide-panel {
+    position: fixed;
+    top: 0;
+    right: -500px;
+    width: 500px;
+    max-width: 100%;
+    height: 100vh;
+    background-color: var(--slide-panel-bg, #1e1e1e);
+    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.3);
+    transition: right 0.3s ease-in-out;
+    z-index: 1060;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.slide-panel.active {
+    right: 0;
+    animation: slideInPanel 0.2s ease-out;
+}
+
+.slide-panel-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1050;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease;
+}
+
+.slide-panel-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.slide-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid #2d2d2d;
+    background-color: #1a2e22;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.slide-panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+/* Animation for sliding in the panel */
+@keyframes slideInPanel {
+    from { transform: translateX(20px); opacity: 0.8; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .slide-panel {
+        width: 100%;
+        right: -100%;
+    }
+}
+.toast-container {
+    position: fixed !important; 
+    bottom: 0 !important;
+    right: 0 !important;
+    padding: 1rem !important;
+    z-index: 9999 !important; /* Higher than any other elements */
+}
+
+/* Ensure toasts are visible */
+.toast {
+    background-color: rgba(40, 40, 40, 0.9) !important;
+    backdrop-filter: blur(5px) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Adjust z-index of slide panel and overlay */
+.slide-panel-overlay {
+    z-index: 1050 !important;
+}
+
+.slide-panel {
+    z-index: 1060 !important;
+}
     </style>
 </head>
 <body class="{% if request.endpoint in ['login', 'signup', 'reset_password_request', 'reset_password'] %}auth-page{% else %}app-page{% endif %}">
@@ -635,7 +1325,10 @@
             <i class="fas fa-times"></i>
         </button>
         {% endif %}
-        <a class="header-brand" href="/">💵 Dollar Dollar Bill Y'all</a>
+        <a class="header-brand" href="/">
+            <img src="/static/images/dddby.png" alt="Logo" class="header-logo" height="30">
+            Dollar Dollar Bill Y'all
+        </a>
     </header>
     
     {% if current_user.is_authenticated %}
@@ -662,10 +1355,17 @@
             <li class="nav-item nav-section">
                 <a href="#expensesSubmenu" data-bs-toggle="collapse" class="nav-link {% if 'transactions' in request.path or 'recurring' in request.path %}{% else %}collapsed{% endif %}">
                     <span class="nav-icon"><i class="fas fa-file-invoice-dollar"></i></span>
-                    <span class="nav-text">Expenses</span>
+                    <span class="nav-text">Ledger</span>
                     <span class="nav-caret"><i class="fas fa-angle-down ms-auto"></i></span>
                 </a>
                 <ul class="collapse nav-submenu {% if 'transactions' in request.path or 'recurring' in request.path %}show{% endif %}" id="expensesSubmenu">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path == '/accounts' %}active{% endif %}" href="{{ url_for('accounts') }}">
+                            <span class="nav-icon"><i class="fas fa-exchange-alt"></i></span>
+                            <i class="fas fa-university me-2"></i>Accounts
+                        </a>
+                    </li>
+                    
                     <li class="nav-item">
                         <a href="{{ url_for('transactions') }}" class="nav-link {% if request.path == url_for('transactions') %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-exchange-alt"></i></span>
@@ -735,6 +1435,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('manage_category_mappings') }}" class="nav-link {% if 'category_mappings' in request.path %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-magic"></i></span>
+                            <span class="nav-text">Auto-Categories</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('manage_tags') }}" class="nav-link {% if 'tags' in request.path %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-tags"></i></span>
                             <span class="nav-text">Tags</span>
@@ -744,6 +1450,12 @@
                         <a href="{{ url_for('manage_currencies') }}" class="nav-link {% if 'currencies' in request.path %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-dollar-sign"></i></span>
                             <span class="nav-text">Currencies</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('advanced') }}" class="nav-link">
+                            <span class="nav-icon"><i class="fas fa-tags"></i></span>
+                            <span class="nav-text">Advanced</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -795,13 +1507,9 @@
     
     <!-- Main Content -->
     <main class="main-content">
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="alert alert-success bg-green-800 text-white border-0">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+        <div class="toast-container position-fixed bottom-0 end-0 p-3">
+            <!-- Flash messages will be dynamically added here as toasts -->
+        </div>
         
         {% block content %}
         <!-- Page content will go here -->
@@ -844,7 +1552,181 @@
             }
         }
     });
-    
+    const messages = [
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    {
+                        message: "{{ message|safe }}",
+                        category: "{{ category }}"
+                    },
+                {% endfor %}
+            {% endwith %}
+        ];
+        
+        // Display flash messages as toasts
+        if (messages.length > 0) {
+            const toastContainer = document.querySelector('.toast-container');
+            
+            messages.forEach(function(msg) {
+                // Determine toast styling based on message category
+                const category = msg.category === 'error' ? 'error' : 
+                                msg.category === 'warning' ? 'warning' : 'success';
+                const bgColor = category === 'error' ? 'bg-danger' : 
+                                category === 'warning' ? 'bg-warning text-dark' : 'bg-success';
+                const iconClass = category === 'error' ? 'fa-exclamation-circle' : 
+                                category === 'warning' ? 'fa-exclamation-triangle' : 'fa-check-circle';
+                
+                // Clean up message (remove markdown-like formatting if present)
+                let cleanMessage = msg.message;
+                // Remove asterisks and other markdown-like formatting
+                cleanMessage = cleanMessage.replace(/\*/g, '').replace(/\*\*H\*\*/g, '').trim();
+                
+                // Create toast element
+                const toastId = `flash-toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                const toastHtml = `
+                    <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000">
+                        <div class="toast-header ${bgColor} ${category !== 'warning' ? 'text-white' : ''}">
+                            <i class="fas ${iconClass} me-2"></i>
+                            <strong class="me-auto">${category.charAt(0).toUpperCase() + category.slice(1)}</strong>
+                            <button type="button" class="btn-close ${category !== 'warning' ? 'btn-close-white' : ''}" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                        <div class="toast-body">
+                            ${cleanMessage}
+                        </div>
+                    </div>
+                `;
+                
+                // Add toast to container
+                toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+                
+                // Initialize and show toast
+                const toastEl = document.getElementById(toastId);
+                const toast = new bootstrap.Toast(toastEl);
+                toast.show();
+                
+                // Remove toast from DOM after it's hidden
+                toastEl.addEventListener('hidden.bs.toast', function() {
+                    toastEl.remove();
+                });
+            });
+        }
+    // Universal Slide Panel Functions
+    function openSlidePanel(panelId, options = {}) {
+        // Create or get the slide panel
+        let slidePanel = document.getElementById(panelId);
+        
+        if (!slidePanel) {
+            slidePanel = createSlidePanel(panelId, options);
+        }
+        
+        // Show loading state if content is not provided
+        if (options.loadingContent) {
+            slidePanel.querySelector('.slide-panel-content').innerHTML = options.loadingContent;
+        }
+        
+        // Show the panel and overlay
+        const overlay = document.getElementById('slide-panel-overlay');
+        if (overlay) overlay.classList.add('active');
+        slidePanel.classList.add('active');
+        
+        // Prevent body scrolling
+        document.body.style.overflow = 'hidden';
+        
+        // Optional: fetch content if a URL is provided
+        if (options.fetchUrl) {
+            fetchPanelContent(options.fetchUrl, slidePanel, options);
+        } else if (options.content) {
+            // Set content directly if provided
+            slidePanel.querySelector('.slide-panel-content').innerHTML = options.content;
+        }
+        
+        return slidePanel;
+    }
+
+    function createSlidePanel(panelId, options) {
+        // Create the panel
+        const slidePanel = document.createElement('div');
+        slidePanel.id = panelId;
+        slidePanel.className = 'slide-panel ' + (options.className || '');
+        
+        // Create header
+        const header = document.createElement('div');
+        header.className = 'slide-panel-header';
+        header.innerHTML = `
+            <h4 class="mb-0">
+                <i class="fas ${options.icon || 'fa-info-circle'} me-2" style="color: ${options.iconColor || '#0ea5e9'}"></i>
+                ${options.title || 'Panel'}
+            </h4>
+            <button type="button" class="btn-close btn-close-white" aria-label="Close" onclick="closeSlidePanel('${panelId}')"></button>
+        `;
+        
+        // Create content area
+        const content = document.createElement('div');
+        content.className = 'slide-panel-content';
+        
+        // Assemble panel
+        slidePanel.appendChild(header);
+        slidePanel.appendChild(content);
+        
+        // Add to DOM if not already present
+        document.body.appendChild(slidePanel);
+        
+        // Create overlay if not exists
+        let overlay = document.getElementById('slide-panel-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'slide-panel-overlay';
+            overlay.className = 'slide-panel-overlay';
+            overlay.addEventListener('click', () => closeSlidePanel(panelId));
+            document.body.appendChild(overlay);
+        }
+        
+        return slidePanel;
+    }
+
+    function fetchPanelContent(url, slidePanel, options = {}) {
+        fetch(url)
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to load content');
+                return response.json();
+            })
+            .then(data => {
+                // Populate content based on data
+                const contentDiv = slidePanel.querySelector('.slide-panel-content');
+                if (options.renderFunction) {
+                    contentDiv.innerHTML = options.renderFunction(data);
+                } else {
+                    contentDiv.innerHTML = JSON.stringify(data, null, 2);
+                }
+            })
+            .catch(error => {
+                const contentDiv = slidePanel.querySelector('.slide-panel-content');
+                contentDiv.innerHTML = `
+                    <div class="alert alert-danger m-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        ${error.message}
+                    </div>
+                `;
+            });
+    }
+
+    function closeSlidePanel(panelId = null) {
+        // Close specific panel or all panels
+        const panels = panelId 
+            ? [document.getElementById(panelId)] 
+            : document.querySelectorAll('.slide-panel');
+        
+        panels.forEach(panel => {
+            if (panel) panel.classList.remove('active');
+        });
+        
+        // Hide overlay
+        const overlay = document.getElementById('slide-panel-overlay');
+        if (overlay) overlay.classList.remove('active');
+        
+        // Re-enable body scrolling
+        document.body.style.overflow = '';
+}
     // Toggle sidebar visibility (show/hide)
     function toggleSidebar() {
         // Toggle classes for visibility

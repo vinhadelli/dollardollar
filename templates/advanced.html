@@ -1,0 +1,626 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Import & Connect</h1>
+    
+    <!-- Navigation Tabs -->
+    <ul class="nav nav-tabs mb-4" id="importTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="csv-tab" data-bs-toggle="tab" data-bs-target="#csv-import" type="button" role="tab" aria-controls="csv-import" aria-selected="true">
+                <i class="fas fa-file-csv me-2"></i>CSV Import
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="simplefin-tab" data-bs-toggle="tab" data-bs-target="#simplefin" type="button" role="tab" aria-controls="simplefin" aria-selected="false">
+                <i class="fas fa-sync-alt me-2"></i>SimpleFin Connect
+            </button>
+        </li>
+    </ul>
+    
+    <!-- Tab Content -->
+    <div class="tab-content" id="importTabsContent">
+        
+        <!-- CSV Import Tab -->
+        <div class="tab-pane fade show active" id="csv-import" role="tabpanel" aria-labelledby="csv-import-tab">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Import Transactions from CSV</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('import_csv') }}" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="csv_file" class="form-label">CSV File</label>
+                            <input type="file" class="form-control bg-dark text-light" id="csv_file" name="csv_file" accept=".csv" required>
+                            <small class="text-muted">Upload a CSV file containing transaction data</small>
+                        </div>
+                        <div id="csv_preview"></div>
+                        <div class="mb-3">
+                            <label for="account_id" class="form-label">Assign to Account</label>
+                            <select class="form-select bg-dark text-light" id="account_id" name="account_id">
+                                <option value="">No specific account</option>
+                                {% for account in current_user.accounts %}
+                                    <option value="{{ account.id }}">{{ account.name }} ({{ account.type }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="date_format" class="form-label">Date Format</label>
+                            <select class="form-select bg-dark text-light" id="date_format" name="date_format">
+                                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                                <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                                <option value="YYYY/MM/DD">YYYY/MM/DD</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">CSV Columns Mapping</label>
+                            <div class="card bg-dark border-secondary">
+                                <div class="card-body">
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label for="date_column" class="form-label">Date Column</label>
+                                            <input type="text" class="form-control bg-dark text-light" id="date_column" name="date_column" value="Date" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="amount_column" class="form-label">Amount Column</label>
+                                            <input type="text" class="form-control bg-dark text-light" id="amount_column" name="amount_column" value="Amount" required>
+                                        </div>
+                                    </div>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label for="description_column" class="form-label">Description Column</label>
+                                            <input type="text" class="form-control bg-dark text-light" id="description_column" name="description_column" value="Description" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="category_column" class="form-label">Category Column (Optional)</label>
+                                            <input type="text" class="form-control bg-dark text-light" id="category_column" name="category_column" value="Category">
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label for="type_column" class="form-label">Type Column (Optional)</label>
+                                            <input type="text" class="form-control bg-dark text-light" id="type_column" name="type_column" value="Type">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="id_column" class="form-label">Transaction ID Column (Optional)</label>
+                                            <input type="text" class="form-control bg-dark text-light" id="id_column" name="id_column" value="ID">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Options</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="detect_duplicates" name="detect_duplicates" checked>
+                                <label class="form-check-label" for="detect_duplicates">
+                                    Detect and skip duplicate transactions
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="auto_categorize" name="auto_categorize" checked>
+                                <label class="form-check-label" for="auto_categorize">
+                                    Auto-categorize transactions based on description
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="negative_is_expense" name="negative_is_expense" checked>
+                                <label class="form-check-label" for="negative_is_expense">
+                                    Negative amounts are expenses, positive are income
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload me-1"></i>Upload and Import
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- CSV Format Examples -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">CSV Format Examples</h5>
+                </div>
+                <div class="card-body">
+                    <p>Your CSV file should contain at least these columns:</p>
+                    <ul>
+                        <li><strong>Date</strong> - The transaction date (e.g., 2023-01-15)</li>
+                        <li><strong>Amount</strong> - The transaction amount (e.g., -24.99 for expenses, 1000.00 for income)</li>
+                        <li><strong>Description</strong> - What the transaction was for (e.g., "Grocery Store")</li>
+                    </ul>
+                    
+                    <p>Optional columns that can enhance your data:</p>
+                    <ul>
+                        <li><strong>Category</strong> - Transaction category (e.g., "Food", "Transportation")</li>
+                        <li><strong>Type</strong> - Transaction type (e.g., "expense", "income", "transfer")</li>
+                        <li><strong>ID</strong> - A unique identifier for the transaction</li>
+                    </ul>
+                    
+                    <div class="mt-3">
+                        <h6>Example CSV:</h6>
+                        <pre class="bg-dark p-3 rounded">
+Date,Amount,Description,Category,Type
+2023-01-15,-24.99,Grocery Store,Food,expense
+2023-01-16,-45.00,Gas Station,Transportation,expense
+2023-01-20,1000.00,Salary,Income,income
+2023-01-25,-12.99,Netflix,Entertainment,expense</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SimpleFin Tab -->
+        <!-- Replace the SimpleFin tab in advanced.html with this content -->
+<div class="tab-pane fade" id="simplefin" role="tabpanel" aria-labelledby="simplefin-tab">
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Connect with SimpleFin</h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-4">
+                <h5>What is SimpleFin?</h5>
+                <p>SimpleFin is a secure way to connect to your bank accounts. It provides a standardized API that allows Dollar Dollar Bill Y'all to access your financial data without storing your bank credentials.</p>
+                <div class="alert alert-info">
+                    <i class="fas fa-shield-alt me-2"></i>
+                    SimpleFin never shares your bank passwords with us. We only receive the transaction data you authorize.
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <h5>How to Connect</h5>
+                <ol>
+                    <li>Click the "Get SimpleFin Setup Token" button below</li>
+                    <li>You'll be redirected to SimpleFin to select your financial institutions</li>
+                    <li>After authorization, SimpleFin will provide you with a <strong>setup token</strong></li>
+                    <li>Copy the setup token and paste it into the form below</li>
+                    <li>Click "Connect" to finish setting up your accounts</li>
+                </ol>
+            </div>
+            
+            <!-- SimpleFin Connection Form -->
+            <div class="card bg-dark border-secondary mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0">SimpleFin Connection</h6>
+                </div>
+                <div class="card-body">
+                    {% if current_user.simplefin_settings and current_user.simplefin_settings.enabled %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Connected to SimpleFin!</strong>
+                            <p class="mb-0">Last synced: {{ current_user.simplefin_settings.last_sync.strftime('%Y-%m-%d %H:%M') if current_user.simplefin_settings.last_sync else "Never" }}</p>
+                            <p class="mb-0">Sync frequency: {{ current_user.simplefin_settings.sync_frequency|capitalize }}</p>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <button class="btn btn-outline-primary" id="refreshSimpleFin">
+                                <i class="fas fa-sync-alt me-1"></i> Refresh Connection
+                            </button>
+                            <button class="btn btn-outline-danger" id="disconnectSimpleFin">
+                                <i class="fas fa-unlink me-1"></i> Disconnect
+                            </button>
+                        </div>
+                    {% else %}
+                        <div class="d-flex justify-content-center mb-3">
+                            <a href="{{ url_for('connect_simplefin') }}" class="btn btn-primary btn-lg">
+                                <i class="fas fa-key me-2"></i>Get SimpleFin Setup Token
+                            </a>
+                        </div>
+                        
+                        <form method="POST" action="{{ url_for('process_simplefin_token') }}">
+                            <div class="mb-3">
+                                <label for="setup_token" class="form-label">Enter your SimpleFin Setup Token</label>
+                                <input type="text" class="form-control bg-dark text-light" id="setup_token" name="setup_token" 
+                                    placeholder="Paste your setup token here" required>
+                                <small class="text-muted">The setup token looks like a long string of random characters.</small>
+                            </div>
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-link me-1"></i>Connect
+                                </button>
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+            
+            {% if connected_accounts %}
+                <div class="mt-4">
+                    <h5>Connected Accounts</h5>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Institution</th>
+                                    <th>Account</th>
+                                    <th>Last Sync</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for account in connected_accounts %}
+                                    <tr>
+                                        <td>{{ account.institution }}</td>
+                                        <td>{{ account.name }}</td>
+                                        <td>{{ account.last_sync.strftime('%Y-%m-%d %H:%M') if account.last_sync else "Never" }}</td>
+                                        <td>
+                                            <span class="badge {% if account.status == 'active' %}bg-success{% else %}bg-warning{% endif %}">
+                                                {{ account.status|capitalize }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="syncAccount({{ account.id }})">
+                                                <i class="fas fa-sync-alt"></i> Sync
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="disconnectAccount({{ account.id }})">
+                                                <i class="fas fa-unlink"></i> Disconnect
+                                            </button>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle SimpleFin disconnection
+        const disconnectSimpleFinBtn = document.getElementById('disconnectSimpleFin');
+        if (disconnectSimpleFinBtn) {
+            disconnectSimpleFinBtn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to disconnect SimpleFin? This will stop all automatic syncing of your financial accounts.')) {
+                    // Send request to disconnect SimpleFin
+                    fetch('/simplefin/disconnect', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showSuccessAlert('SimpleFin disconnected successfully');
+                            // Refresh the page after short delay
+                            setTimeout(() => location.reload(), 1000);
+                        } else {
+                            showErrorAlert('Error disconnecting SimpleFin: ' + (data.message || 'Unknown error'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showErrorAlert('An error occurred while disconnecting SimpleFin');
+                    });
+                }
+            });
+        }
+        
+        // Handle SimpleFin refresh
+        const refreshSimpleFinBtn = document.getElementById('refreshSimpleFin');
+        if (refreshSimpleFinBtn) {
+            refreshSimpleFinBtn.addEventListener('click', function() {
+                if (confirm('Do you want to refresh your SimpleFin connection? This will sync all your accounts.')) {
+                    // Send request to refresh SimpleFin
+                    fetch('/simplefin/refresh', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showSuccessAlert('SimpleFin refresh initiated. ' + (data.message || ''));
+                            // Redirect if needed
+                            if (data.redirect) {
+                                setTimeout(() => window.location.href = data.redirect, 1000);
+                            } else {
+                                // Refresh the page after short delay
+                                setTimeout(() => location.reload(), 1000);
+                            }
+                        } else {
+                            showErrorAlert('Error refreshing SimpleFin: ' + (data.message || 'Unknown error'));
+                            // Redirect if needed even on error
+                            if (data.redirect) {
+                                setTimeout(() => window.location.href = data.redirect, 1500);
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showErrorAlert('An error occurred while refreshing SimpleFin');
+                    });
+                }
+            });
+        }
+        
+        // Initialize Bootstrap components
+        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+            var tooltips = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltips.map(function(tooltip) {
+                return new bootstrap.Tooltip(tooltip);
+            });
+        }
+    });
+
+    // SimpleFin account functions - simplified versions
+    function syncAccount(accountId) {
+        if (!accountId) return;
+        
+        if (confirm('Do you want to sync this account now? This will import new transactions since the last sync.')) {
+            fetch(`/sync_account/${accountId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSuccessAlert(`Account synced successfully. ${data.new_transactions} new transactions imported.`);
+                    // Refresh the page after short delay
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showErrorAlert('Error syncing account: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showErrorAlert('An error occurred while syncing the account');
+            });
+        }
+    }
+
+    function disconnectAccount(accountId) {
+        if (!accountId) return;
+        
+        if (confirm('Are you sure you want to disconnect this account? This will remove the connection to SimpleFin but keep the account in your list.')) {
+            fetch(`/disconnect_account/${accountId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSuccessAlert('Account disconnected successfully');
+                    // Refresh the page after short delay
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showErrorAlert('Error disconnecting account: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showErrorAlert('An error occurred while disconnecting the account');
+            });
+        }
+    }
+    
+    // CSV Import Functions
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get the file input element
+        const csvFileInput = document.getElementById('csv_file');
+        if (csvFileInput) {
+            csvFileInput.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    const fileName = this.files[0].name;
+                    // If it's a CSV file, attempt to auto-detect headers
+                    if (fileName.toLowerCase().endsWith('.csv')) {
+                        tryPreviewCsvHeaders(this.files[0]);
+                    }
+                }
+            });
+        }
+    });
+    
+    // CSV parsing function
+    function tryPreviewCsvHeaders(file) {
+        // Show "analyzing" message
+        const previewContainer = document.getElementById('csv_preview');
+        const columnMappingForm = document.getElementById('column_mapping_form');
+        
+        if (previewContainer) {
+            previewContainer.innerHTML = '<div class="d-flex justify-content-center my-3"><div class="spinner-border text-primary" role="status"></div><span class="ms-2">Analyzing CSV file...</span></div>';
+        }
+        
+        // Read file contents
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const contents = e.target.result;
+            
+            try {
+                // Parse the CSV
+                const lines = contents.split(/\r\n|\n/);
+                
+                if (lines.length < 2) {
+                    if (previewContainer) {
+                        previewContainer.innerHTML = '<div class="alert alert-warning">CSV file appears to be empty or invalid.</div>';
+                    }
+                    return;
+                }
+                
+                // Assume first line is headers
+                const headers = parseCSVLine(lines[0]);
+                
+                // Update column mapping fields
+                updateCsvHeaderFields(headers);
+                
+                // Create preview table (first 5 rows)
+                const previewRows = Math.min(5, lines.length - 1);
+                let previewHTML = '<div class="card bg-dark mt-3 mb-4"><div class="card-header"><h6 class="mb-0">CSV Preview</h6></div>';
+                previewHTML += '<div class="card-body p-0"><div class="table-responsive"><table class="table table-sm table-bordered m-0">';
+                
+                // Headers row
+                previewHTML += '<thead><tr>';
+                for (const header of headers) {
+                    previewHTML += `<th>${escapeHtml(header)}</th>`;
+                }
+                previewHTML += '</tr></thead><tbody>';
+                
+                // Data rows
+                for (let i = 1; i <= previewRows; i++) {
+                    if (lines[i].trim()) {
+                        const rowData = parseCSVLine(lines[i]);
+                        previewHTML += '<tr>';
+                        for (let j = 0; j < headers.length; j++) {
+                            const cellValue = j < rowData.length ? rowData[j] : '';
+                            previewHTML += `<td>${escapeHtml(cellValue)}</td>`;
+                        }
+                        previewHTML += '</tr>';
+                    }
+                }
+                
+                previewHTML += '</tbody></table></div></div>';
+                
+                // Add "X more rows" message if there are more rows
+                if (lines.length > previewRows + 1) {
+                    const moreRows = lines.length - previewRows - 1;
+                    previewHTML += `<div class="card-footer text-muted"><small>+ ${moreRows} more row${moreRows !== 1 ? 's' : ''}</small></div>`;
+                }
+                
+                previewHTML += '</div>';
+                
+                if (previewContainer) {
+                    previewContainer.innerHTML = previewHTML;
+                }
+                
+                // Show column mapping form
+                if (columnMappingForm) {
+                    columnMappingForm.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error parsing CSV:', error);
+                if (previewContainer) {
+                    previewContainer.innerHTML = `<div class="alert alert-danger">Error analyzing CSV: ${error.message}</div>`;
+                }
+            }
+        };
+        
+        reader.onerror = function() {
+            if (previewContainer) {
+                previewContainer.innerHTML = '<div class="alert alert-danger">Error reading the file.</div>';
+            }
+        };
+        
+        // Read file as text
+        reader.readAsText(file);
+    }
+
+    // Helper functions for CSV parsing
+    function parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+                // Toggle quote state
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                // End of field
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        
+        // Add the last field
+        result.push(current.trim());
+        
+        return result;
+    }
+
+    // Helper function to safely escape HTML
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+    
+    function updateCsvHeaderFields(headers) {
+        // Clean headers (remove quotes, trim whitespace)
+        const cleanHeaders = headers.map(h => h.trim().replace(/^["'](.*)["']$/, '$1'));
+        
+        // Try to match common header names
+        const dateFields = ['date', 'transaction date', 'trans date', 'time'];
+        const amountFields = ['amount', 'sum', 'transaction amount', 'price', 'value'];
+        const descriptionFields = ['description', 'desc', 'narrative', 'details', 'transaction', 'memo', 'note'];
+        const categoryFields = ['category', 'type', 'classification', 'group'];
+        const typeFields = ['type', 'transaction type', 'trans type'];
+        const idFields = ['id', 'transaction id', 'reference', 'ref'];
+        
+        // Find best match for each field
+        for (const header of cleanHeaders) {
+            const headerLower = header.toLowerCase();
+            
+            // Date column
+            if (dateFields.some(field => headerLower.includes(field))) {
+                document.getElementById('date_column').value = header;
+            }
+            
+            // Amount column
+            if (amountFields.some(field => headerLower.includes(field))) {
+                document.getElementById('amount_column').value = header;
+            }
+            
+            // Description column
+            if (descriptionFields.some(field => headerLower.includes(field))) {
+                document.getElementById('description_column').value = header;
+            }
+            
+            // Category column
+            if (categoryFields.some(field => headerLower.includes(field))) {
+                document.getElementById('category_column').value = header;
+            }
+            
+            // Type column
+            if (typeFields.some(field => headerLower.includes(field))) {
+                document.getElementById('type_column').value = header;
+            }
+            
+            // ID column
+            if (idFields.some(field => headerLower.includes(field))) {
+                document.getElementById('id_column').value = header;
+            }
+        }
+    }
+    
+    // Helper Functions
+    function showSuccessAlert(message) {
+        // You can replace this with a nicer toast notification
+        alert(message);
+    }
+    
+    function showErrorAlert(message) {
+        // You can replace this with a nicer error notification
+        alert(message);
+    }
+</script>
+{% endblock %}

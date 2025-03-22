@@ -6,181 +6,19 @@
         <div class="col-md-12">
             <div class="d-flex justify-content-between align-items-center">
                 <h2>All Transactions</h2>
-                <button id="toggleExpenseForm" class="btn btn-primary">
-                    <i class="fas fa-plus me-2"></i>Add New Expense
-                </button>
+                <div>
+                    <button type="button" class="btn btn-success me-2" id="bulkCategorizeBtn">
+                        <i class="fas fa-tags me-2"></i>Auto-Categorize
+                    </button>
+                    <button id="openAddTransactionBtn" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Add New Transaction
+                    </button>
+                </div>
             </div>
         </div>
     </div>
     
-    <!-- Add Expense Form (Hidden by default) - MOVED BEFORE FILTERS -->
-    <div id="expenseFormContainer" class="expense-form mb-4" style="display: none;">
-        <h4 class="mb-3">Add New Expense</h4>
-        <form method="POST" action="{{ url_for('add_expense') }}">
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="description" class="form-label">Description</label>
-                    <input type="text" class="form-control bg-dark text-light" id="description" name="description" required>
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label for="amount" class="form-label">Amount ({{ base_currency.symbol }})</label>
-                    <input type="number" step="0.01" class="form-control bg-dark text-light" id="amount" name="amount" required>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="currency_code" class="form-label">Currency</label>
-                    <select class="form-control bg-dark text-light" id="currency_code" name="currency_code">
-                        {% for currency in currencies %}
-                            <option value="{{ currency.code }}" 
-                                    {% if currency.code == current_user.default_currency_code %}selected{% endif %}>
-                                {{ currency.code }} ({{ currency.symbol }})
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label for="date" class="form-label">Date</label>
-                    <input type="date" class="form-control bg-dark text-light" id="date" name="date" required>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="card_used" class="form-label">Card Used</label>
-                    <input type="text" class="form-control bg-dark text-light" id="card_used" name="card_used" required>
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label for="paid_by" class="form-label">Paid By</label>
-                    <select class="form-control bg-dark text-light" id="paid_by" name="paid_by" required>
-                        {% for user in users %}
-                            <option value="{{ user.id }}" {% if user.id == current_user.id %}selected{% endif %}>{{ user.name }} ({{ user.id }})</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-12 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <label for="split_with" class="form-label">Split With (select multiple)</label>
-                        <div class="form-check form-switch ms-2">
-                            <input class="form-check-input" type="checkbox" id="personal_expense_check" name="personal_expense" onchange="togglePersonalExpense()">
-                            <label class="form-check-label" for="personal_expense_check">Personal expense</label>
-                        </div>
-                    </div>
-                    <select class="form-select bg-dark text-light" id="split_with" name="split_with" multiple>
-                        {% for user in users %}
-                            <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
-                        {% endfor %}
-                    </select>
-                    <small class="text-muted d-block mt-1">Check "Personal expense" for transactions with no splits, or select people to split with</small>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-12 mb-3">
-                    <label for="split_method" class="form-label">Split Method</label>
-                    <select class="form-control bg-dark text-light" id="split_method" name="split_method" required onchange="toggleSplitOptions()">
-                        <option value="equal">Equal Split Among All</option>
-                        <option value="custom">Custom Amount for Each Person</option>
-                        <option value="percentage">Percentage Split for Each Person</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="mb-3" id="split_value_container" style="display: none;">
-                <label for="split_value" class="form-label">Split Value (Legacy - Deprecated)</label>
-                <input type="number" step="0.01" class="form-control bg-dark text-light" id="split_value" name="split_value">
-                <small class="text-muted">This field is only for backward compatibility.</small>
-            </div>
-            
-            <!-- Custom Split Values Container (Hidden by default) -->
-            <div id="custom_split_container" class="mb-3" style="display: none;">
-                <div class="card bg-dark">
-                    <div class="card-header">
-                        <h5 class="mb-0">Customize Split Values</h5>
-                        <small class="text-muted" id="split_instruction">Set how much each person pays</small>
-                    </div>
-                    <div class="card-body">
-                        <div id="split_values_container">
-                            <!-- Will be populated by JavaScript -->
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center mt-3">
-                            <div>
-                                <span class="text-muted">Total: {{ base_currency.symbol }}<span id="split_total">0.00</span></span>
-                                <span class="ms-2 text-muted">Expense: {{ base_currency.symbol }}<span id="expense_amount">0.00</span></span>
-                            </div>
-                            <div>
-                                <span class="badge bg-success" id="split_status">Balanced</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Hidden input to store the split details as JSON -->
-                <input type="hidden" id="split_details" name="split_details">
-            </div>
-            <div class="mb-3">
-                <label for="category_id" class="form-label">Category</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-dark text-light" id="category-icon-preview">
-                        <i class="fas fa-tag"></i>
-                    </span>
-                    <select class="form-select bg-dark text-light" id="category_id" name="category_id">
-                        <option value="">Select a category</option>
-                        {% for top_category in current_user.categories if not top_category.parent_id %}
-                            <optgroup label="{{ top_category.name }}">
-                                {% for subcat in top_category.subcategories %}
-                                    <option value="{{ subcat.id }}" 
-                                            data-icon="{{ subcat.icon }}" 
-                                            data-color="{{ subcat.color }}">
-                                        {{ subcat.name }}
-                                    </option>
-                                {% endfor %}
-                            </optgroup>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            <!-- Group Selection -->
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="group_id" class="form-label">Group (Optional)</label>
-                    <select class="form-control bg-dark text-light" name="group_id">
-                        <option value="">No Group (Personal Expense)</option>
-                        {% for group in current_user.groups %}
-                            <option value="{{ group.id }}">{{ group.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <label for="tags" class="form-label">Tags (Optional)</label>
-                    <div class="tag-selector">
-                        {% for tag in current_user.tags %}
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input tag-checkbox" type="checkbox" id="tag{{ tag.id }}" name="tags" value="{{ tag.id }}" 
-                                   style="background-color: {{ tag.color }}; border-color: {{ tag.color }};">
-                            <label class="form-check-label" for="tag{{ tag.id }}">{{ tag.name }}</label>
-                        </div>
-                        {% endfor %}
-                        
-                        {% if current_user.tags|length == 0 %}
-                        <p class="text-muted small">No tags created yet. <a href="{{ url_for('manage_tags') }}" class="text-warning">Create tags</a> to categorize expenses.</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            
-            <div class="d-flex justify-content-end">
-                <button type="button" class="btn btn-secondary me-2" onclick="toggleExpenseForm()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Add Expense</button>
-            </div>
-        </form>
-    </div>
-    
-    <!-- Filters Bar -->
+    <!-- Filters Card -->
     <div class="card mb-4">
         <div class="card-header">
             <h5 class="mb-0">Filters</h5>
@@ -188,7 +26,7 @@
         <div class="card-body">
             <form id="filterForm">
                 <div class="row">
-                    <div class="col-md-3 mb-3">
+                    <div class="col-md-4 mb-3">
                         <label class="form-label">Date Range</label>
                         <div class="input-group">
                             <input type="date" class="form-control bg-dark text-light" id="startDate" name="startDate">
@@ -196,88 +34,54 @@
                             <input type="date" class="form-control bg-dark text-light" id="endDate" name="endDate">
                         </div>
                     </div>
-                    <div class="col-md-3 mb-3">
-                        <label class="form-label">Paid By</label>
-                        <select class="form-select bg-dark text-light" id="paidByFilter" name="paidBy">
-                            <option value="all">All Users</option>
-                            {% for user in users %}
-                                <option value="{{ user.id }}">{{ user.name }}</option>
-                            {% endfor %}
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Transaction Type</label>
+                        <select class="form-select bg-dark text-light" id="transactionTypeFilter" name="transactionType">
+                            <option value="all">All Types</option>
+                            <option value="expense">Expenses</option>
+                            <option value="income">Income</option>
+                            <option value="transfer">Transfers</option>
                         </select>
                     </div>
-                    <div class="col-md-3 mb-3">
-                        <label class="form-label">Card Used</label>
-                        <select class="form-select bg-dark text-light" id="cardFilter" name="cardUsed">
-                            <option value="all">All Cards</option>
-                            {% set unique_cards = [] %}
-                            {% for expense in expenses %}
-                                {% if expense.card_used not in unique_cards %}
-                                    {% set _ = unique_cards.append(expense.card_used) %}
-                                    <option value="{{ expense.card_used }}">{{ expense.card_used }}</option>
-                                {% endif %}
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <label class="form-label">Group</label>
-                        <select class="form-select bg-dark text-light" id="groupFilter" name="groupId">
-                            <option value="all">All Groups</option>
-                            <option value="none">No Group</option>
-                            {% for group in current_user.groups %}
-                                <option value="{{ group.id }}">{{ group.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-md-3 mb-3">
-                        <label class="form-label">Amount Range</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-dark text-light">{{ base_currency.symbol }}</span>
-                            <input type="number" class="form-control bg-dark text-light" placeholder="Min" id="minAmount" name="minAmount" step="0.01">
-                            <span class="input-group-text bg-dark text-light">to</span>
-                            <input type="number" class="form-control bg-dark text-light" placeholder="Max" id="maxAmount" name="maxAmount" step="0.01">
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <label class="form-label">Description</label>
-                        <input type="text" class="form-control bg-dark text-light" id="descriptionSearch" name="description" placeholder="Search description...">
-                    </div>
-                    <div class="col-md-3 mb-3">
+                    <div class="col-md-4 mb-3">
                         <label class="form-label">Category</label>
                         <select class="form-select bg-dark text-light" id="categoryFilter" name="categoryId">
                             <option value="all">All Categories</option>
                             <option value="none">Uncategorized</option>
-                            {% for top_category in current_user.categories if not top_category.parent_id %}
-                                <optgroup label="{{ top_category.name }}">
-                                    {% for subcat in top_category.subcategories %}
-                                        <option value="{{ subcat.id }}">{{ subcat.name }}</option>
-                                    {% endfor %}
-                                </optgroup>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <label class="form-label">Tags</label>
-                        <select class="form-select bg-dark text-light" id="tagFilter" name="tagId">
-                            <option value="all">All Tags</option>
-                            <option value="none">No Tags</option>
-                            {% for tag in current_user.tags %}
-                                <option value="{{ tag.id }}" style="color: {{ tag.color }}">{{ tag.name }}</option>
+                            {% for category in categories %}
+                                {% if not category.parent_id %}
+                                    <optgroup label="{{ category.name }}">
+                                        {% for subcat in category.subcategories %}
+                                            <option value="{{ subcat.id }}">{{ subcat.name }}</option>
+                                        {% endfor %}
+                                    </optgroup>
+                                {% endif %}
                             {% endfor %}
                         </select>
                     </div>
                 </div>
                 <div class="row">
-                    <div class="col-md-12 mb-3 d-flex justify-content-end align-items-end">
-                        <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-primary" id="applyFilters">
-                                <i class="fas fa-filter me-2"></i>Apply Filters
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-control bg-dark text-light" id="descriptionFilter" placeholder="Search description...">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Amount Range</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control bg-dark text-light" id="minAmount" placeholder="Min" step="0.01">
+                            <span class="input-group-text bg-dark text-light">to</span>
+                            <input type="number" class="form-control bg-dark text-light" id="maxAmount" placeholder="Max" step="0.01">
+                        </div>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="btn-group w-100">
+                            <button type="button" class="btn btn-primary" id="applyFiltersBtn">
+                                <i class="fas fa-filter me-2"></i>Apply
                             </button>
-                            <button type="button" class="btn btn-secondary" id="clearFilters">
-                                <i class="fas fa-eraser me-2"></i>Clear Filters
+                            <button type="button" class="btn btn-secondary" id="clearFiltersBtn">
+                                <i class="fas fa-eraser me-2"></i>Clear
                             </button>
-                            <button type="button" class="btn btn-success" id="exportData">
+                            <button type="button" class="btn btn-success" id="exportDataBtn">
                                 <i class="fas fa-file-export me-2"></i>Export
                             </button>
                         </div>
@@ -287,1232 +91,1594 @@
         </div>
     </div>
 
-    <!-- All Expenses Table -->
+    <!-- Transactions Table -->
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Transaction History</h5>
-            <div>
-                <span class="badge bg-secondary" id="resultCount">{{ expenses|length }} transactions</span>
-            </div>
+            <span class="badge bg-secondary" id="resultCount">{{ expenses|length }} transactions</span>
         </div>
-        
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table" id="expensesTable">
+                <table class="table" id="transactionsTable">
                     <thead>
                         <tr>
                             <th>Date <i class="fas fa-sort"></i></th>
+                            <th>Type <i class="fas fa-sort"></i></th>
                             <th>Description <i class="fas fa-sort"></i></th>
                             <th>Amount <i class="fas fa-sort"></i></th>
-                            <th>Card Used <i class="fas fa-sort"></i></th>
-                            <th>Group <i class="fas fa-sort"></i></th>
-                            <th>Category <i class="fas fa-sort"></i></th>
-                            <th>Split Details</th>
+                            <th>Account</th>
+                            <th>Category</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% if expenses %}
-                        {% for expense in expenses %}
-                        {% set splits = expense_splits[expense.id] %}
-                        <tr data-expense-id="{{ expense.id }}" data-paid-by="{{ expense.paid_by }}" 
-                            data-category-id="{{ expense.category_id if expense.category_id else 'none' }}"
-                            data-group-id="{{ expense.group_id if expense.group_id else 'none' }}"
-                            data-tags="{{ expense.tags|map(attribute='id')|join(',') }}">
-                            <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
-                            <td>{{ expense.description }}</td>
-                            <td>{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</td>
-                            <td>{{ expense.card_used }}</td>
-                            <td>{{ expense.group.name if expense.group else "-" }}</td>
-                            <td>
-                                {% if expense.category %}
-                                    <span class="badge" style="background-color: {{ expense.category.color }};">
-                                        <i class="fas {{ expense.category.icon }}"></i>
-                                        {{ expense.category.name }}
-                                    </span>
-                                {% else %}
-                                    <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if expense.tags %}
-                                    {% for tag in expense.tags %}
-                                        <span class="badge mb-1" style="background-color: {{ tag.color }};">{{ tag.name }}</span>
-                                    {% endfor %}
-                                {% else %}
-                                    <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-light" type="button" 
-                                        data-bs-toggle="collapse" data-bs-target="#split{{ expense.id }}" 
-                                        aria-expanded="false">
-                                    <i class="fas fa-chevron-down"></i> View Split
-                                </button>
-                                <div class="collapse mt-2" id="split{{ expense.id }}">
-                                    <div class="card card-body bg-dark border-secondary">
-                                        <small class="d-block mb-1">Method: {{ expense.split_method }}</small>
-                                        
-                                        <!-- Payer's share -->
-                                        {% if splits.payer.amount > 0 %}
-                                        <div class="mb-1">
-                                            <span class="badge bg-primary">{{ splits.payer.name }}</span>
-                                            <span class="badge bg-success">{{ base_currency.symbol }}{{ "%.2f"|format(splits.payer.amount) }}</span>
-                                        </div>
+                            {% for expense in expenses %}
+                                {% set splits = expense_splits[expense.id] %}
+                                <tr data-expense-id="{{ expense.id }}" 
+                                    data-transaction-type="{{ expense.transaction_type|default('expense') }}"
+                                    data-category-id="{{ expense.category_id|default('none') }}">
+                                    <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        {% if expense.is_income %}
+                                            <span class="badge bg-success">Income</span>
+                                        {% elif expense.is_transfer %}
+                                            <span class="badge bg-info">Transfer</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Expense</span>
                                         {% endif %}
-                                        
-                                        <!-- Everyone else's share -->
-                                        {% for split in splits.splits %}
-                                        <div class="mb-1">
-                                            <span class="badge bg-primary">{{ split.name }}</span>
-                                            <span class="badge bg-success">{{ base_currency.symbol }}{{ "%.2f"|format(split.amount) }}</span>
+                                    </td>
+                                    <td>{{ expense.description }}</td>
+                                    <td>
+                                        {% if expense.is_income %}
+                                            <span class="text-success">+{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</span>
+                                        {% elif expense.is_expense %}
+                                            <span class="text-danger">-{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</span>
+                                        {% else %}
+                                            <span class="text-info">{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if expense.account %}
+                                            {{ expense.account.name }}
+                                            {% if expense.is_transfer and expense.destination_account %}
+                                                → {{ expense.destination_account.name }}
+                                            {% endif %}
+                                        {% else %}
+                                            {{ expense.card_used }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if expense.category %}
+                                            <span class="badge" style="background-color: {{ expense.category.color }};">
+                                                <i class="fas {{ expense.category.icon }}"></i>
+                                                {{ expense.category.name }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group">
+                                            {% if expense.is_expense %}
+                                                <button class="btn btn-sm btn-outline-secondary view-split-btn" 
+                                                        data-expense-id="{{ expense.id }}">
+                                                    <i class="fas fa-users"></i>
+                                                </button>
+                                            {% endif %}
+                                            <button class="btn btn-sm btn-outline-primary edit-expense-btn" 
+                                                    data-expense-id="{{ expense.id }}">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger delete-expense-btn" 
+                                                    data-expense-id="{{ expense.id }}">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
                                         </div>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" id="actionDropdown{{ expense.id }}" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-ellipsis-v"></i>
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end bg-dark" aria-labelledby="actionDropdown{{ expense.id }}">
-                                        <li><a class="dropdown-item text-light" href="#" onclick="editExpense({{ expense.id }}); return false;"><i class="fas fa-edit me-2"></i>Edit</a></li>
-                                        <li><hr class="dropdown-divider border-secondary"></li>
-                                        <li><a class="dropdown-item text-danger" href="#" onclick="deleteExpense({{ expense.id }}); return false;"><i class="fas fa-trash-alt me-2"></i>Delete</a></li>
-                                    </ul>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
+                                        
+                                        <!-- Split details (hidden by default) -->
+                                        <div class="split-details mt-2" id="split-{{ expense.id }}" style="display: none;">
+                                            <div class="card bg-dark border-secondary">
+                                                <div class="card-body p-2">
+                                                    <div class="mb-1">Split: {{ expense.split_method }}</div>
+                                                    
+                                                    {% if splits.payer.amount > 0 %}
+                                                        <div class="mb-1">
+                                                            <span class="badge bg-primary">{{ splits.payer.name }}</span>
+                                                            <span class="badge bg-success">{{ base_currency.symbol }}{{ "%.2f"|format(splits.payer.amount) }}</span>
+                                                        </div>
+                                                    {% endif %}
+                                                    
+                                                    {% for split in splits.splits %}
+                                                        <div class="mb-1">
+                                                            <span class="badge bg-secondary">{{ split.name }}</span>
+                                                            <span class="badge bg-success">{{ base_currency.symbol }}{{ "%.2f"|format(split.amount) }}</span>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="9" class="text-center">No transactions found</td>
+                                <td colspan="7" class="text-center">No transactions found</td>
                             </tr>
                         {% endif %}
                     </tbody>
                 </table>
             </div>
         </div>
-        
-        <!-- Pagination -->
-        <div class="card-footer">
-            <nav aria-label="Transaction pagination">
-                <ul class="pagination justify-content-center mb-0">
-                    <li class="page-item disabled">
-                        <a class="page-link bg-dark border-secondary" href="#" tabindex="-1" aria-disabled="true">Previous</a>
-                    </li>
-                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
-                    <li class="page-item"><a class="page-link bg-dark border-secondary" href="#">2</a></li>
-                    <li class="page-item"><a class="page-link bg-dark border-secondary" href="#">3</a></li>
-                    <li class="page-item">
-                        <a class="page-link bg-dark border-secondary" href="#">Next</a>
-                    </li>
-                </ul>
-            </nav>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Deletion</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this transaction? This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
         </div>
     </div>
 </div>
+
+<!-- Slide panel overlay (shared) -->
+<div id="slide-panel-overlay" class="slide-panel-overlay"></div>
+
 {% endblock %}
+
 {% block scripts %}
 <script>
-const categorySelect = document.getElementById('category_id');
-const categoryIconPreview = document.getElementById('category-icon-preview');
+    // Store current expense ID for deletion
+    let currentExpenseId = null;
+    let baseCurrencySymbol = '{{ base_currency.symbol }}';
 
-if (categorySelect && categoryIconPreview) {
-    categorySelect.addEventListener('change', function() {
-        const selectedOption = this.options[this.selectedIndex];
-        if (selectedOption.value) {
-            const icon = selectedOption.getAttribute('data-icon');
-            const color = selectedOption.getAttribute('data-color');
-            categoryIconPreview.innerHTML = `<i class="fas ${icon}" style="color: ${color};"></i>`;
-        } else {
-            categoryIconPreview.innerHTML = `<i class="fas fa-tag"></i>`;
-        }
-    });
-}
-
-const baseCurrencySymbol = "{{ base_currency.symbol }}";
-
-// Document ready - initialize all components and event handlers
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize today's date
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Set date field for new expense form
-    const dateInput = document.getElementById('date');  
-    if (dateInput) {
-        dateInput.value = today;
-    }
-    
-    // Initialize tag checkboxes
-    initializeTagCheckboxes();
-    
-    // Set default date range for filters (last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const startDateInput = document.getElementById('startDate');
-    const endDateInput = document.getElementById('endDate');
-    
-    if (startDateInput && endDateInput) {
-        startDateInput.value = thirtyDaysAgo.toISOString().split('T')[0];
-        endDateInput.value = today;
-    }
-    
-    // Toggle expense form visibility
-    const toggleButton = document.getElementById('toggleExpenseForm');
-    if (toggleButton) {
-        toggleButton.addEventListener('click', toggleExpenseForm);
-    }
-    
-    // Initialize personal expense checkbox 
-    const personalExpenseCheck = document.getElementById('personal_expense_check');
-    if (personalExpenseCheck) {
-        personalExpenseCheck.addEventListener('change', togglePersonalExpense);
-    }
-    
-    // Initialize filter buttons
-    const applyFiltersButton = document.getElementById('applyFilters');
-    if (applyFiltersButton) {
-        applyFiltersButton.addEventListener('click', applyFilters);
-    }
-    
-    const clearFiltersButton = document.getElementById('clearFilters');
-    if (clearFiltersButton) {
-        clearFiltersButton.addEventListener('click', clearFilters);
-    }
-    
-    // Initialize export button
-    const exportButton = document.getElementById('exportData');
-    if (exportButton) {
-        exportButton.addEventListener('click', exportTransactions);
-    }
-    
-    // Initialize multiselect dropdown for split_with
-    initializeMultiSelect();
-    
-    // Handle amount field changes
-    const amountInput = document.getElementById('amount');
-    if (amountInput) {
-        amountInput.addEventListener('input', updateSplitValues);
-    }
-    
-    // Handle paid_by changes
-    const paidBySelect = document.getElementById('paid_by');
-    if (paidBySelect) {
-        paidBySelect.addEventListener('change', function() {
-            // Update the split_with options when payer changes
-            updateSplitWithOptions();
-            // Update split values if needed
-            updateSplitValues();
-        });
-    }
-    
-    // Make table headers sortable
-    const tableHeaders = document.querySelectorAll('#expensesTable th');
-    tableHeaders.forEach(header => {
-        const sortIcon = header.querySelector('.fa-sort');
-        if (sortIcon) {
-            header.style.cursor = 'pointer';
-            header.addEventListener('click', function() {
-                sortTable(header);
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize date fields
+        initializeDates();
+        
+        // Set up event handlers for filter buttons
+        setupFilterButtons();
+        
+        // Set up event handlers for transaction actions
+        setupActionButtons();
+        
+        // Set up add transaction button
+        const openAddTransactionBtn = document.getElementById('openAddTransactionBtn');
+        if (openAddTransactionBtn) {
+            openAddTransactionBtn.addEventListener('click', function() {
+                openAddTransactionPanel();
             });
         }
-    });
-    
-    // Handle form submission for validation
-    const expenseAddForm = document.querySelector('form[action*="add_expense"]');
-    if (expenseAddForm) {
-        expenseAddForm.addEventListener('submit', function(e) {
-            const splitWithSelect = document.getElementById('split_with');
-            const personalExpenseCheck = document.getElementById('personal_expense_check');
-            
-            // If personal expense is checked, we don't need to validate split_with
-            if (personalExpenseCheck && personalExpenseCheck.checked) {
-                return true;
+        const sourceAccountSelect = document.getElementById('edit_account_id');
+    if (sourceAccountSelect) {
+        sourceAccountSelect.addEventListener('change', function() {
+            // Only update if the transaction type is transfer
+            const transactionType = document.getElementById('edit_transaction_type')?.value;
+            if (transactionType === 'transfer') {
+                updateDestinationAccountOptions();
             }
-            
-            // For shared expenses, ensure at least one person is selected in split_with
-            if (splitWithSelect && splitWithSelect.selectedOptions.length === 0) {
-                e.preventDefault();
-                alert('Please select at least one person to split with or check "Personal expense"');
-                return false;
-            }
-            
-            // For non-personal expenses, ensure the split details are valid
-            const splitMethod = document.getElementById('split_method').value;
-            if (splitMethod !== 'equal') {
-                // Trigger input event on the first split value input to update the hidden field
-                const firstInput = document.querySelector('.split-value-input');
-                if (firstInput) {
-                    firstInput.dispatchEvent(new Event('input'));
-                }
-                
-                // Validate totals
-                const splitStatus = document.getElementById('split_status');
-                if (splitStatus && splitStatus.textContent !== 'Balanced') {
-                    e.preventDefault();
-                    alert('Your split values must balance with the expense amount before saving.');
-                    return false;
-                }
-            }
-            return true;
         });
     }
     
-    // Initialize split options if the split method select exists
-    const splitMethodSelect = document.getElementById('split_method');
-    if (splitMethodSelect) {
-        splitMethodSelect.addEventListener('change', toggleSplitOptions);
-        // Initialize split options based on current value
-        toggleSplitOptions();
+    // Setup transaction type change listener
+    const transactionTypeSelect = document.getElementById('edit_transaction_type');
+    if (transactionTypeSelect) {
+        transactionTypeSelect.addEventListener('change', handleEditTransactionTypeChange);
+        
+        // Initialize form state based on initial transaction type
+        setTimeout(() => {
+            handleEditTransactionTypeChange();
+        }, 100);
     }
-
-    // Apply filters on page load to initialize the view
-    applyFilters();
-});
-
-// Function to handle editing an expense
-function editExpense(expenseId) {
-    // Make an AJAX call to get the expense data
-    fetch(`/get_expense/${expenseId}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Failed to retrieve expense data');
+        // Apply filters on page load
+        applyFilters();
+    });
+    
+    // Initialize date inputs with sensible defaults
+    function initializeDates() {
+        const today = new Date();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        
+        const endDateInput = document.getElementById('endDate');
+        const startDateInput = document.getElementById('startDate');
+        
+        if (endDateInput) {
+            endDateInput.value = today.toISOString().split('T')[0];
+        }
+        
+        if (startDateInput) {
+            startDateInput.value = thirtyDaysAgo.toISOString().split('T')[0];
+        }
+    }
+    
+    // Set up filter buttons
+    function setupFilterButtons() {
+        const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+        if (applyFiltersBtn) {
+            applyFiltersBtn.addEventListener('click', applyFilters);
+        }
+        
+        const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+        if (clearFiltersBtn) {
+            clearFiltersBtn.addEventListener('click', clearFilters);
+        }
+        
+        const exportDataBtn = document.getElementById('exportDataBtn');
+        if (exportDataBtn) {
+            exportDataBtn.addEventListener('click', exportTransactions);
+        }
+        
+        const bulkCategorizeBtn = document.getElementById('bulkCategorizeBtn');
+        if (bulkCategorizeBtn) {
+            bulkCategorizeBtn.addEventListener('click', bulkCategorize);
+        }
+    }
+    
+    // Set up action buttons for transactions
+    function setupActionButtons() {
+        // View split details buttons
+        document.querySelectorAll('.view-split-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const expenseId = this.getAttribute('data-expense-id');
+                if (expenseId) {
+                    const splitDetails = document.getElementById(`split-${expenseId}`);
+                    if (splitDetails) {
+                        splitDetails.style.display = splitDetails.style.display === 'none' ? 'block' : 'none';
+                    }
+                }
+            });
+        });
+        
+        // Edit expense buttons
+        document.querySelectorAll('.edit-expense-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const expenseId = this.getAttribute('data-expense-id');
+                if (expenseId) {
+                    openEditTransactionPanel(expenseId);
+                }
+            });
+        });
+        
+        // Delete expense buttons
+        document.querySelectorAll('.delete-expense-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const expenseId = this.getAttribute('data-expense-id');
+                if (expenseId) {
+                    showDeleteConfirmation(expenseId);
+                }
+            });
+        });
+        
+        // Confirm delete button
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        if (confirmDeleteBtn) {
+            confirmDeleteBtn.addEventListener('click', function() {
+                if (currentExpenseId) {
+                    deleteExpense(currentExpenseId);
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+                }
+            });
+        }
+    }
+    
+    function showDeleteConfirmation(expenseId) {
+    // Store the expense ID
+    currentExpenseId = expenseId;
+    
+    // Find the expense description for better UX
+    const row = document.querySelector(`tr[data-expense-id="${expenseId}"]`);
+    const description = row ? row.cells[2].textContent.trim() : 'this transaction';
+    
+    // Create toast container if it doesn't exist
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Create unique ID for this toast
+    const toastId = `delete-toast-${Date.now()}`;
+    
+    // Create the confirm delete toast with buttons
+    const toastHtml = `
+        <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
+            <div class="toast-header bg-danger text-white">
+                <strong class="me-auto"><i class="fas fa-trash me-2"></i>Confirm Deletion</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                <p>Are you sure you want to delete "${description}"?</p>
+                <p class="text-danger small mb-2">This action cannot be undone.</p>
+                <div class="mt-2 pt-2 border-top d-flex justify-content-end">
+                    <button type="button" class="btn btn-secondary btn-sm me-2" data-bs-dismiss="toast">Cancel</button>
+                    <button type="button" class="btn btn-danger btn-sm delete-confirm-btn">Delete</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add the toast to the container
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    
+    // Get the toast element
+    const toastEl = document.getElementById(toastId);
+    
+    // Add delete confirmation button handler
+    toastEl.querySelector('.delete-confirm-btn').addEventListener('click', function() {
+        // Hide the toast
+        const bsToast = bootstrap.Toast.getInstance(toastEl);
+        if (bsToast) bsToast.hide();
+        
+        // Delete the expense
+        deleteExpense(currentExpenseId);
+    });
+    
+    // Initialize and show the toast
+    const toast = new bootstrap.Toast(toastEl);
+    toast.show();
+    
+    // Clean up the toast element when hidden
+    toastEl.addEventListener('hidden.bs.toast', function() {
+        toastEl.remove();
+    });
+}
+    
+    // Delete expense
+    function deleteExpense(expenseId) {
+        // Show loading state on the row
+        const row = document.querySelector(`tr[data-expense-id="${expenseId}"]`);
+        if (row) {
+            row.classList.add('deleting');
+            row.style.opacity = '0.5';
+        }
+        
+        fetch(`/delete_expense/${expenseId}`, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
             }
-            return response.json();
         })
+        .then(response => response.json())
         .then(data => {
             if (data.success) {
-                populateEditForm(data.expense);
+                // Remove row with animation
+                if (row) {
+                    row.style.height = row.offsetHeight + 'px';
+                    row.style.transition = 'all 0.3s ease-out';
+                    
+                    setTimeout(() => {
+                        row.style.height = '0';
+                        row.style.opacity = '0';
+                        row.style.overflow = 'hidden';
+                        
+                        // Remove row after animation
+                        setTimeout(() => {
+                            row.remove();
+                            
+                            // Update the counter
+                            const resultCount = document.getElementById('resultCount');
+                            if (resultCount) {
+                                const count = parseInt(resultCount.textContent);
+                                if (!isNaN(count)) {
+                                    resultCount.textContent = (count - 1) + ' transactions';
+                                }
+                            }
+                        }, 300);
+                    }, 100);
+                }
             } else {
-                alert(data.message || 'Failed to load expense data');
+                // Show error and reset row
+                showMessage(data.message || 'Failed to delete transaction', 'error');
+                if (row) {
+                    row.classList.remove('deleting');
+                    row.style.opacity = '1';
+                }
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert(`Error loading expense data: ${error.message}`);
+            showMessage('Error deleting transaction: ' + error.message, 'error');
+            
+            // Reset row
+            if (row) {
+                row.classList.remove('deleting');
+                row.style.opacity = '1';
+            }
         });
+    }
+    
+    // Apply filters to transactions table
+    function applyFilters() {
+        const startDate = document.getElementById('startDate')?.value;
+        const endDate = document.getElementById('endDate')?.value;
+        const transactionType = document.getElementById('transactionTypeFilter')?.value || 'all';
+        const categoryId = document.getElementById('categoryFilter')?.value || 'all';
+        const description = (document.getElementById('descriptionFilter')?.value || '').toLowerCase();
+        const minAmount = document.getElementById('minAmount')?.value;
+        const maxAmount = document.getElementById('maxAmount')?.value;
+        
+        let visibleCount = 0;
+        
+        // Get all rows
+        const rows = document.querySelectorAll('#transactionsTable tbody tr[data-expense-id]');
+        if (!rows.length) return;
+        
+        rows.forEach(row => {
+            const rowDate = row.cells[0].textContent.trim();
+            const rowType = row.querySelector('.badge')?.textContent.toLowerCase() || '';
+            const rowDescription = row.cells[2].textContent.trim().toLowerCase();
+            const rowCategory = row.getAttribute('data-category-id') || 'none';
+            
+            // Extract amount from the amount cell (removing currency symbol and formatting)
+            const amountText = row.cells[3].textContent.trim();
+            const rowAmount = parseFloat(amountText.replace(/[^\d.-]/g, '')) || 0;
+            
+            let visible = true;
+            
+            // Date filter
+            if (startDate && new Date(rowDate) < new Date(startDate)) visible = false;
+            if (endDate && new Date(rowDate) > new Date(endDate)) visible = false;
+            
+            // Transaction type filter
+            if (transactionType !== 'all') {
+                if (transactionType === 'expense' && !rowType.includes('expense')) visible = false;
+                if (transactionType === 'income' && !rowType.includes('income')) visible = false;
+                if (transactionType === 'transfer' && !rowType.includes('transfer')) visible = false;
+            }
+            
+            // Category filter
+            if (categoryId === 'none' && rowCategory !== 'none') visible = false;
+            if (categoryId !== 'all' && categoryId !== 'none' && rowCategory !== categoryId) visible = false;
+            
+            // Description filter
+            if (description && !rowDescription.includes(description)) visible = false;
+            
+            // Amount filter
+            if (minAmount && !isNaN(parseFloat(minAmount)) && Math.abs(rowAmount) < parseFloat(minAmount)) visible = false;
+            if (maxAmount && !isNaN(parseFloat(maxAmount)) && Math.abs(rowAmount) > parseFloat(maxAmount)) visible = false;
+            
+            // Show/hide row
+            row.style.display = visible ? '' : 'none';
+            if (visible) visibleCount++;
+        });
+        
+        // Update result count
+        const resultCountEl = document.getElementById('resultCount');
+        if (resultCountEl) {
+            resultCountEl.textContent = `${visibleCount} transaction${visibleCount !== 1 ? 's' : ''}`;
+        }
+        
+        // Show/hide the "no results" message
+        const tbody = document.querySelector('#transactionsTable tbody');
+        let noResultsRow = document.querySelector('#transactionsTable tbody tr.no-results');
+        
+        if (visibleCount === 0) {
+            // Add "no results" row if none exists
+            if (!noResultsRow && tbody) {
+                noResultsRow = document.createElement('tr');
+                noResultsRow.className = 'no-results';
+                noResultsRow.innerHTML = '<td colspan="7" class="text-center">No transactions match your filters</td>';
+                tbody.appendChild(noResultsRow);
+            }
+        } else if (noResultsRow) {
+            // Remove "no results" row if we have visible rows
+            noResultsRow.remove();
+        }
+    }
+    
+    // Clear all filters
+    function clearFilters() {
+        // Reset filter form fields
+        const form = document.getElementById('filterForm');
+        if (form) form.reset();
+        
+        // Re-initialize date range
+        initializeDates();
+        
+        // Apply the cleared filters
+        applyFilters();
+    }
+    
+    // Export transactions as CSV
+    function exportTransactions() {
+        // Collect filter data from form
+        const filters = {
+            startDate: document.getElementById('startDate')?.value,
+            endDate: document.getElementById('endDate')?.value,
+            transactionType: document.getElementById('transactionTypeFilter')?.value,
+            categoryId: document.getElementById('categoryFilter')?.value,
+            minAmount: document.getElementById('minAmount')?.value,
+            maxAmount: document.getElementById('maxAmount')?.value,
+            description: document.getElementById('descriptionFilter')?.value
+        };
+
+        // Show loading state
+        const exportBtn = document.getElementById('exportDataBtn');
+        if (exportBtn) {
+            exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Exporting...';
+            exportBtn.disabled = true;
+        }
+
+        // Perform AJAX request to export
+        fetch('/export_transactions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(filters)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Export failed');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            // Create a download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+            a.href = url;
+            a.download = `transactions_${timestamp}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            console.error('Export error:', error);
+            showMessage('Failed to export transactions. Please try again.', 'error');
+        })
+        .finally(() => {
+            // Reset button state
+            if (exportBtn) {
+                exportBtn.innerHTML = '<i class="fas fa-file-export me-2"></i>Export';
+                exportBtn.disabled = false;
+            }
+        });
+    }
+    
+    // Bulk categorize transactions
+    
+    // Bulk categorize transactions
+function bulkCategorize() {
+    // Show a confirmation toast instead of browser alert
+    showMessage('This will attempt to categorize all uncategorized transactions based on your category mapping rules.', 'warning', {
+        autoHide: false,
+        actionButtons: [
+            {
+                text: 'Cancel',
+                class: 'btn-outline-secondary',
+                onClick: function(toast) {
+                    // Just close the toast
+                    toast.hide();
+                }
+            },
+            {
+                text: 'Continue',
+                class: 'btn-warning',
+                onClick: function(toast) {
+                    toast.hide();
+                    performBulkCategorization();
+                }
+            }
+        ]
+    });
 }
 
-// Function to populate the edit form with expense data
-function populateEditForm(expense) {
-    // Toggle the form to edit mode
-    const form = document.getElementById('expenseFormContainer');
-    const toggleButton = document.getElementById('toggleExpenseForm');
+// Function to perform the actual categorization
+    // Function to perform the actual categorization
+function performBulkCategorization() {
+    // Show loading state
+    const bulkBtn = document.getElementById('bulkCategorizeBtn');
+    if (bulkBtn) {
+        bulkBtn.disabled = true;
+        bulkBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Categorizing...';
+    }
     
-    if (form && toggleButton) {
-        // Show the form
-        form.style.display = 'block';
-        toggleButton.innerHTML = '<i class="fas fa-times me-2"></i>Cancel';
-        toggleButton.classList.replace('btn-primary', 'btn-secondary');
+    // Perform AJAX request
+    fetch('/bulk_categorize_transactions', {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Bulk categorization failed');
+        }
+        // Just get the response text instead of expecting JSON
+        return response.text();
+    })
+    .then(data => {
+        // Show success message
+        showMessage('Auto-categorization complete! Page will reload to show changes.', 'success', {
+            autoHide: true,
+            delay: 3000,
+            onClose: function() {
+                // Reload page to show changes
+                window.location.reload();
+            }
+        });
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showMessage(`Error during categorization: ${error.message}`, 'error');
         
-        // Change form action to update route instead of add
-        const formElement = form.querySelector('form');
-        if (formElement) {
-            formElement.action = `/update_expense/${expense.id}`;
+        // Reset button state
+        if (bulkBtn) {
+            bulkBtn.disabled = false;
+            bulkBtn.innerHTML = '<i class="fas fa-tags me-2"></i>Auto-Categorize';
+        }
+    });
+}
+    // Show a message toast
+    function showMessage(message, type = 'success', options = {}) {
+    // Default options
+    const defaultOptions = {
+        autoHide: true,
+        delay: 5000,
+        actionButtons: [],
+        onClose: null
+    };
+    
+    // Merge options
+    const finalOptions = {...defaultOptions, ...options};
+    
+    // Check if we can use Bootstrap toast
+    if (typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+        // Create toast container if it doesn't exist
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+        
+        // Create toast
+        const toastId = `toast-${Date.now()}`;
+        const iconClass = type === 'error' ? 'fa-exclamation-circle' : 
+                          type === 'warning' ? 'fa-exclamation-triangle' : 'fa-check-circle';
+        const bgColor = type === 'error' ? 'bg-danger' : 
+                        type === 'warning' ? 'bg-warning text-dark' : 'bg-success';
+        
+        // Create action buttons HTML if provided
+        let actionButtonsHtml = '';
+        if (finalOptions.actionButtons && finalOptions.actionButtons.length > 0) {
+            actionButtonsHtml = `
+                <div class="mt-2 pt-2 border-top d-flex justify-content-end">
+                    ${finalOptions.actionButtons.map(btn => 
+                        `<button type="button" class="btn ${btn.class || 'btn-secondary'} btn-sm me-2 action-btn" 
+                            data-action="${btn.text}">${btn.text}</button>`
+                    ).join('')}
+                </div>
+            `;
+        }
+        
+        // Create toast HTML
+        const toastHtml = `
+            <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true" 
+                ${finalOptions.autoHide ? `data-bs-delay="${finalOptions.delay}"` : 'data-bs-autohide="false"'}>
+                <div class="toast-header ${bgColor} ${type !== 'warning' ? 'text-white' : ''}">
+                    <i class="fas ${iconClass} me-2"></i>
+                    <strong class="me-auto">${type.charAt(0).toUpperCase() + type.slice(1)}</strong>
+                    <button type="button" class="btn-close ${type !== 'warning' ? 'btn-close-white' : ''}" 
+                        data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                    ${actionButtonsHtml}
+                </div>
+            </div>
+        `;
+        
+        // Add toast to container
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        
+        // Get toast element
+        const toastEl = document.getElementById(toastId);
+        
+        // Add action button event listeners
+        if (finalOptions.actionButtons && finalOptions.actionButtons.length > 0) {
+            const actionBtns = toastEl.querySelectorAll('.action-btn');
+            actionBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const actionText = this.getAttribute('data-action');
+                    const actionBtn = finalOptions.actionButtons.find(b => b.text === actionText);
+                    
+                    if (actionBtn && typeof actionBtn.onClick === 'function') {
+                        // Create toast instance reference to pass to handlers
+                        const bsToast = bootstrap.Toast.getInstance(toastEl);
+                        actionBtn.onClick(bsToast);
+                    }
+                });
+            });
+        }
+        
+        // Initialize and show toast
+        const toast = new bootstrap.Toast(toastEl);
+        toast.show();
+        
+        // Handle close event
+        toastEl.addEventListener('hidden.bs.toast', function() {
+            if (typeof finalOptions.onClose === 'function') {
+                finalOptions.onClose();
+            }
+            // Remove toast from DOM
+            toastEl.remove();
+        });
+        
+        return toast;
+    } else {
+        // Fallback to alert
+        alert(message);
+        
+        // Call onClose if provided
+        if (typeof finalOptions.onClose === 'function') {
+            finalOptions.onClose();
+        }
+    }
+}
+    
+
+function openAddTransactionPanel() {
+    // Create the slide panel first
+    const panel = openSlidePanel('addTransactionPanel', {
+        title: 'Add New Transaction',
+        icon: 'fa-plus',
+        iconColor: '#0ea5e9',
+        loadingContent: '<div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>'
+    });
+    
+    // Then fetch the form contents
+    fetch('/get_transaction_form_html')
+        .then(response => response.text())
+        .then(html => {
+            const contentDiv = panel.querySelector('.slide-panel-content');
+            if (contentDiv) {
+                contentDiv.innerHTML = html;
+                
+                // Initialize date with today's date
+                const dateInput = document.getElementById('date');
+                if (dateInput) {
+                    dateInput.value = new Date().toISOString().split('T')[0];
+                }
+                
+                // Set up event listeners for form controls
+                setupAddTransactionFormListeners();
+                
+                // Make split_with select user-friendly (no need for Ctrl+click)
+                initializeSelectWithoutCtrl('split_with');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading form:', error);
+            showMessage('Error loading transaction form. Please try again.', 'error');
+        });
+}
+    
+    // Open Edit Transaction Panel
+function openEditTransactionPanel(expenseId) {
+    // Show a loading panel first
+    const panel = openSlidePanel('editTransactionPanel', {
+        title: 'Edit Transaction',
+        icon: 'fa-edit',
+        iconColor: '#0ea5e9',
+        loadingContent: '<div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>'
+    });
+    
+    // Fetch expense data
+    fetch(`/get_expense_edit_form/${expenseId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to retrieve expense data');
+            }
+            return response.text();
+        })
+        .then(html => {
+            const contentDiv = panel.querySelector('.slide-panel-content');
+            if (contentDiv) {
+                contentDiv.innerHTML = html;
+                
+                // Set up event listeners
+                setupEditTransactionFormListeners();
+                
+                // Make split_with select user-friendly (no need for Ctrl+click)
+                initializeSelectWithoutCtrl('edit_split_with');
+                
+                // Initialize UI state based on data
+                toggleEditPersonalExpense();
+                toggleEditSplitOptions();
+                
+                // Setup form submission
+                const editForm = document.getElementById('editTransactionForm');
+                if (editForm) {
+                    editForm.addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        logFormValues(); // Add this line
+                        submitEditForm(this, expenseId);
+                    });
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showMessage(`Error loading expense data: ${error.message}`, 'error');
+            closeSlidePanel('editTransactionPanel');
+        });
+}
+    
+    // Populate edit panel with expense data
+    function populateEditPanel(expense, expenseId) {
+        // Create edit form HTML
+        const formHtml = `
+            <form method="POST" action="/update_expense/${expenseId}" id="editTransactionForm">
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label for="edit_description" class="form-label">Description</label>
+                        <input type="text" class="form-control bg-dark text-light" id="edit_description" name="description" value="${expense.description || ''}" required>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="edit_amount" class="form-label">Amount (${baseCurrencySymbol})</label>
+                        <input type="number" step="0.01" class="form-control bg-dark text-light" id="edit_amount" name="amount" value="${expense.amount || 0}" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="edit_date" class="form-label">Date</label>
+                        <input type="date" class="form-control bg-dark text-light" id="edit_date" name="date" value="${expense.date || ''}" required>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="edit_category_id" class="form-label">Category</label>
+                        <select class="form-select bg-dark text-light" id="edit_category_id" name="category_id">
+                            <option value="">Select a category</option>
+                            {% for category in categories %}
+                                {% if not category.parent_id %}
+                                    <optgroup label="{{ category.name }}">
+                                        {% for subcat in category.subcategories %}
+                                            <option value="{{ subcat.id }}" 
+                                                    data-icon="{{ subcat.icon }}" 
+                                                    data-color="{{ subcat.color }}"
+                                                    ${expense.category_id == {{ subcat.id }} ? 'selected' : ''}>
+                                                {{ subcat.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </optgroup>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="edit_paid_by" class="form-label">Paid By</label>
+                        <select class="form-select bg-dark text-light" id="edit_paid_by" name="paid_by">
+                            {% for user in users %}
+                                <option value="{{ user.id }}" ${expense.paid_by == "{{ user.id }}" ? 'selected' : ''}>
+                                    {{ user.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="edit_group_id" class="form-label">Group (Optional)</label>
+                        <select class="form-select bg-dark text-light" id="edit_group_id" name="group_id">
+                            <option value="">No Group (Personal Transaction)</option>
+                            {% for group in groups %}
+                                <option value="{{ group.id }}" ${expense.group_id == {{ group.id }} ? 'selected' : ''}>
+                                    {{ group.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check form-switch mt-4">
+                            <input class="form-check-input" type="checkbox" id="edit_personal_expense" name="personal_expense" ${!expense.split_with || expense.split_with.length === 0 ? 'checked' : ''}>
+                            <label class="form-check-label" for="edit_personal_expense">Personal expense (no splitting)</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="edit-expense-only-fields">
+                    <div class="mb-3">
+                        <label for="edit_split_with" class="form-label">Split With</label>
+                        <select class="form-select bg-dark text-light" id="edit_split_with" name="split_with" multiple>
+                            {% for user in users %}
+                                <option value="{{ user.id }}">{{ user.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_split_method" class="form-label">Split Method</label>
+                        <select class="form-select bg-dark text-light" id="edit_split_method" name="split_method" required>
+                            <option value="equal" ${expense.split_method === 'equal' ? 'selected' : ''}>Equal Split Among All</option>
+                            <option value="percentage" ${expense.split_method === 'percentage' ? 'selected' : ''}>Percentage Split for Each Person</option>
+                            <option value="custom" ${expense.split_method === 'custom' ? 'selected' : ''}>Custom Amount for Each Person</option>
+                        </select>
+                    </div>
+                    
+                    <div id="edit_custom_split_container" style="display: none;" class="mb-3">
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-header">
+                                <h5 class="mb-0">Split Values</h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="edit_split_values_container"></div>
+                                <div class="d-flex justify-content-between mt-3">
+                                    <span>Total: ${baseCurrencySymbol}<span id="edit_split_total">0.00</span></span>
+                                    <span class="badge bg-success" id="edit_split_status">Balanced</span>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="edit_split_details" name="split_details" value='${expense.split_details || ""}'>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-end mt-3">
+                    <button type="button" class="btn btn-secondary me-2" onclick="closeSlidePanel('editTransactionPanel')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        `;
+        
+        // Update the panel content
+        const slidePanelContent = document.querySelector('#editTransactionPanel .slide-panel-content');
+        if (slidePanelContent) {
+            slidePanelContent.innerHTML = formHtml;
+        }
+        
+        // Set category and select values
+        setTimeout(() => {
+            const categorySelect = document.getElementById('edit_category_id');
+            if (categorySelect) {
+                for (let i = 0; i < categorySelect.options.length; i++) {
+                    if (categorySelect.options[i].value == expense.category_id) {
+                        categorySelect.options[i].selected = true;
+                        break;
+                    }
+                }
+            }
             
-            // Set form fields
-            formElement.querySelector('#description').value = expense.description;
-            formElement.querySelector('#amount').value = expense.amount;
-            formElement.querySelector('#date').value = expense.date;
-            formElement.querySelector('#card_used').value = expense.card_used;
-            
-            // Set paid_by dropdown
-            const paidBySelect = formElement.querySelector('#paid_by');
+            // Set paid by
+            const paidBySelect = document.getElementById('edit_paid_by');
             if (paidBySelect) {
                 for (let i = 0; i < paidBySelect.options.length; i++) {
-                    if (paidBySelect.options[i].value === expense.paid_by) {
+                    if (paidBySelect.options[i].value == expense.paid_by) {
                         paidBySelect.options[i].selected = true;
                         break;
                     }
                 }
             }
             
-            // Set split_method dropdown
-            const splitMethodSelect = formElement.querySelector('#split_method');
-            if (splitMethodSelect) {
-                splitMethodSelect.value = expense.split_method;
-            }
-            
-            // Set split_value if applicable
-            const splitValueInput = formElement.querySelector('#split_value');
-            if (splitValueInput && expense.split_value) {
-                splitValueInput.value = expense.split_value;
-            }
-            
-            // Set split_details if applicable
-            const splitDetailsInput = formElement.querySelector('#split_details');
-            if (splitDetailsInput && expense.split_details) {
-                splitDetailsInput.value = expense.split_details;
-            }
-            
-            // Set personal expense checkbox based on whether there's split_with
-            const personalExpenseCheck = formElement.querySelector('#personal_expense_check');
-            if (personalExpenseCheck) {
-                personalExpenseCheck.checked = !expense.split_with || expense.split_with.length === 0;
-                togglePersonalExpense(); // Update the UI based on checkbox state
-            }
-            
-            // Handle split_with multiselect
-            const splitWithSelect = formElement.querySelector('#split_with');
-            if (splitWithSelect) {
-                // First, deselect all options
+            // Set split with (multi-select)
+            const splitWithSelect = document.getElementById('edit_split_with');
+            if (splitWithSelect && expense.split_with) {
+                const splitWithIds = Array.isArray(expense.split_with) ? 
+                    expense.split_with : expense.split_with.split(',');
+                
                 for (let i = 0; i < splitWithSelect.options.length; i++) {
-                    splitWithSelect.options[i].selected = false;
+                    splitWithSelect.options[i].selected = splitWithIds.includes(splitWithSelect.options[i].value);
                 }
+            }
+            
+            // Setup event listeners
+            setupEditTransactionFormListeners();
+            
+            // Initialize UI state based on data
+            toggleEditPersonalExpense();
+            toggleEditSplitOptions();
+            
+            // Setup form submission
+            const editForm = document.getElementById('editTransactionForm');
+            if (editForm) {
+                editForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    submitEditForm(this, expenseId);
+                });
+            }
+        }, 100);
+    }
+    function logFormValues() {
+            const categorySelect = document.getElementById('edit_category_id');
+            const formElement = document.getElementById('editTransactionForm');
+            
+            if (categorySelect && formElement) {
+                console.log('Current category ID value:', categorySelect.value);
+                console.log('Form has category_id field:', formElement.elements['category_id'] !== undefined);
+            }
+    }
+    // Setup event listeners for add transaction form
+    function setupAddTransactionFormListeners() {
+        // Transaction type change handler
+        const transactionTypeSelect = document.getElementById('transaction_type');
+        if (transactionTypeSelect) {
+            transactionTypeSelect.addEventListener('change', handleTransactionTypeChange);
+            // Initialize UI based on default transaction type
+            handleTransactionTypeChange();
+        }
+        
+        // Personal expense toggle
+        const personalExpenseCheck = document.getElementById('personal_expense');
+        if (personalExpenseCheck) {
+            personalExpenseCheck.addEventListener('change', togglePersonalExpense);
+        }
+        
+        // Split method change handler
+        const splitMethodSelect = document.getElementById('split_method');
+        if (splitMethodSelect) {
+            splitMethodSelect.addEventListener('change', toggleSplitOptions);
+        }
+        
+        // Amount field change handler
+        const amountField = document.getElementById('amount');
+        if (amountField) {
+            amountField.addEventListener('input', function() {
+                // Only update split values if a split method is selected
+                const splitMethod = document.getElementById('split_method')?.value;
+                if (splitMethod && splitMethod !== 'equal') {
+                    updateSplitValues();
+                }
+            });
+        }
+        
+        // Paid by change handler
+        const paidBySelect = document.getElementById('paid_by');
+        if (paidBySelect) {
+            paidBySelect.addEventListener('change', function() {
+                updateSplitWithOptions();
                 
-                // Then select only the ones in the expense.split_with array
-                if (expense.split_with && expense.split_with.length > 0) {
-                    for (let i = 0; i < splitWithSelect.options.length; i++) {
-                        if (expense.split_with.includes(splitWithSelect.options[i].value)) {
-                            splitWithSelect.options[i].selected = true;
-                        }
-                    }
+                // Only update split values if a split method is selected
+                const splitMethod = document.getElementById('split_method')?.value;
+                if (splitMethod && splitMethod !== 'equal') {
+                    updateSplitValues();
                 }
-                
-                // If we have a custom multiselect initialized, update it
-                if (typeof initializeMultiSelect === 'function') {
-                    initializeMultiSelect(true);
+            });
+        }
+        
+        // Split with change handler
+        const splitWithSelect = document.getElementById('split_with');
+        if (splitWithSelect) {
+            splitWithSelect.addEventListener('change', function() {
+                // Only update split values if a split method is selected
+                const splitMethod = document.getElementById('split_method')?.value;
+                if (splitMethod && splitMethod !== 'equal') {
+                    updateSplitValues();
                 }
+            });
+        }
+    }
+    
+    // Setup event listeners for edit transaction form
+    function setupEditTransactionFormListeners() {
+    // Add transaction type change handler
+            const transactionTypeSelect = document.getElementById('edit_transaction_type');
+            if (transactionTypeSelect) {
+                transactionTypeSelect.addEventListener('change', handleEditTransactionTypeChange);
+                // Initialize UI based on current transaction type
+                handleEditTransactionTypeChange();
             }
             
-            // Set currency if applicable
-            const currencySelect = formElement.querySelector('#currency_code');
-            if (currencySelect && expense.currency_code) {
-                currencySelect.value = expense.currency_code;
+            // Personal expense toggle
+            const personalExpenseCheck = document.getElementById('edit_personal_expense');
+            if (personalExpenseCheck) {
+                personalExpenseCheck.addEventListener('change', toggleEditPersonalExpense);
+            }
+            const categorySelect = document.getElementById('edit_category_id');
+            if (categorySelect) {
+                 categorySelect.addEventListener('change', function() {
+                    console.log('Category changed to:', this.value);
+            // Optional: You could update a hidden field or do other actions here
+             });
+    }
+            // Split method change handler
+            const splitMethodSelect = document.getElementById('edit_split_method');
+            if (splitMethodSelect) {
+                splitMethodSelect.addEventListener('change', toggleEditSplitOptions);
             }
             
-            // Set group_id if applicable
-            const groupSelect = formElement.querySelector('select[name="group_id"]');
-            if (groupSelect) {
-                groupSelect.value = expense.group_id || '';
-            }
-            
-            // Set category if applicable
-            const categorySelect = formElement.querySelector('#category_id');
-            if (categorySelect && expense.category_id) {
-                categorySelect.value = expense.category_id;
-                // Update icon preview
-                if (typeof categorySelect.onchange === 'function') {
-                    categorySelect.dispatchEvent(new Event('change'));
-                }
-            }
-            
-            // Set tags if applicable
-            if (expense.tag_ids && expense.tag_ids.length > 0) {
-                expense.tag_ids.forEach(tagId => {
-                    const tagCheckbox = formElement.querySelector(`#tag${tagId}`);
-                    if (tagCheckbox) {
-                        tagCheckbox.checked = true;
-                        // Update styling if we have tag checkboxes with colors
-                        if (tagCheckbox.style.backgroundColor) {
-                            tagCheckbox.style.backgroundColor = tagCheckbox.style.borderColor;
-                        }
+            // Amount field change handler
+            const amountField = document.getElementById('edit_amount');
+            if (amountField) {
+                amountField.addEventListener('input', function() {
+                    // Only update split values if a split method is selected
+                    const splitMethod = document.getElementById('edit_split_method')?.value;
+                    if (splitMethod && splitMethod !== 'equal') {
+                        updateEditSplitValues();
                     }
                 });
             }
             
-            // Trigger split method change to update UI
-            if (typeof toggleSplitOptions === 'function') {
-                toggleSplitOptions();
+            // Paid by change handler
+            const paidBySelect = document.getElementById('edit_paid_by');
+            if (paidBySelect) {
+                paidBySelect.addEventListener('change', function() {
+                    updateEditSplitWithOptions();
+                    
+                    // Only update split values if a split method is selected
+                    const splitMethod = document.getElementById('edit_split_method')?.value;
+                    if (splitMethod && splitMethod !== 'equal') {
+                        updateEditSplitValues();
+                    }
+                });
             }
             
-            // Update form submit button text
-            const submitButton = formElement.querySelector('button[type="submit"]');
-            if (submitButton) {
-                submitButton.textContent = 'Update Expense';
+            // Split with change handler
+            const splitWithSelect = document.getElementById('edit_split_with');
+            if (splitWithSelect) {
+                splitWithSelect.addEventListener('change', function() {
+                    // Only update split values if a split method is selected
+                    const splitMethod = document.getElementById('edit_split_method')?.value;
+                    if (splitMethod && splitMethod !== 'equal') {
+                        updateEditSplitValues();
+                    }
+                });
+            }
+        }
+
+        // Function to handle transaction type changes in edit mode
+        function handleEditTransactionTypeChange() {
+            const transactionTypeSelect = document.getElementById('edit_transaction_type');
+            if (!transactionTypeSelect) return;
+            
+            const transactionType = transactionTypeSelect.value;
+            const expenseOnlyFields = document.querySelector('.edit-expense-only-fields');
+            const toAccountContainer = document.getElementById('edit_to_account_container');
+            const accountLabel = document.getElementById('edit_account_label');
+            
+            // Show/hide fields based on transaction type
+            if (transactionType === 'expense') {
+                // Show splitting options for expenses
+                if (expenseOnlyFields) expenseOnlyFields.style.display = 'block';
+                if (toAccountContainer) toAccountContainer.style.display = 'none';
+                
+                // Update account label
+                if (accountLabel) accountLabel.textContent = 'Payment Account';
+                
+                // Make sure the destination account is cleared
+                const destinationAccountSelect = document.getElementById('edit_destination_account_id');
+                if (destinationAccountSelect) {
+                    destinationAccountSelect.value = '';
+                }
+            } 
+            else if (transactionType === 'income') {
+                // Hide splitting options for income
+                if (expenseOnlyFields) expenseOnlyFields.style.display = 'none';
+                if (toAccountContainer) toAccountContainer.style.display = 'none';
+                
+                // Update account label
+                if (accountLabel) accountLabel.textContent = 'Deposit Account';
+                
+                // Make sure the destination account is cleared
+                const destinationAccountSelect = document.getElementById('edit_destination_account_id');
+                if (destinationAccountSelect) {
+                    destinationAccountSelect.value = '';
+                }
+            }
+            else if (transactionType === 'transfer') {
+                // Hide splitting options for transfers
+                if (expenseOnlyFields) expenseOnlyFields.style.display = 'none';
+                
+                // Show destination account
+                if (toAccountContainer) toAccountContainer.style.display = 'block';
+                
+                // Update account label
+                if (accountLabel) accountLabel.textContent = 'From Account';
+                
+                // Update destination account options to exclude the selected source account
+                updateDestinationAccountOptions();
+            }
+        }
+
+        // Function to update destination account options to exclude the selected source account
+        function updateDestinationAccountOptions() {
+            const sourceAccountSelect = document.getElementById('edit_account_id');
+            const destinationAccountSelect = document.getElementById('edit_destination_account_id');
+            
+            if (!sourceAccountSelect || !destinationAccountSelect) return;
+            
+            const sourceAccountId = sourceAccountSelect.value;
+            
+            // Enable all options first
+            for (let i = 0; i < destinationAccountSelect.options.length; i++) {
+                destinationAccountSelect.options[i].disabled = false;
             }
             
-            // Scroll to the form
-            form.scrollIntoView({ behavior: 'smooth' });
-        }
-    }
-}
-
-// Update split_with options when paid_by changes
-function updateSplitWithOptions() {
-    const paidById = document.getElementById('paid_by').value;
-    const splitWithSelect = document.getElementById('split_with');
-    
-    if (!splitWithSelect) return;
-    
-    // Store currently selected options (excluding the payer)
-    const selectedOptions = Array.from(splitWithSelect.selectedOptions)
-        .filter(opt => opt.value !== paidById)
-        .map(opt => opt.value);
-    
-    // Update selection - deselect payer
-    for (let i = 0; i < splitWithSelect.options.length; i++) {
-        const option = splitWithSelect.options[i];
-        // If this is the payer, deselect it
-        if (option.value === paidById) {
-            option.selected = false;
-        }
-    }
-    
-    // If the multiselect has been initialized
-    const multiselectWrapper = document.querySelector('.multiselect-wrapper');
-    if (multiselectWrapper) {
-        // Need to rebuild the dropdown options to reflect the new state
-        initializeMultiSelect(true);
-    }
-}
-
-// Tag checkboxes styling
-function initializeTagCheckboxes() {
-    const tagCheckboxes = document.querySelectorAll('.tag-checkbox');
-    
-    tagCheckboxes.forEach(checkbox => {
-        const originalColor = checkbox.style.backgroundColor;
-        
-        // Adjust checked style
-        checkbox.addEventListener('change', function() {
-            if (this.checked) {
-                this.style.backgroundColor = this.style.borderColor || originalColor;
-            } else {
-                this.style.backgroundColor = 'transparent';
-            }
-        });
-    });
-}
-
-// Function to handle deleting an expense
-function deleteExpense(expenseId) {
-    if (confirm('Are you sure you want to delete this expense?')) {
-        fetch(`/delete_expense/${expenseId}`, {
-            method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Failed to delete expense');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                // Find and remove the row from the table
-                const row = document.querySelector(`tr[data-expense-id="${expenseId}"]`);
-                if (row) {
-                    row.remove();
-                } else {
-                    // Try finding the row by looping through all rows and checking cells
-                    const rows = document.querySelectorAll('#expensesTable tbody tr');
-                    for (const row of rows) {
-                        if (row.querySelector(`#actionDropdown${expenseId}`)) {
-                            row.remove();
-                            break;
+            // If a source account is selected, disable it in the destination select
+            if (sourceAccountId) {
+                for (let i = 0; i < destinationAccountSelect.options.length; i++) {
+                    if (destinationAccountSelect.options[i].value === sourceAccountId) {
+                        destinationAccountSelect.options[i].disabled = true;
+                        
+                        // If this was the selected destination, clear the selection
+                        if (destinationAccountSelect.options[i].selected) {
+                            destinationAccountSelect.value = '';
                         }
+                        
+                        break;
                     }
                 }
-                
-                // Update the result count
-                const resultCountEl = document.getElementById('resultCount');
-                if (resultCountEl) {
-                    const currentCount = parseInt(resultCountEl.textContent.split(' ')[0]) - 1;
-                    resultCountEl.textContent = `${currentCount} transaction${currentCount !== 1 ? 's' : ''}`;
-                }
-                
-                // Show success message
-                alert('Expense deleted successfully');
-            } else {
-                alert(data.message || 'Failed to delete expense');
             }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert(`Error deleting expense: ${error.message}`);
-        });
     }
-}
 
-// Implement the improved multiselect dropdown
-function initializeMultiSelect(rebuild = false) {
-    // Get the select element
-    const selectElement = document.getElementById('split_with');
-    const paidBySelect = document.getElementById('paid_by');
-    
-    if (!selectElement || !paidBySelect) return;
-    
-    // If rebuilding, remove previous wrapper
-    if (rebuild) {
-        const existingWrapper = selectElement.closest('.multiselect-wrapper');
-        if (existingWrapper) {
-            // Move select element back to its original position
-            existingWrapper.parentNode.insertBefore(selectElement, existingWrapper);
-            existingWrapper.remove();
-            
-            // Reset display
-            selectElement.style.display = '';
-        }
-    }
-    
-    // Check if already initialized and not rebuilding
-    if (!rebuild && selectElement.parentNode.classList.contains('multiselect-wrapper')) {
-        return; // Already initialized
-    }
-    
-    // Create a wrapper div
-    const wrapper = document.createElement('div');
-    wrapper.className = 'multiselect-wrapper position-relative';
-    selectElement.parentNode.insertBefore(wrapper, selectElement);
-    wrapper.appendChild(selectElement);
-    
-    // Create the custom dropdown
-    const customSelect = document.createElement('div');
-    customSelect.className = 'form-control bg-dark text-light d-flex flex-wrap align-items-center';
-    customSelect.style.minHeight = '38px';
-    customSelect.style.cursor = 'pointer';
-    wrapper.appendChild(customSelect);
-    
-    // Create dropdown content
-    const dropdownContent = document.createElement('div');
-    dropdownContent.className = 'position-absolute w-100 bg-dark border border-secondary rounded mt-1 p-2';
-    dropdownContent.style.zIndex = '100';
-    dropdownContent.style.maxHeight = '200px';
-    dropdownContent.style.overflowY = 'auto';
-    dropdownContent.style.display = 'none';
-    wrapper.appendChild(dropdownContent);
-    
-    // Hide the original select
-    selectElement.style.display = 'none';
-    
-    // Function to update options based on paid_by
-    function updateOptions() {
-        const paidById = paidBySelect.value;
-        
-        // Clear existing dropdown content
-        dropdownContent.innerHTML = '';
-        
-        // Store currently selected options (excluding the payer)
-        const selectedOptions = Array.from(selectElement.selectedOptions)
-            .filter(opt => opt.value !== paidById)
-            .map(opt => opt.value);
-        
-        // Repopulate dropdown options
-        for (let i = 0; i < selectElement.options.length; i++) {
-            const option = selectElement.options[i];
-            
-            // Skip the payer (the paid_by person shouldn't be in the split_with list)
-            if (option.value === paidById) {
-                option.selected = false; // Ensure the payer isn't selected
-                continue;
-            }
-            
-            const checkboxContainer = document.createElement('div');
-            checkboxContainer.className = 'form-check mb-2';
-            
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.className = 'form-check-input';
-            checkbox.value = option.value;
-            checkbox.id = 'multiselect-' + option.value;
-            checkbox.checked = selectedOptions.includes(option.value);
-            option.selected = checkbox.checked; // Update the actual select element
-            
-            const label = document.createElement('label');
-            label.htmlFor = 'multiselect-' + option.value;
-            label.className = 'form-check-label text-light ms-2';
-            label.textContent = option.textContent;
-            
-            checkboxContainer.appendChild(checkbox);
-            checkboxContainer.appendChild(label);
-            dropdownContent.appendChild(checkboxContainer);
-            
-            // Handle checkbox change
-            checkbox.addEventListener('change', function() {
-                option.selected = checkbox.checked;
-                updateCustomSelectDisplay();
-                
-                // Trigger change event on original select
-                const event = new Event('change', { bubbles: true });
-                selectElement.dispatchEvent(event);
-            });
-        }
-        
-        // Update display
-        updateCustomSelectDisplay();
-    }
-    
-    // Toggle dropdown on click
-    customSelect.addEventListener('click', function(e) {
-        dropdownContent.style.display = dropdownContent.style.display === 'none' ? 'block' : 'none';
-        e.stopPropagation();
-    });
-    
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function() {
-        dropdownContent.style.display = 'none';
-    });
-    
-    // Prevent dropdown from closing when clicking inside it
-    dropdownContent.addEventListener('click', function(e) {
-        e.stopPropagation();
-    });
-    
-    // Update the custom select display
-    function updateCustomSelectDisplay() {
-        customSelect.innerHTML = '';
-        let selectedCount = 0;
-        
-        // Check if personal expense is checked
-        const personalExpenseCheck = document.getElementById('personal_expense_check');
-        if (personalExpenseCheck && personalExpenseCheck.checked) {
-            const placeholder = document.createElement('span');
-            placeholder.className = 'text-muted';
-            placeholder.textContent = 'Personal expense - no split';
-            customSelect.appendChild(placeholder);
-            return;
-        }
-        
-        for (let i = 0; i < selectElement.options.length; i++) {
-            if (selectElement.options[i].selected) {
-                const badge = document.createElement('span');
-                badge.className = 'badge bg-primary me-1 mb-1';
-                badge.textContent = selectElement.options[i].text.split(' (')[0]; // Just show the name
-                
-                const removeBtn = document.createElement('span');
-                removeBtn.className = 'ms-1';
-                removeBtn.innerHTML = '&times;';
-                removeBtn.style.cursor = 'pointer';
-                
-                badge.appendChild(removeBtn);
-                customSelect.appendChild(badge);
-                selectedCount++;
-                
-                // Handle remove button with closure to capture current i value
-                (function(optionIndex) {
-                    removeBtn.addEventListener('click', function(e) {
-                        selectElement.options[optionIndex].selected = false;
-                        const cb = document.getElementById('multiselect-' + selectElement.options[optionIndex].value);
-                        if (cb) cb.checked = false;
-                        updateCustomSelectDisplay();
-                        
-                        // Trigger change event
-                        selectElement.dispatchEvent(new Event('change', { bubbles: true }));
-                        e.stopPropagation();
-                    });
-                })(i);
-            }
-        }
-        
-        // If nothing selected, show placeholder
-        if (selectedCount === 0) {
-            const placeholder = document.createElement('span');
-            placeholder.className = 'text-muted';
-            placeholder.textContent = 'Select people to split with';
-            customSelect.appendChild(placeholder);
-        }
-    }
-    
-    // Add event listener to paid_by select to update options
-    if (paidBySelect) {
-        paidBySelect.addEventListener('change', updateOptions);
-    }
-    
-    // Initial setup
-    updateOptions();
-}
-
-
-// Toggle expense form visibility
-function toggleExpenseForm() {
-    const expenseForm = document.getElementById('expenseFormContainer');
-    const toggleButton = document.getElementById('toggleExpenseForm');
-    
-    if (!expenseForm || !toggleButton) return;
-    
-    if (expenseForm.style.display === 'none' || expenseForm.style.display === '') {
-        expenseForm.style.display = 'block';
-        toggleButton.innerHTML = '<i class="fas fa-times me-2"></i>Cancel';
-        toggleButton.classList.replace('btn-primary', 'btn-secondary');
-    } else {
-        expenseForm.style.display = 'none';
-        toggleButton.innerHTML = '<i class="fas fa-plus me-2"></i>Add New Expense';
-        toggleButton.classList.replace('btn-secondary', 'btn-primary');
-        
-        // Reset form fields when closing
-        const form = expenseForm.querySelector('form');
-        if (form) form.reset();
-        
-        // Reset any custom UI elements
-        resetFormUI();
-    }
-}
-
-// Function to reset custom UI elements in the form
-function resetFormUI() {
-    // Reset personal expense checkbox
-    const personalExpenseCheck = document.getElementById('personal_expense_check');
-    if (personalExpenseCheck) {
-        personalExpenseCheck.checked = false;
-    }
-    
-    // Reset multiselect display
-    const customSelect = document.querySelector('.multiselect-wrapper .form-control');
-    if (customSelect) {
-        customSelect.innerHTML = '<span class="text-muted">Select people to split with</span>';
-    }
-    
-    // Reset split method container
-    const splitMethodContainer = document.getElementById('split_method')?.parentNode;
-    if (splitMethodContainer) {
-        splitMethodContainer.style.opacity = '1';
-    }
-    
-    // Reset split with container
-    const splitWithContainer = document.querySelector('.multiselect-wrapper');
-    if (splitWithContainer) {
-        splitWithContainer.style.opacity = '1';
-    }
-    
-    // Hide custom split container
-    const customSplitContainer = document.getElementById('custom_split_container');
-    if (customSplitContainer) {
-        customSplitContainer.style.display = 'none';
-    }
-    
-    // Reset tag checkboxes
-    const tagCheckboxes = document.querySelectorAll('.tag-checkbox');
-    tagCheckboxes.forEach(checkbox => {
-        checkbox.checked = false;
-        checkbox.style.backgroundColor = 'transparent';
-    });
-    
-    // Reset category icon preview
-    const categoryIconPreview = document.getElementById('category-icon-preview');
-    if (categoryIconPreview) {
-        categoryIconPreview.innerHTML = '<i class="fas fa-tag"></i>';
-    }
-}
-
-// Toggle personal expense mode
-function togglePersonalExpense() {
-    const personalExpenseCheck = document.getElementById('personal_expense_check');
-    const splitWithContainer = document.querySelector('.multiselect-wrapper');
-    const splitWithSelect = document.getElementById('split_with');
-    const splitMethodSelect = document.getElementById('split_method');
-    const splitMethodContainer = document.getElementById('split_method')?.parentNode;
-    const customSplitContainer = document.getElementById('custom_split_container');
-    
-    if (!personalExpenseCheck) return;
-    
-    if (personalExpenseCheck.checked) {
-        // This is a personal expense - simplify the form
-        if (splitWithContainer) splitWithContainer.style.opacity = '0.5';
-        if (splitMethodContainer) splitMethodContainer.style.opacity = '0.5';
-        if (customSplitContainer) customSplitContainer.style.display = 'none';
-        
-        // Clear any existing split_with selections
-        if (splitWithSelect) {
-            for (let i = 0; i < splitWithSelect.options.length; i++) {
-                splitWithSelect.options[i].selected = false;
-            }
-            
-            // Update the visual of multiselect if it exists
-            const customSelect = document.querySelector('.multiselect-wrapper .form-control');
-            if (customSelect) {
-                customSelect.innerHTML = '<span class="text-muted">Personal expense - no split</span>';
-            }
-        }
-    } else {
-        // This is a shared expense - enable the split options
-        if (splitWithContainer) splitWithContainer.style.opacity = '1';
-        if (splitMethodContainer) splitMethodContainer.style.opacity = '1';
-        
-        // Reset the multiselect display
-        const customSelect = document.querySelector('.multiselect-wrapper .form-control');
-        if (customSelect) {
-            customSelect.innerHTML = '<span class="text-muted">Select people to split with</span>';
-        }
-        
-        // Show custom split container if needed
-        if (splitMethodSelect && splitMethodSelect.value !== 'equal') {
-            if (customSplitContainer) customSplitContainer.style.display = 'block';
-        }
-    }
-    
-    // Update split values if needed
-    updateSplitValues();
-}
-
-// Toggle split options based on selected method
-function toggleSplitOptions() {
-    const splitMethod = document.getElementById('split_method').value;
-    const splitValueContainer = document.getElementById('split_value_container');
-    const customSplitContainer = document.getElementById('custom_split_container');
-    const personalExpenseCheck = document.getElementById('personal_expense_check');
-    
-    if (!splitValueContainer || !customSplitContainer) return;
-    
-    const splitValue = document.getElementById('split_value');
-    const splitInstruction = document.getElementById('split_instruction');
-    
-    // Hide legacy split value field
-    splitValueContainer.style.display = 'none';
-    if (splitValue) {
-        splitValue.removeAttribute('required');
-    }
-    
-    // Don't show custom split container for personal expenses
-    if (personalExpenseCheck && personalExpenseCheck.checked) {
-        customSplitContainer.style.display = 'none';
-        return;
-    }
-    
-    if (splitMethod === 'equal') {
-        customSplitContainer.style.display = 'none';
-    } else {
-        customSplitContainer.style.display = 'block';
-        
-        if (splitInstruction) {
-            if (splitMethod === 'percentage') {
-                splitInstruction.textContent = 'Set what percentage each person pays (total must be 100%)';
-            } else { // custom amounts
-                splitInstruction.textContent = 'Set how much each person pays (total must match expense amount)';
-            }
-        }
-        
-        // Update the split values UI
-        updateSplitValues();
-    }
-}
-
-// Sort table by column
-function sortTable(header) {
-    const table = document.getElementById('expensesTable');
-    if (!table) return;
-    
-    const index = Array.from(header.parentNode.children).indexOf(header);
-    const sortIcon = header.querySelector('i');
-    const isAscending = sortIcon.classList.contains('fa-sort') || sortIcon.classList.contains('fa-sort-down');
-    
-    // Update sort icons
-    document.querySelectorAll('#expensesTable th i').forEach(icon => {
-        icon.className = 'fas fa-sort';
-    });
-    
-    sortIcon.className = isAscending ? 'fas fa-sort-up' : 'fas fa-sort-down';
-    
-    // Get rows and sort
-    const rows = Array.from(table.querySelectorAll('tbody tr'));
-    
-    rows.sort((a, b) => {
-        // Skip the "no results" row
-        if (a.cells.length === 1 || b.cells.length === 1) return 0;
-        
-        if (!a.cells[index] || !b.cells[index]) return 0;
-        
-        let aValue = a.cells[index].textContent.trim();
-        let bValue = b.cells[index].textContent.trim();
-        
-        // Handle date sorting
-        if (index === 0) {
-            return isAscending ? 
-                new Date(bValue) - new Date(aValue) : 
-                new Date(aValue) - new Date(bValue);
-        }
-        
-        // Handle amount sorting
-        if (index === 2) {
-            aValue = parseFloat(aValue.replace(/[^\d.-]/g, ''));
-            bValue = parseFloat(bValue.replace(/[^\d.-]/g, ''));
-            return isAscending ? bValue - aValue : aValue - bValue;
-        }
-        
-        // Categories and Tags (special treatment for badges)
-        if (index === 5 || index === 6) {
-            // Extract text content but handle cases with no category/tags
-            aValue = a.cells[index].textContent.trim();
-            bValue = b.cells[index].textContent.trim();
-            
-            // Consider "-" at the bottom when sorting ascending
-            if (aValue === "-" && bValue !== "-") {
-                return isAscending ? 1 : -1;
-            }
-            if (bValue === "-" && aValue !== "-") {
-                return isAscending ? -1 : 1;
-            }
-        }
-        
-        // Default string comparison
-        return isAscending ? 
-            bValue.localeCompare(aValue) : 
-            aValue.localeCompare(bValue);
-    });
-    
-    // Reorder rows
-    const tbody = table.querySelector('tbody');
-    rows.forEach(row => tbody.appendChild(row));
-}
-
-// Apply filters to the transactions table
-function applyFilters() {
-    const startDate = document.getElementById('startDate')?.value;
-    const endDate = document.getElementById('endDate')?.value;
-    const paidBy = document.getElementById('paidByFilter')?.value;
-    const cardUsed = document.getElementById('cardFilter')?.value;
-    const groupId = document.getElementById('groupFilter')?.value;
-    const categoryId = document.getElementById('categoryFilter')?.value;
-    const tagId = document.getElementById('tagFilter')?.value;
-    const minAmount = document.getElementById('minAmount')?.value;
-    const maxAmount = document.getElementById('maxAmount')?.value;
-    const description = document.getElementById('descriptionSearch')?.value?.toLowerCase() || '';
-    
-    let visibleCount = 0;
-    
-    // Get all rows
-    const rows = document.querySelectorAll('#expensesTable tbody tr');
-    if (!rows.length) return;
-    
-    rows.forEach(row => {
-        // Only process rows that aren't the "No transactions found" row
-        if (row.cells.length < 9) return;
-        
-        const rowDate = row.cells[0].textContent.trim();
-        const rowDescription = row.cells[1].textContent.trim().toLowerCase();
-        const rowAmount = parseFloat(row.cells[2].textContent.trim().replace(/[^\d.-]/g, ''));
-        const rowCard = row.cells[3].textContent.trim();
-        const rowGroup = row.cells[4].textContent.trim();
-        
-        // Get data attributes for filtering
-        const rowPaidBy = row.getAttribute('data-paid-by');
-        const rowCategoryId = row.getAttribute('data-category-id');
-        const rowGroupId = row.getAttribute('data-group-id');
-        const rowTags = row.getAttribute('data-tags') || '';
-        
-        let visible = true;
-        
-        // Date filter - convert to comparable format
-        if (startDate && new Date(rowDate) < new Date(startDate)) visible = false;
-        if (endDate && new Date(rowDate) > new Date(endDate)) visible = false;
-        
-        // Paid by filter - using data attribute for proper filtering
-        if (paidBy && paidBy !== 'all' && rowPaidBy !== paidBy) visible = false;
-        
-        // Card filter
-        if (cardUsed && cardUsed !== 'all' && rowCard !== cardUsed) visible = false;
-        
-        // Group filter
-        if (groupId === 'none' && rowGroupId !== 'none') visible = false;
-        if (groupId && groupId !== 'all' && groupId !== 'none' && rowGroupId !== groupId) visible = false;
-        
-        // Category filter
-        if (categoryId === 'none' && rowCategoryId !== 'none') visible = false;
-        if (categoryId && categoryId !== 'all' && categoryId !== 'none' && rowCategoryId !== categoryId) visible = false;
-        
-        // Tag filter
-        if (tagId === 'none' && rowTags !== '') visible = false;
-        if (tagId && tagId !== 'all' && tagId !== 'none') {
-            const tagsList = rowTags.split(',');
-            if (!tagsList.includes(tagId)) visible = false;
-        }
-        
-        // Amount filter
-        if (minAmount && !isNaN(parseFloat(minAmount)) && rowAmount < parseFloat(minAmount)) visible = false;
-        if (maxAmount && !isNaN(parseFloat(maxAmount)) && rowAmount > parseFloat(maxAmount)) visible = false;
-        
-        // Description filter - case insensitive
-        if (description && !rowDescription.includes(description)) visible = false;
-        
-        // Show/hide row
-        row.style.display = visible ? '' : 'none';
-        if (visible) visibleCount++;
-    });
-    
-    // Update result count
-    const resultCountEl = document.getElementById('resultCount');
-    if (resultCountEl) {
-        resultCountEl.textContent = `${visibleCount} transaction${visibleCount !== 1 ? 's' : ''}`;
-    }
-    
-    // Show/hide the "no results" message
-    const noResultsRow = document.querySelector('#expensesTable tbody tr td[colspan="9"]');
-    if (noResultsRow) {
-        const parentRow = noResultsRow.parentElement;
-        if (visibleCount === 0 && rows.length > 1) {
-            // If we have rows but none are visible, show the "no results" message
-            parentRow.style.display = '';
-            noResultsRow.textContent = 'No transactions match your filters';
-        } else if (rows.length > 1) {
-            // If we have visible rows, hide the "no results" message
-            parentRow.style.display = 'none';
-        }
-    }
-}
-
-// Clear all filters
-function clearFilters() {
-    // Reset form fields
-    const filterForm = document.getElementById('filterForm');
-    if (filterForm) {
-        filterForm.reset();
-    }
-    
-    // Set default date range (last 30 days)
-    const today = new Date().toISOString().split('T')[0];
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const startDateEl = document.getElementById('startDate');
-    const endDateEl = document.getElementById('endDate');
-    
-    if (startDateEl) startDateEl.value = thirtyDaysAgo.toISOString().split('T')[0];
-    if (endDateEl) endDateEl.value = today;
-    
-    // Show all rows except the "No transactions match your filters" row
-    const rows = document.querySelectorAll('#expensesTable tbody tr');
-    let actualRowCount = 0;
-    
-    rows.forEach(row => {
-        // Skip the "no results" row
-        if (row.cells.length === 1 && row.cells[0].getAttribute('colspan') === '9') {
-            row.style.display = 'none';
-        } else {
-            row.style.display = '';
-            actualRowCount++;
-        }
-    });
-    
-    // Update result count
-    const resultCountEl = document.getElementById('resultCount');
-    if (resultCountEl) {
-        resultCountEl.textContent = `${actualRowCount} transaction${actualRowCount !== 1 ? 's' : ''}`;
-    }
-    
-    // Restore original "No transactions found" message if there are no transactions
-    const noResultsRow = document.querySelector('#expensesTable tbody tr td[colspan="9"]');
-    if (noResultsRow && actualRowCount === 0) {
-        noResultsRow.parentElement.style.display = '';
-        noResultsRow.textContent = 'No transactions found';
-    }
-}
-
-// Export transactions
-function exportTransactions() {
-    // Collect filter data from form
-    const filters = {
-        startDate: document.getElementById('startDate')?.value,
-        endDate: document.getElementById('endDate')?.value,
-        paidBy: document.getElementById('paidByFilter')?.value,
-        cardUsed: document.getElementById('cardFilter')?.value,
-        groupId: document.getElementById('groupFilter')?.value,
-        categoryId: document.getElementById('categoryFilter')?.value,
-        tagId: document.getElementById('tagFilter')?.value,
-        minAmount: document.getElementById('minAmount')?.value,
-        maxAmount: document.getElementById('maxAmount')?.value,
-        description: document.getElementById('descriptionSearch')?.value
-    };
-
+    // Submit edit form
+    // Modify the submitEditForm function to ensure category_id is properly included
+    function submitEditForm(form, expenseId) {
     // Show loading state
-    const exportBtn = document.getElementById('exportData');
-    if (exportBtn) {
-        exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Exporting...';
-        exportBtn.disabled = true;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
     }
-
-    // Perform AJAX request to export
-    fetch('/export_transactions', {
+    
+    // Create FormData from the form
+    const formData = new FormData(form);
+    
+    // Explicitly add the category_id from the select element
+    const categorySelect = document.getElementById('edit_category_id');
+    if (categorySelect) {
+        // Log the category ID to debug
+        console.log('Category ID selected:', categorySelect.value);
+        
+        // Remove any existing category_id entries to avoid duplicates
+        if (formData.has('category_id')) {
+            formData.delete('category_id');
+        }
+        
+        // Add the selected category_id
+        formData.append('category_id', categorySelect.value);
+    }
+    
+    // Log the entire FormData to see what's being sent
+    for (let pair of formData.entries()) {
+        console.log(pair[0] + ': ' + pair[1]);
+    }
+    
+    // Send AJAX request
+    fetch(`/update_expense/${expenseId}`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(filters)
+        body: formData
     })
     .then(response => {
         if (!response.ok) {
-            throw new Error('Export failed');
+            throw new Error('Failed to update transaction');
         }
-        return response.blob();
+        return response.text();
     })
-    .then(blob => {
-        // Create a download link
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
-        a.href = url;
-        a.download = `dollar_bill_transactions_${timestamp}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
+    .then(() => {
+        // Success - close panel and reload
+        closeSlidePanel('editTransactionPanel');
+        showMessage('Transaction updated successfully');
+        window.location.reload();
     })
     .catch(error => {
-        console.error('Export error:', error);
-        alert('Failed to export transactions. Please try again.');
-    })
-    .finally(() => {
+        console.error('Error:', error);
+        showMessage(`Error updating transaction: ${error.message}`, 'error');
+        
         // Reset button state
-        if (exportBtn) {
-            exportBtn.innerHTML = '<i class="fas fa-file-export me-2"></i>Export';
-            exportBtn.disabled = false;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Changes';
         }
     });
 }
-
-// Update split values UI
-function updateSplitValues() {
-    const splitMethodEl = document.getElementById('split_method');
-    if (!splitMethodEl) return;
     
-    const splitMethod = splitMethodEl.value;
-    if (splitMethod === 'equal') return;
-    
-    // Skip if personal expense is checked
-    const personalExpenseCheck = document.getElementById('personal_expense_check');
-    if (personalExpenseCheck && personalExpenseCheck.checked) return;
-    
-    const amountEl = document.getElementById('amount');
-    const paidByEl = document.getElementById('paid_by');
-    const splitWithEl = document.getElementById('split_with');
-    const splitTotalEl = document.getElementById('split_total');
-    const expenseAmountEl = document.getElementById('expense_amount');
-    
-    if (!amountEl || !paidByEl || !splitWithEl || !splitTotalEl || !expenseAmountEl) return;
-    
-    const totalAmount = parseFloat(amountEl.value) || 0;
-    const paidById = paidByEl.value;
-    const splitWithIds = Array.from(splitWithEl.selectedOptions).map(opt => opt.value);
-    
-    // Display current amount in the UI
-    expenseAmountEl.textContent = totalAmount.toFixed(2);
-    
-    // Get all participant IDs (payer + split_with)
-    let allParticipantIds = [...splitWithIds];
-    // Add payer if they're not already in the split_with list
-    if (!allParticipantIds.includes(paidById)) {
-        allParticipantIds.unshift(paidById);
-    }
-    
-    // Generate split values UI
-    const container = document.getElementById('split_values_container');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    // If no participants, show a message
-    if (allParticipantIds.length === 0) {
-        container.innerHTML = '<p class="text-center text-warning">Please select people to split with</p>';
-        return;
-    }
-    
-    let splitValues = {};
-    
-    if (splitMethod === 'percentage') {
-        // Start with equal percentages
-        const equalPercentage = allParticipantIds.length ? (100 / allParticipantIds.length) : 0;
+    // Handle transaction type change
+    function handleTransactionTypeChange() {
+        const transactionTypeSelect = document.getElementById('transaction_type');
+        if (!transactionTypeSelect) return;
         
-        allParticipantIds.forEach(userId => {
-            const user = Array.from(paidByEl.options)
-                .find(opt => opt.value === userId);
+        const transactionType = transactionTypeSelect.value;
+        const expenseOnlyFields = document.querySelectorAll('.expense-only-fields');
+        const toAccountContainer = document.getElementById('to_account_container');
+        const accountLabel = document.getElementById('account_label');
+        const personalExpenseCheck = document.getElementById('personal_expense');
+        
+        // Show/hide fields based on transaction type
+        if (transactionType === 'expense') {
+            // Show splitting options for expenses
+            expenseOnlyFields.forEach(el => el.style.display = 'block');
+            if (toAccountContainer) toAccountContainer.style.display = 'none';
             
-            if (user) {
-                const userName = user.text.split(' (')[0];
+            // Update account label
+            if (accountLabel) accountLabel.textContent = 'Payment Account';
+            
+            // Enable personal expense toggle
+            if (personalExpenseCheck) {
+                personalExpenseCheck.disabled = false;
+                const switchContainer = personalExpenseCheck.closest('.form-check');
+                if (switchContainer) switchContainer.style.opacity = '1';
+            }
+        } 
+        else if (transactionType === 'income') {
+            // Hide splitting options for income
+            expenseOnlyFields.forEach(el => el.style.display = 'none');
+            if (toAccountContainer) toAccountContainer.style.display = 'none';
+            
+            // Update account label
+            if (accountLabel) accountLabel.textContent = 'Deposit Account';
+        }
+        else if (transactionType === 'transfer') {
+            // Hide splitting options for transfers
+            expenseOnlyFields.forEach(el => el.style.display = 'none');
+            
+            // Show destination account
+            if (toAccountContainer) toAccountContainer.style.display = 'block';
+            
+            // Update account label
+            if (accountLabel) accountLabel.textContent = 'From Account';
+        }
+    }
+    
+    // Toggle personal expense mode for add form
+    function togglePersonalExpense() {
+        const personalExpenseCheck = document.getElementById('personal_expense');
+        if (!personalExpenseCheck) return;
+        
+        const splitWithSelect = document.getElementById('split_with');
+        const splitMethodContainer = document.getElementById('split_method')?.parentNode;
+        const customSplitContainer = document.getElementById('custom_split_container');
+        
+        if (personalExpenseCheck.checked) {
+            // This is a personal expense - simplify the form
+            if (splitMethodContainer) splitMethodContainer.style.opacity = '0.5';
+            if (customSplitContainer) customSplitContainer.style.display = 'none';
+            
+            // Clear any existing split_with selections
+            if (splitWithSelect) {
+                for (let i = 0; i < splitWithSelect.options.length; i++) {
+                    splitWithSelect.options[i].selected = false;
+                }
+                splitWithSelect.disabled = true;
+                splitWithSelect.parentNode.style.opacity = '0.5';
+            }
+        } else {
+            // This is a shared expense - enable the split options
+            if (splitMethodContainer) splitMethodContainer.style.opacity = '1';
+            if (splitWithSelect) {
+                splitWithSelect.disabled = false;
+                splitWithSelect.parentNode.style.opacity = '1';
+            }
+            
+            // Show custom split container if needed
+            const splitMethodSelect = document.getElementById('split_method');
+            if (splitMethodSelect && splitMethodSelect.value !== 'equal' && customSplitContainer) {
+                customSplitContainer.style.display = 'block';
+            }
+        }
+        
+        // Update split values if needed
+        updateSplitValues();
+    }
+    
+    // Toggle personal expense mode for edit form
+    function toggleEditPersonalExpense() {
+        const personalExpenseCheck = document.getElementById('edit_personal_expense');
+        if (!personalExpenseCheck) return;
+        
+        const splitWithSelect = document.getElementById('edit_split_with');
+        const splitMethodContainer = document.getElementById('edit_split_method')?.parentNode;
+        const customSplitContainer = document.getElementById('edit_custom_split_container');
+        
+        if (personalExpenseCheck.checked) {
+            // This is a personal expense - disable split options
+            if (splitMethodContainer) splitMethodContainer.style.opacity = '0.5';
+            if (customSplitContainer) customSplitContainer.style.display = 'none';
+            
+            // Clear any existing split_with selections
+            if (splitWithSelect) {
+                for (let i = 0; i < splitWithSelect.options.length; i++) {
+                    splitWithSelect.options[i].selected = false;
+                }
+                splitWithSelect.disabled = true;
+                splitWithSelect.parentNode.style.opacity = '0.5';
+            }
+        } else {
+            // This is a shared expense - enable split options
+            if (splitMethodContainer) splitMethodContainer.style.opacity = '1';
+            if (splitWithSelect) {
+                splitWithSelect.disabled = false;
+                splitWithSelect.parentNode.style.opacity = '1';
+            }
+            
+            // Show custom split container if needed
+            const splitMethodSelect = document.getElementById('edit_split_method');
+            if (splitMethodSelect && splitMethodSelect.value !== 'equal' && customSplitContainer) {
+                customSplitContainer.style.display = 'block';
+            }
+        }
+        
+        // Update split values if needed
+        updateEditSplitValues();
+    }
+    
+    // Toggle split options in add form
+    function toggleSplitOptions() {
+        const splitMethodSelect = document.getElementById('split_method');
+        if (!splitMethodSelect) return;
+        
+        const splitMethod = splitMethodSelect.value;
+        const customSplitContainer = document.getElementById('custom_split_container');
+        const personalExpenseCheck = document.getElementById('personal_expense');
+        
+        if (!customSplitContainer) return;
+        
+        // Don't show custom split container for personal expenses
+        if (personalExpenseCheck && personalExpenseCheck.checked) {
+            customSplitContainer.style.display = 'none';
+            return;
+        }
+        
+        if (splitMethod === 'equal') {
+            customSplitContainer.style.display = 'none';
+        } else {
+            customSplitContainer.style.display = 'block';
+            
+            // Update the split values UI
+            updateSplitValues();
+        }
+    }
+    
+    // Toggle split options in edit form
+    function toggleEditSplitOptions() {
+        const splitMethodSelect = document.getElementById('edit_split_method');
+        if (!splitMethodSelect) return;
+        
+        const splitMethod = splitMethodSelect.value;
+        const customSplitContainer = document.getElementById('edit_custom_split_container');
+        const personalExpenseCheck = document.getElementById('edit_personal_expense');
+        
+        if (!customSplitContainer) return;
+        
+        // Don't show custom split container for personal expenses
+        if (personalExpenseCheck && personalExpenseCheck.checked) {
+            customSplitContainer.style.display = 'none';
+            return;
+        }
+        
+        if (splitMethod === 'equal') {
+            customSplitContainer.style.display = 'none';
+        } else {
+            customSplitContainer.style.display = 'block';
+            
+            // Update the split values UI
+            updateEditSplitValues();
+        }
+    }
+    
+    // Update split_with options for add form
+    function updateSplitWithOptions() {
+        const paidById = document.getElementById('paid_by')?.value;
+        const splitWithSelect = document.getElementById('split_with');
+        
+        if (!splitWithSelect || !paidById) return;
+        
+        // Remember currently selected options
+        const selectedOptions = Array.from(splitWithSelect.selectedOptions).map(opt => opt.value);
+        
+        // Enable/disable payer option
+        for (let i = 0; i < splitWithSelect.options.length; i++) {
+            const option = splitWithSelect.options[i];
+            if (option.value === paidById) {
+                // Don't allow selecting the payer
+                option.disabled = true;
+                option.selected = false;
+            } else {
+                option.disabled = false;
+            }
+        }
+        
+        // Restore selections (except payer)
+        for (let i = 0; i < splitWithSelect.options.length; i++) {
+            const option = splitWithSelect.options[i];
+            if (option.value !== paidById && selectedOptions.includes(option.value)) {
+                option.selected = true;
+            }
+        }
+    }
+    
+    // Update split_with options for edit form
+    function updateEditSplitWithOptions() {
+        const paidById = document.getElementById('edit_paid_by')?.value;
+        const splitWithSelect = document.getElementById('edit_split_with');
+        
+        if (!splitWithSelect || !paidById) return;
+        
+        // Remember currently selected options
+        const selectedOptions = Array.from(splitWithSelect.selectedOptions).map(opt => opt.value);
+        
+        // Enable/disable payer option
+        for (let i = 0; i < splitWithSelect.options.length; i++) {
+            const option = splitWithSelect.options[i];
+            if (option.value === paidById) {
+                // Don't allow selecting the payer
+                option.disabled = true;
+                option.selected = false;
+            } else {
+                option.disabled = false;
+            }
+        }
+        
+        // Restore selections (except payer)
+        for (let i = 0; i < splitWithSelect.options.length; i++) {
+            const option = splitWithSelect.options[i];
+            if (option.value !== paidById && selectedOptions.includes(option.value)) {
+                option.selected = true;
+            }
+        }
+    }
+    
+    // Update split values UI for add form
+    function updateSplitValues() {
+        const splitMethodSelect = document.getElementById('split_method');
+        if (!splitMethodSelect) return;
+        
+        const splitMethod = splitMethodSelect.value;
+        if (splitMethod === 'equal') return;
+        
+        // Skip if personal expense is checked
+        const personalExpenseCheck = document.getElementById('personal_expense');
+        if (personalExpenseCheck && personalExpenseCheck.checked) return;
+        
+        const amountInput = document.getElementById('amount');
+        const paidBySelect = document.getElementById('paid_by');
+        const splitWithSelect = document.getElementById('split_with');
+        const splitTotalEl = document.getElementById('split_total');
+        const splitValuesContainer = document.getElementById('split_values_container');
+        const splitDetailsInput = document.getElementById('split_details');
+        
+        if (!amountInput || !paidBySelect || !splitWithSelect || !splitTotalEl || !splitValuesContainer) return;
+        
+        const totalAmount = parseFloat(amountInput.value) || 0;
+        const paidById = paidBySelect.value;
+        
+        // Get selected users to split with
+        const splitWithIds = Array.from(splitWithSelect.selectedOptions).map(opt => opt.value);
+        
+        // If no participants, show a message
+        if (splitWithIds.length === 0) {
+            splitValuesContainer.innerHTML = '<p class="text-center text-warning">Please select people to split with</p>';
+            return;
+        }
+        
+        // Get all participant IDs (include payer only if they aren't already in the split list)
+        const allParticipantIds = [...splitWithIds];
+        if (!allParticipantIds.includes(paidById)) {
+            allParticipantIds.unshift(paidById);
+        }
+        
+        splitValuesContainer.innerHTML = '';
+        let splitValues = {};
+        
+        if (splitMethod === 'percentage') {
+            // Equal percentage for all participants
+            const equalPercentage = allParticipantIds.length ? (100 / allParticipantIds.length) : 0;
+            
+            allParticipantIds.forEach(userId => {
+                const userName = Array.from(paidBySelect.options)
+                    .find(opt => opt.value === userId)?.text || userId;
+                
                 const isPayerId = userId === paidById;
                 
                 // Create row for this user
@@ -1534,67 +1700,19 @@ function updateSplitValues() {
                         </div>
                     </div>
                 `;
-                container.appendChild(row);
+                splitValuesContainer.appendChild(row);
                 
                 // Save the initial value
                 splitValues[userId] = equalPercentage;
-            }
-        });
-        
-        // Add event listeners to percentage inputs
-        container.querySelectorAll('.split-value-input').forEach(input => {
-            input.addEventListener('input', function() {
-                const userId = this.getAttribute('data-user-id');
-                const percentage = parseFloat(this.value) || 0;
-                splitValues[userId] = percentage;
-                
-                // Calculate total percentage
-                const totalPercentage = Object.values(splitValues).reduce((sum, val) => sum + val, 0);
-                
-                const splitTotalEl = document.getElementById('split_total');
-                if (splitTotalEl) {
-                    splitTotalEl.textContent = totalPercentage.toFixed(1) + '%';
-                }
-                
-                // Update status
-                const statusBadge = document.getElementById('split_status');
-                if (statusBadge) {
-                    if (Math.abs(totalPercentage - 100) < 0.1) {
-                        statusBadge.textContent = 'Balanced';
-                        statusBadge.className = 'badge bg-success';
-                    } else if (totalPercentage < 100) {
-                        statusBadge.textContent = 'Underfunded';
-                        statusBadge.className = 'badge bg-warning';
-                    } else {
-                        statusBadge.textContent = 'Overfunded';
-                        statusBadge.className = 'badge bg-danger';
-                    }
-                }
-                
-                // Update hidden split details field
-                const splitDetailsEl = document.getElementById('split_details');
-                if (splitDetailsEl) {
-                    splitDetailsEl.value = JSON.stringify({
-                        type: 'percentage',
-                        values: splitValues
-                    });
-                }
             });
+        } else { // Custom amount
+            // Equal amounts
+            const equalAmount = allParticipantIds.length ? (totalAmount / allParticipantIds.length) : 0;
             
-            // Trigger input event to initialize values
-            input.dispatchEvent(new Event('input'));
-        });
-        
-    } else { // Custom amount
-        // Start with equal amounts
-        const equalAmount = allParticipantIds.length ? (totalAmount / allParticipantIds.length) : 0;
-        
-        allParticipantIds.forEach(userId => {
-            const user = Array.from(paidByEl.options)
-                .find(opt => opt.value === userId);
-            
-            if (user) {
-                const userName = user.text.split(' (')[0];
+            allParticipantIds.forEach(userId => {
+                const userName = Array.from(paidBySelect.options)
+                    .find(opt => opt.value === userId)?.text || userId;
+                
                 const isPayerId = userId === paidById;
                 
                 // Create row for this user
@@ -1616,48 +1734,203 @@ function updateSplitValues() {
                         </div>
                     </div>
                 `;
-                container.appendChild(row);
+                splitValuesContainer.appendChild(row);
                 
                 // Save the initial value
                 splitValues[userId] = equalAmount;
-            }
-        });
+            });
+        }
         
-        // Add event listeners to amount inputs
-        container.querySelectorAll('.split-value-input').forEach(input => {
+        // Add event listeners to inputs and update split details
+        setupSplitInputListeners(splitMethod, splitValues, totalAmount);
+    }
+    
+    // Update split values UI for edit form
+    function updateEditSplitValues() {
+        const splitMethodSelect = document.getElementById('edit_split_method');
+        if (!splitMethodSelect) return;
+        
+        const splitMethod = splitMethodSelect.value;
+        if (splitMethod === 'equal') return;
+        
+        // Skip if personal expense is checked
+        const personalExpenseCheck = document.getElementById('edit_personal_expense');
+        if (personalExpenseCheck && personalExpenseCheck.checked) return;
+        
+        const amountInput = document.getElementById('edit_amount');
+        const paidBySelect = document.getElementById('edit_paid_by');
+        const splitWithSelect = document.getElementById('edit_split_with');
+        const splitTotalEl = document.getElementById('edit_split_total');
+        const splitValuesContainer = document.getElementById('edit_split_values_container');
+        const splitDetailsInput = document.getElementById('edit_split_details');
+        
+        if (!amountInput || !paidBySelect || !splitWithSelect || !splitTotalEl || !splitValuesContainer) return;
+        
+        const totalAmount = parseFloat(amountInput.value) || 0;
+        const paidById = paidBySelect.value;
+        
+        // Get selected users to split with
+        const splitWithIds = Array.from(splitWithSelect.selectedOptions).map(opt => opt.value);
+        
+        // If no participants, show a message
+        if (splitWithIds.length === 0) {
+            splitValuesContainer.innerHTML = '<p class="text-center text-warning">Please select people to split with</p>';
+            return;
+        }
+        
+        // Get all participant IDs (include payer only if they aren't already in the split list)
+        const allParticipantIds = [...splitWithIds];
+        if (!allParticipantIds.includes(paidById)) {
+            allParticipantIds.unshift(paidById);
+        }
+        
+        splitValuesContainer.innerHTML = '';
+        let splitValues = {};
+        
+        // Try to load existing split details
+        try {
+            if (splitDetailsInput && splitDetailsInput.value) {
+                const details = JSON.parse(splitDetailsInput.value);
+                if (details && details.values) {
+                    splitValues = details.values;
+                }
+            }
+        } catch (e) {
+            console.warn('Could not parse existing split details', e);
+        }
+        
+        if (splitMethod === 'percentage') {
+            // Start with equal percentages or use existing values
+            const equalPercentage = allParticipantIds.length ? (100 / allParticipantIds.length) : 0;
+            
+            allParticipantIds.forEach(userId => {
+                const userName = Array.from(paidBySelect.options)
+                    .find(opt => opt.value === userId)?.text || userId;
+                
+                const isPayerId = userId === paidById;
+                const userPercentage = splitValues[userId] !== undefined ? splitValues[userId] : equalPercentage;
+                
+                // Create row for this user
+                const row = document.createElement('div');
+                row.className = 'row mb-2 align-items-center';
+                row.innerHTML = `
+                    <div class="col-md-6">
+                        <span class="badge ${isPayerId ? 'bg-primary' : 'bg-secondary'} me-1">
+                            ${isPayerId ? '💰' : ''} ${userName}
+                        </span>
+                        ${isPayerId ? '<small class="text-muted">(Paid)</small>' : ''}
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <input type="number" class="form-control bg-dark text-light edit-split-value-input"
+                                data-user-id="${userId}" step="0.1" min="0" max="100" 
+                                value="${userPercentage.toFixed(1)}">
+                            <span class="input-group-text bg-dark text-light">%</span>
+                        </div>
+                    </div>
+                `;
+                splitValuesContainer.appendChild(row);
+                
+                // Initialize or use existing value
+                splitValues[userId] = userPercentage;
+            });
+        } else { // Custom amount
+            // Start with equal amounts or use existing values
+            const equalAmount = allParticipantIds.length ? (totalAmount / allParticipantIds.length) : 0;
+            
+            allParticipantIds.forEach(userId => {
+                const userName = Array.from(paidBySelect.options)
+                    .find(opt => opt.value === userId)?.text || userId;
+                
+                const isPayerId = userId === paidById;
+                const userAmount = splitValues[userId] !== undefined ? splitValues[userId] : equalAmount;
+                
+                // Create row for this user
+                const row = document.createElement('div');
+                row.className = 'row mb-2 align-items-center';
+                row.innerHTML = `
+                    <div class="col-md-6">
+                        <span class="badge ${isPayerId ? 'bg-primary' : 'bg-secondary'} me-1">
+                            ${isPayerId ? '💰' : ''} ${userName}
+                        </span>
+                        ${isPayerId ? '<small class="text-muted">(Paid)</small>' : ''}
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark text-light">${baseCurrencySymbol}</span>
+                            <input type="number" class="form-control bg-dark text-light edit-split-value-input"
+                                data-user-id="${userId}" step="0.01" min="0" 
+                                value="${userAmount.toFixed(2)}">
+                        </div>
+                    </div>
+                `;
+                splitValuesContainer.appendChild(row);
+                
+                // Initialize or use existing value
+                splitValues[userId] = userAmount;
+            });
+        }
+        
+        // Add event listeners to inputs and update split details
+        setupEditSplitInputListeners(splitMethod, splitValues, totalAmount);
+    }
+    
+    // Setup input listeners for split values in add form
+    function setupSplitInputListeners(splitMethod, splitValues, totalAmount) {
+        const splitDetailsInput = document.getElementById('split_details');
+        const splitTotalEl = document.getElementById('split_total');
+        const splitStatusEl = document.getElementById('split_status');
+        
+        document.querySelectorAll('.split-value-input').forEach(input => {
             input.addEventListener('input', function() {
                 const userId = this.getAttribute('data-user-id');
-                const amount = parseFloat(this.value) || 0;
-                splitValues[userId] = amount;
+                const value = parseFloat(this.value) || 0;
+                splitValues[userId] = value;
                 
-                // Calculate total amount
-                const totalSplit = Object.values(splitValues).reduce((sum, val) => sum + val, 0);
+                // Calculate total
+                const total = Object.values(splitValues).reduce((sum, val) => sum + val, 0);
                 
-                const splitTotalEl = document.getElementById('split_total');
+                // Update UI
                 if (splitTotalEl) {
-                    splitTotalEl.textContent = totalSplit.toFixed(2);
-                }
-                
-                // Update status
-                const statusBadge = document.getElementById('split_status');
-                if (statusBadge) {
-                    if (Math.abs(totalSplit - totalAmount) < 0.01) {
-                        statusBadge.textContent = 'Balanced';
-                        statusBadge.className = 'badge bg-success';
-                    } else if (totalSplit < totalAmount) {
-                        statusBadge.textContent = 'Underfunded';
-                        statusBadge.className = 'badge bg-warning';
-                    } else {
-                        statusBadge.textContent = 'Overfunded';
-                        statusBadge.className = 'badge bg-danger';
+                    if (splitMethod === 'percentage') {
+                        splitTotalEl.textContent = total.toFixed(1) + '%';
+                        
+                        // Update status
+                        if (splitStatusEl) {
+                            if (Math.abs(total - 100) < 0.1) {
+                                splitStatusEl.textContent = 'Balanced';
+                                splitStatusEl.className = 'badge bg-success';
+                            } else if (total < 100) {
+                                splitStatusEl.textContent = 'Underfunded';
+                                splitStatusEl.className = 'badge bg-warning';
+                            } else {
+                                splitStatusEl.textContent = 'Overfunded';
+                                splitStatusEl.className = 'badge bg-danger';
+                            }
+                        }
+                    } else { // Custom amount
+                        splitTotalEl.textContent = total.toFixed(2);
+                        
+                        // Update status
+                        if (splitStatusEl) {
+                            if (Math.abs(total - totalAmount) < 0.01) {
+                                splitStatusEl.textContent = 'Balanced';
+                                splitStatusEl.className = 'badge bg-success';
+                            } else if (total < totalAmount) {
+                                splitStatusEl.textContent = 'Underfunded';
+                                splitStatusEl.className = 'badge bg-warning';
+                            } else {
+                                splitStatusEl.textContent = 'Overfunded';
+                                splitStatusEl.className = 'badge bg-danger';
+                            }
+                        }
                     }
                 }
                 
                 // Update hidden split details field
-                const splitDetailsEl = document.getElementById('split_details');
-                if (splitDetailsEl) {
-                    splitDetailsEl.value = JSON.stringify({
-                        type: 'amount',
+                if (splitDetailsInput) {
+                    splitDetailsInput.value = JSON.stringify({
+                        type: splitMethod,
                         values: splitValues
                     });
                 }
@@ -1667,294 +1940,213 @@ function updateSplitValues() {
             input.dispatchEvent(new Event('input'));
         });
     }
-}
-
-// Update split_with options when paid_by changes
-function updateSplitWithOptions() {
-    const paidById = document.getElementById('paid_by').value;
-    const splitWithSelect = document.getElementById('split_with');
+    // Function to initialize a select without requiring Ctrl+click
+function initializeSelectWithoutCtrl(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select || !select.multiple) return;
     
-    if (!splitWithSelect) return;
+    // Replace the standard multiple select with a custom one
+    const wrapper = document.createElement('div');
+    wrapper.className = 'custom-multiselect-wrapper';
+    wrapper.style.maxHeight = '200px';
+    wrapper.style.overflowY = 'auto';
+    wrapper.style.border = '1px solid #444';
+    wrapper.style.borderRadius = '0.25rem';
+    wrapper.style.backgroundColor = '#2d2d2d';
     
-    // Store currently selected options (excluding the payer)
-    const selectedOptions = Array.from(splitWithSelect.selectedOptions)
-        .filter(opt => opt.value !== paidById)
-        .map(opt => opt.value);
+    // Hide the original select
+    select.style.display = 'none';
+    select.parentNode.insertBefore(wrapper, select.nextSibling);
     
-    // Update selection - deselect payer
-    for (let i = 0; i < splitWithSelect.options.length; i++) {
-        const option = splitWithSelect.options[i];
-        // If this is the payer, deselect it
-        if (option.value === paidById) {
-            option.selected = false;
-        }
-    }
-    
-    // If the multiselect has been initialized
-    const multiselectWrapper = document.querySelector('.multiselect-wrapper');
-    if (multiselectWrapper) {
-        // Need to rebuild the dropdown options to reflect the new state
-        initializeMultiSelect(true);
-    }
-}
-
-// Tag checkboxes styling
-function initializeTagCheckboxes() {
-    const tagCheckboxes = document.querySelectorAll('.tag-checkbox');
-    
-    tagCheckboxes.forEach(checkbox => {
-        const originalColor = checkbox.style.backgroundColor;
+    // Create checkbox options for each option in the select
+    Array.from(select.options).forEach(option => {
+        if (option.disabled) return;
         
-        // Adjust checked style
+        const item = document.createElement('div');
+        item.className = 'custom-multiselect-item';
+        item.style.padding = '0.5rem 1rem';
+        item.style.borderBottom = '1px solid rgba(255, 255, 255, 0.1)';
+        item.style.cursor = 'pointer';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'form-check-input me-2';
+        checkbox.checked = option.selected;
+        checkbox.value = option.value;
+        
+        const label = document.createElement('label');
+        label.className = 'form-check-label';
+        label.style.cursor = 'pointer';
+        label.style.userSelect = 'none';
+        label.style.marginLeft = '8px';
+        label.textContent = option.textContent;
+        
+        item.appendChild(checkbox);
+        item.appendChild(label);
+        wrapper.appendChild(item);
+        
+        // Add event listener to update the original select when checkbox is clicked
         checkbox.addEventListener('change', function() {
-            if (this.checked) {
-                this.style.backgroundColor = this.style.borderColor || originalColor;
-            } else {
-                this.style.backgroundColor = 'transparent';
+            option.selected = checkbox.checked;
+            // Trigger change event on original select
+            const event = new Event('change', { bubbles: true });
+            select.dispatchEvent(event);
+        });
+        
+        // Also make the whole item clickable
+        item.addEventListener('click', function(e) {
+            if (e.target !== checkbox) {
+                checkbox.checked = !checkbox.checked;
+                option.selected = checkbox.checked;
+                // Trigger change event on original select
+                const event = new Event('change', { bubbles: true });
+                select.dispatchEvent(event);
             }
         });
     });
 }
-
-// Function to handle deleting an expense
-function deleteExpense(expenseId) {
-    if (confirm('Are you sure you want to delete this expense?')) {
-        fetch(`/delete_expense/${expenseId}`, {
-            method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Failed to delete expense');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                // Find and remove the row from the table
-                const row = document.querySelector(`tr[data-expense-id="${expenseId}"]`);
-                if (row) {
-                    row.remove();
-                } else {
-                    // Try finding the row by looping through all rows and checking cells
-                    const rows = document.querySelectorAll('#expensesTable tbody tr');
-                    for (const row of rows) {
-                        if (row.querySelector(`#actionDropdown${expenseId}`)) {
-                            row.remove();
-                            break;
+    // Setup input listeners for split values in edit form
+    function setupEditSplitInputListeners(splitMethod, splitValues, totalAmount) {
+        const splitDetailsInput = document.getElementById('edit_split_details');
+        const splitTotalEl = document.getElementById('edit_split_total');
+        const splitStatusEl = document.getElementById('edit_split_status');
+        
+        document.querySelectorAll('.edit-split-value-input').forEach(input => {
+            input.addEventListener('input', function() {
+                const userId = this.getAttribute('data-user-id');
+                const value = parseFloat(this.value) || 0;
+                splitValues[userId] = value;
+                
+                // Calculate total
+                const total = Object.values(splitValues).reduce((sum, val) => sum + val, 0);
+                
+                // Update UI
+                if (splitTotalEl) {
+                    if (splitMethod === 'percentage') {
+                        splitTotalEl.textContent = total.toFixed(1) + '%';
+                        
+                        // Update status
+                        if (splitStatusEl) {
+                            if (Math.abs(total - 100) < 0.1) {
+                                splitStatusEl.textContent = 'Balanced';
+                                splitStatusEl.className = 'badge bg-success';
+                            } else if (total < 100) {
+                                splitStatusEl.textContent = 'Underfunded';
+                                splitStatusEl.className = 'badge bg-warning';
+                            } else {
+                                splitStatusEl.textContent = 'Overfunded';
+                                splitStatusEl.className = 'badge bg-danger';
+                            }
+                        }
+                    } else { // Custom amount
+                        splitTotalEl.textContent = total.toFixed(2);
+                        
+                        // Update status
+                        if (splitStatusEl) {
+                            if (Math.abs(total - totalAmount) < 0.01) {
+                                splitStatusEl.textContent = 'Balanced';
+                                splitStatusEl.className = 'badge bg-success';
+                            } else if (total < totalAmount) {
+                                splitStatusEl.textContent = 'Underfunded';
+                                splitStatusEl.className = 'badge bg-warning';
+                            } else {
+                                splitStatusEl.textContent = 'Overfunded';
+                                splitStatusEl.className = 'badge bg-danger';
+                            }
                         }
                     }
                 }
                 
-                // Update the result count
-                const resultCountEl = document.getElementById('resultCount');
-                if (resultCountEl) {
-                    const currentCount = parseInt(resultCountEl.textContent.split(' ')[0]) - 1;
-                    resultCountEl.textContent = `${currentCount} transaction${currentCount !== 1 ? 's' : ''}`;
+                // Update hidden split details field
+                if (splitDetailsInput) {
+                    splitDetailsInput.value = JSON.stringify({
+                        type: splitMethod,
+                        values: splitValues
+                    });
                 }
-                
-                // Show success message
-                alert('Expense deleted successfully');
-            } else {
-                alert(data.message || 'Failed to delete expense');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert(`Error deleting expense: ${error.message}`);
+            });
+            
+            // Trigger input event to initialize values
+            input.dispatchEvent(new Event('input'));
         });
     }
-}
-
-// Implement the improved multiselect dropdown
-function initializeMultiSelect(rebuild = false) {
-    // Get the select element
-    const selectElement = document.getElementById('split_with');
-    const paidBySelect = document.getElementById('paid_by');
     
-    if (!selectElement || !paidBySelect) return;
-    
-    // If rebuilding, remove previous wrapper
-    if (rebuild) {
-        const existingWrapper = selectElement.closest('.multiselect-wrapper');
-        if (existingWrapper) {
-            // Move select element back to its original position
-            existingWrapper.parentNode.insertBefore(selectElement, existingWrapper);
-            existingWrapper.remove();
+    // Open slide panel
+    function openSlidePanel(panelId, options = {}) {
+        // Check if panel already exists
+        let panel = document.getElementById(panelId);
+        
+        // Create panel if it doesn't exist
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = panelId;
+            panel.className = 'slide-panel';
             
-            // Reset display
-            selectElement.style.display = '';
-        }
-    }
-    
-    // Check if already initialized and not rebuilding
-    if (!rebuild && selectElement.parentNode.classList.contains('multiselect-wrapper')) {
-        return; // Already initialized
-    }
-    
-    // Create a wrapper div
-    const wrapper = document.createElement('div');
-    wrapper.className = 'multiselect-wrapper position-relative';
-    selectElement.parentNode.insertBefore(wrapper, selectElement);
-    wrapper.appendChild(selectElement);
-    
-    // Create the custom dropdown
-    const customSelect = document.createElement('div');
-    customSelect.className = 'form-control bg-dark text-light d-flex flex-wrap align-items-center';
-    customSelect.style.minHeight = '38px';
-    customSelect.style.cursor = 'pointer';
-    wrapper.appendChild(customSelect);
-    
-    // Create dropdown content
-    const dropdownContent = document.createElement('div');
-    dropdownContent.className = 'position-absolute w-100 bg-dark border border-secondary rounded mt-1 p-2';
-    dropdownContent.style.zIndex = '100';
-    dropdownContent.style.maxHeight = '200px';
-    dropdownContent.style.overflowY = 'auto';
-    dropdownContent.style.display = 'none';
-    wrapper.appendChild(dropdownContent);
-    
-    // Hide the original select
-    selectElement.style.display = 'none';
-    
-    // Function to update options based on paid_by
-    function updateOptions() {
-        const paidById = paidBySelect.value;
-        
-        // Clear existing dropdown content
-        dropdownContent.innerHTML = '';
-        
-        // Store currently selected options (excluding the payer)
-        const selectedOptions = Array.from(selectElement.selectedOptions)
-            .filter(opt => opt.value !== paidById)
-            .map(opt => opt.value);
-        
-        // Repopulate dropdown options
-        for (let i = 0; i < selectElement.options.length; i++) {
-            const option = selectElement.options[i];
+            // Create panel header
+            const header = document.createElement('div');
+            header.className = 'slide-panel-header';
+            header.innerHTML = `
+                <h4 class="mb-0">
+                    <i class="fas ${options.icon || 'fa-info-circle'} me-2" style="color: ${options.iconColor || '#15803d'}"></i>
+                    ${options.title || 'Panel'}
+                </h4>
+                <button type="button" class="btn-close btn-close-white" onclick="closeSlidePanel('${panelId}')"></button>
+            `;
             
-            // Skip the payer (the paid_by person shouldn't be in the split_with list)
-            if (option.value === paidById) {
-                option.selected = false; // Ensure the payer isn't selected
-                continue;
+            // Create panel content
+            const content = document.createElement('div');
+            content.className = 'slide-panel-content';
+            
+            // Add loading content if provided
+            if (options.loadingContent) {
+                content.innerHTML = options.loadingContent;
+            } else if (options.content) {
+                content.innerHTML = options.content;
             }
             
-            const checkboxContainer = document.createElement('div');
-            checkboxContainer.className = 'form-check mb-2';
+            // Assemble panel
+            panel.appendChild(header);
+            panel.appendChild(content);
             
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.className = 'form-check-input';
-            checkbox.value = option.value;
-            checkbox.id = 'multiselect-' + option.value;
-            checkbox.checked = selectedOptions.includes(option.value);
-            option.selected = checkbox.checked; // Update the actual select element
-            
-            const label = document.createElement('label');
-            label.htmlFor = 'multiselect-' + option.value;
-            label.className = 'form-check-label text-light ms-2';
-            label.textContent = option.textContent;
-            
-            checkboxContainer.appendChild(checkbox);
-            checkboxContainer.appendChild(label);
-            dropdownContent.appendChild(checkboxContainer);
-            
-            // Handle checkbox change
-            checkbox.addEventListener('change', function() {
-                option.selected = checkbox.checked;
-                updateCustomSelectDisplay();
-                
-                // Trigger change event on original select
-                const event = new Event('change', { bubbles: true });
-                selectElement.dispatchEvent(event);
-            });
+            // Add to DOM
+            document.body.appendChild(panel);
         }
         
-        // Update display
-        updateCustomSelectDisplay();
+        // Show overlay
+        const overlay = document.getElementById('slide-panel-overlay');
+        if (overlay) {
+            overlay.classList.add('active');
+            overlay.onclick = function() {
+                closeSlidePanel(panelId);
+            };
+        }
+        
+        // Show panel with animation
+        setTimeout(() => {
+            panel.classList.add('active');
+        }, 10);
+        
+        // Prevent body scrolling
+        document.body.style.overflow = 'hidden';
+        
+        return panel;
     }
     
-    // Toggle dropdown on click
-    customSelect.addEventListener('click', function(e) {
-        dropdownContent.style.display = dropdownContent.style.display === 'none' ? 'block' : 'none';
-        e.stopPropagation();
-    });
-    
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function() {
-        dropdownContent.style.display = 'none';
-    });
-    
-    // Prevent dropdown from closing when clicking inside it
-    dropdownContent.addEventListener('click', function(e) {
-        e.stopPropagation();
-    });
-    
-    // Update the custom select display
-    function updateCustomSelectDisplay() {
-        customSelect.innerHTML = '';
-        let selectedCount = 0;
-        
-        // Check if personal expense is checked
-        const personalExpenseCheck = document.getElementById('personal_expense_check');
-        if (personalExpenseCheck && personalExpenseCheck.checked) {
-            const placeholder = document.createElement('span');
-            placeholder.className = 'text-muted';
-            placeholder.textContent = 'Personal expense - no split';
-            customSelect.appendChild(placeholder);
-            return;
+    // Close slide panel
+    function closeSlidePanel(panelId) {
+        const panel = document.getElementById(panelId);
+        if (panel) {
+            panel.classList.remove('active');
         }
         
-        for (let i = 0; i < selectElement.options.length; i++) {
-            if (selectElement.options[i].selected) {
-                const badge = document.createElement('span');
-                badge.className = 'badge bg-primary me-1 mb-1';
-                badge.textContent = selectElement.options[i].text.split(' (')[0]; // Just show the name
-                
-                const removeBtn = document.createElement('span');
-                removeBtn.className = 'ms-1';
-                removeBtn.innerHTML = '&times;';
-                removeBtn.style.cursor = 'pointer';
-                
-                badge.appendChild(removeBtn);
-                customSelect.appendChild(badge);
-                selectedCount++;
-                
-                // Handle remove button with closure to capture current i value
-                (function(optionIndex) {
-                    removeBtn.addEventListener('click', function(e) {
-                        selectElement.options[optionIndex].selected = false;
-                        const cb = document.getElementById('multiselect-' + selectElement.options[optionIndex].value);
-                        if (cb) cb.checked = false;
-                        updateCustomSelectDisplay();
-                        
-                        // Trigger change event
-                        selectElement.dispatchEvent(new Event('change', { bubbles: true }));
-                        e.stopPropagation();
-                    });
-                })(i);
-            }
+        // Hide overlay
+        const overlay = document.getElementById('slide-panel-overlay');
+        if (overlay) {
+            overlay.classList.remove('active');
         }
         
-        // If nothing selected, show placeholder
-        if (selectedCount === 0) {
-            const placeholder = document.createElement('span');
-            placeholder.className = 'text-muted';
-            placeholder.textContent = 'Select people to split with';
-            customSelect.appendChild(placeholder);
-        }
+        // Re-enable body scrolling
+        document.body.style.overflow = '';
     }
-    
-    // Add event listener to paid_by select to update options
-    if (paidBySelect) {
-        paidBySelect.addEventListener('change', updateOptions);
-    }
-    
-    // Initial setup
-    updateOptions();
-}
 </script>
 {% endblock %}

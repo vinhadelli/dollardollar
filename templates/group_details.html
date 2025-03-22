@@ -129,8 +129,23 @@
                                 <input type="date" class="form-control bg-dark text-light" id="date" name="date" required>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="card_used" class="form-label">Card Used</label>
-                                <input type="text" class="form-control bg-dark text-light" id="card_used" name="card_used" required>
+                                <label for="account_id" class="form-label">Account</label>
+                                <select class="form-control bg-dark text-light" id="account_id" name="account_id" required>
+                                    <option value="">Select an account</option>
+                                    {% for account in current_user.accounts %}
+                                        <option value="{{ account.id }}">{{ account.name }} ({{ account.type }})</option>
+                                    {% endfor %}
+                                    
+                                    {% if current_user.accounts|length == 0 %}
+                                        <option value="default">Default Account</option>
+                                    {% endif %}
+                                </select>
+                                
+                                <small class="text-muted d-block mt-1">
+                                    {% if current_user.accounts|length == 0 %}
+                                        No accounts created yet. <a href="{{ url_for('advanced') }}" class="text-warning">Create accounts</a> to better track your finances.
+                                    {% endif %}
+                                </small>
                             </div>
                         </div>
                         
@@ -236,7 +251,7 @@
                                     <th>Description</th>
                                     <th>Amount</th>
                                     <th>Paid By</th>
-                                    <th>Card Used</th>
+                                    <th>Account</th>
                                     <th>Split Details</th>
                                 </tr>
                             </thead>
@@ -249,7 +264,13 @@
                                         <td>{{ expense.description }}</td>
                                         <td>{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</td>
                                         <td>{{ expense.user.name }}</td>
-                                        <td>{{ expense.card_used }}</td>
+                                        <td>
+                                            {% if expense.account %}
+                                                {{ expense.account.name }}
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ expense.card_used }}</span>
+                                            {% endif %}
+                                        </td>
                                         <td>
                                             <small class="d-block">Method: {{ expense.split_method }}</small>
                                             
@@ -279,6 +300,7 @@
     </div>
 </div>
 {% endblock %}
+
 
 {% block scripts %}
 <script>

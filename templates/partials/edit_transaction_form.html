@@ -1,0 +1,187 @@
+<!-- Updated edit_transaction_form.html partial template with transaction type selector -->
+<form id="editTransactionForm" action="/update_expense/{{ expense.id }}" method="POST">
+    <div class="row">
+        <!-- Add transaction type field at the top -->
+        <div class="col-md-12 mb-3">
+            <label for="transaction_type" class="form-label">Transaction Type</label>
+            <select class="form-select bg-dark text-light" id="edit_transaction_type" name="transaction_type">
+                <option value="expense" {% if expense.transaction_type == 'expense' or not expense.transaction_type %}selected{% endif %}>Expense</option>
+                <option value="income" {% if expense.transaction_type == 'income' %}selected{% endif %}>Income</option>
+                <option value="transfer" {% if expense.transaction_type == 'transfer' %}selected{% endif %}>Transfer</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12 mb-3">
+            <label for="description" class="form-label">Description</label>
+            <input type="text" class="form-control bg-dark text-light" id="description" name="description" value="{{ expense.description }}" required>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="amount" class="form-label">Amount</label>
+            <div class="input-group">
+                <span class="input-group-text bg-dark text-light">{{ base_currency.symbol }}</span>
+                <input type="number" step="0.01" class="form-control bg-dark text-light" id="edit_amount" name="amount" value="{{ expense.amount }}" required>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="date" class="form-label">Date</label>
+            <input type="date" class="form-control bg-dark text-light" id="date" name="date" value="{{ expense.date.strftime('%Y-%m-%d') }}" required>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="category_id" class="form-label">Category</label>
+            <select class="form-select bg-dark text-light" id="edit_category_id" name="category_id">
+                <option value="">Select a category</option>
+                {% for category in categories %}
+                    {% if not category.parent_id %}
+                        <optgroup label="{{ category.name }}">
+                            {% for subcat in category.subcategories %}
+                                <option value="{{ subcat.id }}" 
+                                        {% if expense.category_id == subcat.id %}selected{% endif %}>
+                                    {{ subcat.name }}
+                                </option>
+                            {% endfor %}
+                        </optgroup>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Account section - changed to accommodate transaction type -->
+        <div class="col-md-6 mb-3">
+            <label for="account_id" class="form-label" id="edit_account_label">Account</label>
+            <select class="form-select bg-dark text-light" id="edit_account_id" name="account_id">
+                <option value="">Select account</option>
+                <!-- Use a conditional to check if expense.account exists -->
+                {% if expense.account %}
+                    <option value="{{ expense.account.id }}" selected>{{ expense.account.name }}</option>
+                {% endif %}
+                
+                <!-- Fall back to card_used if no account -->
+                {% if not expense.account %}
+                    <option value="" selected>{{ expense.card_used }}</option>
+                {% endif %}
+                
+                <!-- Always show all user accounts -->
+                {% for account in user.accounts %}
+                    {% if not expense.account or account.id != expense.account.id %}
+                        <option value="{{ account.id }}">{{ account.name }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    
+    <!-- Destination account for transfers - initially hidden unless transfer type -->
+    <div class="row" id="edit_to_account_container" style="display: {% if expense.is_transfer %}block{% else %}none{% endif %};">
+        <div class="col-md-12 mb-3">
+            <label for="destination_account_id" class="form-label">To Account</label>
+            <select class="form-select bg-dark text-light" id="edit_destination_account_id" name="destination_account_id">
+                <option value="">Select destination account</option>
+                <!-- Show current destination account if it exists -->
+                {% if expense.destination_account %}
+                    <option value="{{ expense.destination_account.id }}" selected>{{ expense.destination_account.name }}</option>
+                {% endif %}
+                
+                <!-- Show all user accounts except the source account -->
+                {% for account in user.accounts %}
+                    {% if not expense.destination_account or account.id != expense.destination_account.id %}
+                        {% if not expense.account or account.id != expense.account.id %}
+                            <option value="{{ account.id }}">{{ account.name }}</option>
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <!-- Only show these fields for expense type transactions -->
+    <div class="edit-expense-only-fields" style="display: {% if expense.is_expense %}block{% else %}none{% endif %};">
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="paid_by" class="form-label">Paid By</label>
+                <select class="form-select bg-dark text-light" id="edit_paid_by" name="paid_by">
+                    {% for user in users %}
+                        <option value="{{ user.id }}" 
+                                {% if expense.paid_by == user.id %}selected{% endif %}>
+                            {{ user.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="form-check form-switch mt-4">
+                    <input class="form-check-input" type="checkbox" id="edit_personal_expense" name="personal_expense" 
+                           {% if not expense.split_with %}checked{% endif %}>
+                    <label class="form-check-label" for="edit_personal_expense">Personal expense (no splitting)</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mb-3">
+            <label for="edit_group_id" class="form-label">Group (Optional)</label>
+            <select class="form-select bg-dark text-light" id="edit_group_id" name="group_id">
+                <option value="">No Group (Personal Transaction)</option>
+                {% for group in groups %}
+                    <option value="{{ group.id }}" 
+                            {% if expense.group_id == group.id %}selected{% endif %}>
+                        {{ group.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="mb-3">
+            <label for="edit_split_with" class="form-label">Split With</label>
+            <select class="form-select bg-dark text-light" id="edit_split_with" name="split_with" multiple 
+                    {% if not expense.split_with %}disabled{% endif %}>
+                {% for user in users %}
+                    {% if user.id != expense.paid_by %}
+                        <option value="{{ user.id }}" 
+                                {% if expense.split_with and user.id in expense.split_with.split(',') %}selected{% endif %}>
+                            {{ user.name }}
+                        </option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+            <small class="form-text text-muted">Hold Ctrl to select multiple people</small>
+        </div>
+        
+        <div class="mb-3">
+            <label for="edit_split_method" class="form-label">Split Method</label>
+            <select class="form-select bg-dark text-light" id="edit_split_method" name="split_method" required
+                   {% if not expense.split_with %}disabled{% endif %}>
+                <option value="equal" {% if expense.split_method == 'equal' %}selected{% endif %}>Equal Split Among All</option>
+                <option value="percentage" {% if expense.split_method == 'percentage' %}selected{% endif %}>Percentage Split for Each Person</option>
+                <option value="custom" {% if expense.split_method == 'custom' %}selected{% endif %}>Custom Amount for Each Person</option>
+            </select>
+        </div>
+        
+        <div id="edit_custom_split_container" style="display: {% if expense.split_method != 'equal' and expense.split_with %}block{% else %}none{% endif %};" class="mb-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header">
+                    <h5 class="mb-0">Split Values</h5>
+                </div>
+                <div class="card-body">
+                    <div id="edit_split_values_container"></div>
+                    <div class="d-flex justify-content-between mt-3">
+                        <span>Total: {{ base_currency.symbol }}<span id="edit_split_total">0.00</span></span>
+                        <span class="badge bg-success" id="edit_split_status">Balanced</span>
+                    </div>
+                </div>
+            </div>
+            <input type="hidden" id="edit_split_details" name="split_details" value='{{ expense.split_details }}'>
+        </div>
+    </div>
+    
+    <div class="d-flex justify-content-end mt-3">
+        <button type="button" class="btn btn-secondary me-2" onclick="closeSlidePanel('editTransactionPanel')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+    </div>
+</form>

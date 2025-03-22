@@ -99,7 +99,8 @@ def extend_user_model(db, User):
             # Save to database
             db.session.add(user)
             db.session.commit()
-            
+            from app import create_default_categories  # Import at the top of the file if possible
+            create_default_categories(user.id)
             # Add a log entry
             current_app.logger.info(f"New user created via OIDC: {user.id}, Admin: {is_first_user}")
             

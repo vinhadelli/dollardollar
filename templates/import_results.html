@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Import Results</h1>
+        <a href="{{ url_for('advanced') }}" class="btn btn-primary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Advanced
+        </a>
+    </div>
+    
+    <div class="alert alert-success">
+        <i class="fas fa-check-circle me-2"></i>
+        Successfully imported {{ count }} transactions. Skipped {{ duplicate_count }} duplicates.
+    </div>
+    
+    {% if count > 0 %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Imported Transactions</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th>Amount</th>
+                            <th>Category</th>
+                            <th>Card Used</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for expense in expenses %}
+                        <tr>
+                            <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ expense.description }}</td>
+                            <td>{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</td>
+                            <td>
+                                {% if expense.category %}
+                                <span class="badge" style="background-color: {{ expense.category.color }};">
+                                    <i class="fas {{ expense.category.icon }}"></i> {{ expense.category.name }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted">Uncategorized</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ expense.card_used }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <div class="d-flex justify-content-center">
+        <a href="{{ url_for('transactions') }}" class="btn btn-primary me-2">
+            <i class="fas fa-list me-1"></i>View All Transactions
+        </a>
+        <a href="{{ url_for('advanced') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-upload me-1"></i>Import Another File
+        </a>
+    </div>
+</div>
+{% endblock %}

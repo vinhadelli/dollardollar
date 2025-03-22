@@ -27,6 +27,13 @@ from sqlalchemy import inspect, text
 from oidc_auth import setup_oidc_config, register_oidc_routes
 from oidc_user import extend_user_model
 from datetime import datetime, date, timedelta
+from simplefin_client import SimpleFin
+from flask import session, request, jsonify, url_for, flash, redirect
+from datetime import datetime, timedelta
+import uuid
+import json
+import base64
+import pytz
 
 os.environ['OPENSSL_LEGACY_PROVIDER'] = '1'
 
@@ -52,6 +59,9 @@ app.config['DEVELOPMENT_MODE'] = os.getenv('DEVELOPMENT_MODE', 'True').lower() =
 app.config['DISABLE_SIGNUPS'] = os.environ.get('DISABLE_SIGNUPS', 'False').lower() == 'true'  # Default to allowing signups
 app.config['LOCAL_LOGIN_DISABLE'] = os.getenv('LOCAL_LOGIN_DISABLE', 'False').lower() == 'true' # Default to false to allow local logins
 
+app.config['SIMPLEFIN_ENABLED'] = os.getenv('SIMPLEFIN_ENABLED', 'True').lower() == 'true'
+app.config['SIMPLEFIN_SETUP_TOKEN_URL'] = os.getenv('SIMPLEFIN_SETUP_TOKEN_URL', 'https://beta-bridge.simplefin.org/setup-token')
+
 
 
 # Email configuration from environment variables
@@ -72,11 +82,17 @@ def scheduled_monthly_reports():
     """Run on the 1st day of each month at 1:00 AM"""
     send_automatic_monthly_reports()
 
+
+@scheduler.task('cron', id='simplefin_sync', hour=23, minute=0)
+def scheduled_simplefin_sync():
+    """Run every day at 11:00 PM"""
+    sync_all_simplefin_accounts()
+
 # Start the scheduler
 scheduler.start()
 
 
-
+simplefin_client = SimpleFin(app)
 
 mail = Mail(app)
 
@@ -142,6 +158,7 @@ class User(UserMixin, db.Model):
     last_login = db.Column(db.DateTime, nullable=True)   
     monthly_report_enabled = db.Column(db.Boolean, default=True)     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    timezone = db.Column(db.String(50), nullable=True, default='UTC')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password,method='pbkdf2:sha256')
@@ -190,6 +207,7 @@ class Settlement(db.Model):
     # Relationships
     payer = db.relationship('User', foreign_keys=[payer_id], backref=db.backref('settlements_paid', lazy=True))
     receiver = db.relationship('User', foreign_keys=[receiver_id], backref=db.backref('settlements_received', lazy=True))
+
 class Currency(db.Model):
     __tablename__ = 'currencies'
     code = db.Column(db.String(3), primary_key=True)  # ISO 4217 currency code (e.g., USD, EUR, GBP)
@@ -226,6 +244,28 @@ class Category(db.Model):
         return f"<Category: {self.name}>"
     
 
+class Account(db.Model):
+    __tablename__ = 'accounts'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    type = db.Column(db.String(50), nullable=False)  # checking, savings, credit, etc.
+    institution = db.Column(db.String(100), nullable=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id', name='fk_account_user'), nullable=False)
+    balance = db.Column(db.Float, default=0.0)
+    currency_code = db.Column(db.String(3), db.ForeignKey('currencies.code', name='fk_account_currency'), nullable=True)
+    last_sync = db.Column(db.DateTime, nullable=True)
+    import_source = db.Column(db.String(50), nullable=True)
+    # Relationships
+    user = db.relationship('User', backref=db.backref('accounts', lazy=True))
+    currency = db.relationship('Currency', backref=db.backref('accounts', lazy=True))
+    external_id = db.Column(db.String(200), nullable=True)  # Add this line
+    status = db.Column(db.String(20), nullable=True)  # Add this line too for 'active'/'inactive' status
+    
+    
+    def __repr__(self):
+        return f"<Account {self.name} ({self.type})>"
+
+
 
 class Expense(db.Model):
     __tablename__ = 'expenses'
@@ -249,6 +289,31 @@ class Expense(db.Model):
     original_amount = db.Column(db.Float, nullable=True) # Amount in original currency
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
     currency = db.relationship('Currency', backref=db.backref('expenses', lazy=True))
+    #imports
+    transaction_type = db.Column(db.String(20), server_default='expense')  # 'expense', 'income', 'transfer'
+    account_id = db.Column(db.Integer, db.ForeignKey('accounts.id', name='fk_expense_account'), nullable=True)
+    external_id = db.Column(db.String(200), nullable=True)  # For tracking external transaction IDs
+    import_source = db.Column(db.String(50), nullable=True)  # 'csv', 'simplefin', 'manual'
+
+    account = db.relationship('Account', foreign_keys=[account_id], backref=db.backref('expenses', lazy=True))
+
+      # For transfers, we need a destination account
+    destination_account_id = db.Column(db.Integer, db.ForeignKey('accounts.id', name='fk_destination_account'), nullable=True)
+    destination_account = db.relationship('Account', foreign_keys=[destination_account_id], backref=db.backref('incoming_transfers', lazy=True))
+    
+    
+    @property
+    def is_income(self):
+        return self.transaction_type == 'income'
+    
+    @property
+    def is_transfer(self):
+        return self.transaction_type == 'transfer'
+    
+    @property
+    def is_expense(self):
+        return self.transaction_type == 'expense' or self.transaction_type is None
+
     def calculate_splits(self):
     
         # Get the user who paid
@@ -272,7 +337,7 @@ class Expense(db.Model):
         # Handle case where original_amount is None by using amount
         original_amount = self.original_amount if self.original_amount is not None else self.amount
         
-    # Set up result structure with both base and original currency
+        # Set up result structure with both base and original currency
         result = {
             'payer': {
                 'name': payer_name, 
@@ -288,8 +353,14 @@ class Expense(db.Model):
         split_details = {}
         if self.split_details:
             try:
-                split_details = json.loads(self.split_details)
-            except:
+                if isinstance(self.split_details, str):
+                    import json
+                    split_details = json.loads(self.split_details)
+                elif isinstance(self.split_details, dict):
+                    split_details = self.split_details
+            except Exception as e:
+                # Log the error or handle it as appropriate
+                print(f"Error parsing split_details for expense {self.id}: {str(e)}")
                 split_details = {}
         
         if self.split_method == 'equal':
@@ -318,7 +389,7 @@ class Expense(db.Model):
                     
         elif self.split_method == 'percentage':
             # Use per-user percentages if available in split_details
-            if split_details and split_details.get('type') == 'percentage':
+            if split_details and isinstance(split_details, dict) and split_details.get('type') == 'percentage':
                 percentages = split_details.get('values', {})
                 total_assigned = 0
                 total_original_assigned = 0
@@ -381,7 +452,7 @@ class Expense(db.Model):
         
         elif self.split_method == 'custom':
             # Use per-user custom amounts if available in split_details
-            if split_details and split_details.get('type') == 'amount':
+            if split_details and isinstance(split_details, dict) and split_details.get('type') == 'amount':
                 amounts = split_details.get('values', {})
                 total_assigned = 0
                 total_original_assigned = 0
@@ -476,6 +547,17 @@ class RecurringExpense(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
     category = db.relationship('Category', backref=db.backref('recurring_expenses', lazy=True))
 
+
+    # Transaction type and account fields
+    transaction_type = db.Column(db.String(20), default='expense')  # 'expense', 'income', 'transfer'
+    account_id = db.Column(db.Integer, db.ForeignKey('accounts.id', name='fk_recurring_account'), nullable=True)
+    account = db.relationship('Account', foreign_keys=[account_id], backref=db.backref('recurring_expenses', lazy=True))
+    
+    # For transfers
+    destination_account_id = db.Column(db.Integer, db.ForeignKey('accounts.id', name='fk_recurring_destination'), nullable=True)
+    destination_account = db.relationship('Account', foreign_keys=[destination_account_id], 
+                                         backref=db.backref('recurring_incoming_transfers', lazy=True))
+
     def create_expense_instance(self, for_date=None):
         """Create a single expense instance from this recurring template"""
         if for_date is None:
@@ -495,13 +577,42 @@ class RecurringExpense(db.Model):
             group_id=self.group_id,
             split_with=self.split_with,
             category_id=self.category_id,
-            recurring_id=self.id  # Link to this recurring expense
+            recurring_id=self.id,  # Link to this recurring expense
+            transaction_type=self.transaction_type,
+            account_id=self.account_id,
+            destination_account_id=self.destination_account_id if self.transaction_type == 'transfer' else None,
+            currency_code=self.currency_code,
+            original_amount=self.original_amount
         )
         
         # Update the last created date
         self.last_created = for_date
         
         return expense
+    
+
+
+class CategoryMapping(db.Model):
+    __tablename__ = 'category_mappings'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False)
+    keyword = db.Column(db.String(100), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
+    is_regex = db.Column(db.Boolean, default=False)  # Whether the keyword is a regex pattern
+    priority = db.Column(db.Integer, default=0)  # Higher priority mappings take precedence
+    match_count = db.Column(db.Integer, default=0)  # How many times this mapping has been used
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref=db.backref('category_mappings', lazy=True))
+    category = db.relationship('Category', backref=db.backref('mappings', lazy=True))
+    
+    def __repr__(self):
+        return f"<CategoryMapping: '{self.keyword}' → {self.category.name}>"
+
+
+
 # Tag-Expense Association Table
 
 class Tag(db.Model):
@@ -516,6 +627,33 @@ class Tag(db.Model):
     user = db.relationship('User', backref=db.backref('tags', lazy=True))
 
         
+
+
+
+
+class SimpleFin(db.Model):
+    """
+    Stores SimpleFin connection settings for a user
+    """
+    __tablename__ = 'SimpleFin'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False, unique=True)
+    access_url = db.Column(db.Text, nullable=False)  # Encoded/encrypted access URL
+    last_sync = db.Column(db.DateTime, nullable=True)
+    enabled = db.Column(db.Boolean, default=True)
+    sync_frequency = db.Column(db.String(20), default='daily')  # 'daily', 'weekly', etc.
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    temp_accounts = db.Column(db.Text, nullable=True)
+    # Relationship with User
+    user = db.relationship('User', backref=db.backref('SimpleFin', uselist=False, lazy=True))
+    
+    def __repr__(self):
+        return f"<SimpleFin settings for user {self.user_id}>"
+
+
+            
+     
 #--------------------
 # Budget
 #--------------------
@@ -538,6 +676,9 @@ class Budget(db.Model):
     # Relationships
     user = db.relationship('User', backref=db.backref('budgets', lazy=True))
     category = db.relationship('Category', backref=db.backref('budgets', lazy=True))
+
+    transaction_types = db.Column(db.String(100), default='expense')  # comma-separated list of types to include
+    
     
     def get_current_period_dates(self):
         """Get start and end dates for the current budget period"""
@@ -691,12 +832,701 @@ def init_db():
             dev_user.set_password(DEV_USER_PASSWORD)
             db.session.add(dev_user)
             db.session.commit()
+            create_default_categories(dev_user.id)
+            create_default_budgets(dev_user.id)
             print("Development user created:", DEV_USER_EMAIL)
+
+
+
+
 
 #--------------------
 # BUSINESS LOGIC FUNCTIONS
 #--------------------
-# Add this function to your app.py file
+
+# enhance transfer detection
+def calculate_asset_debt_trends(current_user):
+    """
+    Calculate asset and debt trends for a user's accounts
+    """
+    from datetime import datetime, timedelta
+    
+    # Initialize tracking
+    monthly_assets = {}
+    monthly_debts = {}
+    
+    # Get today's date and calculate a reasonable historical range (last 12 months)
+    today = datetime.now()
+    twelve_months_ago = today - timedelta(days=365)
+    
+    # Get all accounts for the user
+    accounts = Account.query.filter_by(user_id=current_user.id).all()
+    
+    # Calculate true total assets and debts directly from accounts (for accurate current total)
+    direct_total_assets = 0
+    direct_total_debts = 0
+    
+    for account in accounts:
+        if account.type in ['checking', 'savings', 'investment'] and account.balance > 0:
+            direct_total_assets += account.balance
+        elif account.type in ['credit'] or account.balance < 0:
+            # For credit cards with negative balances (standard convention)
+            direct_total_debts += abs(account.balance)
+    
+    # Process each account for historical trends
+    for account in accounts:
+        # Categorize account types
+        is_asset = account.type in ['checking', 'savings', 'investment'] and account.balance > 0
+        is_debt = account.type in ['credit'] or account.balance < 0
+        
+        # Skip accounts with zero or near-zero balance
+        if abs(account.balance or 0) < 0.01:
+            continue
+        
+        # Get monthly transactions for this account
+        transactions = Expense.query.filter(
+            Expense.account_id == account.id,
+            Expense.user_id == current_user.id,
+            Expense.date >= twelve_months_ago
+        ).order_by(Expense.date).all()
+        
+        # Track balance over time
+        balance_history = {}
+        current_balance = account.balance or 0
+        
+        # Start with the most recent balance
+        balance_history[today.strftime('%Y-%m')] = current_balance
+        
+        # Process transactions to track historical balances
+        for transaction in transactions:
+            month_key = transaction.date.strftime('%Y-%m')
+            
+            # Adjust balance based on transaction
+            if transaction.transaction_type == 'income':
+                current_balance += transaction.amount
+            elif transaction.transaction_type == 'expense' or transaction.transaction_type == 'transfer':
+                current_balance -= transaction.amount
+            
+            # Update monthly balance
+            balance_history[month_key] = current_balance
+        
+        # Categorize and store balances
+        for month, balance in balance_history.items():
+            if is_asset:
+                # For asset accounts, add positive balances to the monthly total
+                monthly_assets[month] = monthly_assets.get(month, 0) + balance
+            elif is_debt:
+                # For debt accounts or negative balances, add the absolute value to the debt total
+                monthly_debts[month] = monthly_debts.get(month, 0) + abs(balance)
+    
+    # Ensure consistent months across both series
+    all_months = sorted(set(list(monthly_assets.keys()) + list(monthly_debts.keys())))
+    
+    # Fill in missing months with previous values or zero
+    assets_trend = []
+    debts_trend = []
+    
+    for month in all_months:
+        assets_trend.append(monthly_assets.get(month, assets_trend[-1] if assets_trend else 0))
+        debts_trend.append(monthly_debts.get(month, debts_trend[-1] if debts_trend else 0))
+    
+    # Use the directly calculated totals rather than the trend values for accuracy
+    total_assets = direct_total_assets
+    total_debts = direct_total_debts
+    net_worth = total_assets - total_debts
+    
+    return {
+        'months': all_months,
+        'assets': assets_trend,
+        'debts': debts_trend,
+        'total_assets': total_assets,
+        'total_debts': total_debts,
+        'net_worth': net_worth
+    }
+
+
+
+def detect_internal_transfer(description, amount, account_id=None):
+    """
+    Detect if a transaction appears to be an internal transfer between accounts
+    Returns a tuple of (is_transfer, source_account_id, destination_account_id)
+    """
+    # Default return values
+    is_transfer = False
+    source_account_id = account_id
+    destination_account_id = None
+    
+    # Skip if no description or account
+    if not description or not account_id:
+        return is_transfer, source_account_id, destination_account_id
+    
+    # Normalize description for easier matching
+    desc_lower = description.lower()
+    
+    # Common transfer-related keywords
+    transfer_keywords = [
+        'transfer', 'xfer', 'move', 'moved to', 'sent to', 'to account', 
+        'from account', 'between accounts', 'internal', 'account to account',
+        'trx to', 'trx from', 'trans to', 'trans from','ACH Withdrawal',
+        'Robinhood', 'BK OF AMER VISA ONLINE PMT','Payment Thank You',
+
+
+    ]
+    
+    # Check for transfer keywords in description
+    if any(keyword in desc_lower for keyword in transfer_keywords):
+        is_transfer = True
+        
+        # Try to identify the destination account
+        # Get all user accounts
+        user_accounts = Account.query.filter_by(user_id=current_user.id).all()
+        
+        # Look for account names in the description
+        for account in user_accounts:
+            # Skip the source account
+            if account.id == account_id:
+                continue
+                
+            # Check if account name appears in the description
+            if account.name.lower() in desc_lower:
+                # This is likely the destination account
+                destination_account_id = account.id
+                break
+    
+    return is_transfer, source_account_id, destination_account_id
+
+# Update the determine_transaction_type function to detect internal transfers
+def determine_transaction_type(row, current_account_id=None):
+    """
+    Determine transaction type based on row data from CSV import
+    Now with enhanced internal transfer detection
+    """
+    type_column = request.form.get('type_column')
+    negative_is_expense = 'negative_is_expense' in request.form
+    
+    # Get description column name (default to 'Description')
+    description_column = request.form.get('description_column', 'Description')
+    description = row.get(description_column, '').strip()
+    
+    # Get amount column name (default to 'Amount')
+    amount_column = request.form.get('amount_column', 'Amount')
+    amount_str = row.get(amount_column, '0').strip().replace('$', '').replace(',', '')
+    
+    try:
+        amount = float(amount_str)
+    except ValueError:
+        amount = 0
+    
+    # First check for internal transfer
+    if current_account_id:
+        is_transfer, _, _ = detect_internal_transfer(description, amount, current_account_id)
+        if is_transfer:
+            return 'transfer'
+    
+    # Check if there's a specific transaction type column
+    if type_column and type_column in row:
+        type_value = row[type_column].strip().lower()
+        
+        # Map common terms to transaction types
+        if type_value in ['expense', 'debit', 'purchase', 'payment', 'withdrawal']:
+            return 'expense'
+        elif type_value in ['income', 'credit', 'deposit', 'refund']:
+            return 'income'
+        elif type_value in ['transfer', 'move', 'xfer']:
+            return 'transfer'
+    
+    # If no type column or unknown value, try to determine from description
+    if description:
+        # Common transfer keywords
+        transfer_keywords = ['transfer', 'xfer', 'move', 'moved to', 'sent to', 'to account', 'between accounts']
+        # Common income keywords
+        income_keywords = ['salary', 'deposit', 'refund', 'interest', 'dividend', 'payment received']
+        # Common expense keywords
+        expense_keywords = ['payment', 'purchase', 'fee', 'subscription', 'bill']
+        
+        desc_lower = description.lower()
+        
+        # Check for keywords in description
+        if any(keyword in desc_lower for keyword in transfer_keywords):
+            return 'transfer'
+        elif any(keyword in desc_lower for keyword in income_keywords):
+            return 'income'
+        elif any(keyword in desc_lower for keyword in expense_keywords):
+            return 'expense'
+    
+    # If still undetermined, use amount sign
+    try:
+        # Determine type based on amount sign and settings
+        if amount < 0 and negative_is_expense:
+            return 'expense'
+        elif amount > 0 and negative_is_expense:
+            return 'income'
+        elif amount < 0 and not negative_is_expense:
+            return 'income'  # In some systems, negative means money coming in
+        else:
+            return 'expense'  # Default to expense for positive amounts
+    except ValueError:
+        # If amount can't be parsed, default to expense
+        return 'expense'
+
+def auto_categorize_transaction(description, user_id):
+    """
+    Automatically categorize a transaction based on its description
+    Returns the best matching category ID or None if no match found
+    """
+    if not description:
+        return None
+        
+    # Standardize description - lowercase and remove extra spaces
+    description = description.strip().lower()
+    
+    # Get all active category mappings for the user
+    mappings = CategoryMapping.query.filter_by(
+        user_id=user_id,
+        active=True
+    ).order_by(CategoryMapping.priority.desc(), CategoryMapping.match_count.desc()).all()
+    
+    # Keep track of matches and their scores
+    matches = []
+    
+    # Check each mapping
+    for mapping in mappings:
+        matched = False
+        if mapping.is_regex:
+            # Use regex pattern matching
+            try:
+                import re
+                pattern = re.compile(mapping.keyword, re.IGNORECASE)
+                if pattern.search(description):
+                    matched = True
+            except:
+                # If regex is invalid, fall back to simple substring search
+                matched = mapping.keyword.lower() in description
+        else:
+            # Simple substring matching
+            matched = mapping.keyword.lower() in description
+            
+        if matched:
+            # Calculate match score based on:
+            # 1. Priority (user-defined importance)
+            # 2. Usage count (previous successful matches)
+            # 3. Keyword length (longer keywords are more specific)
+            # 4. Keyword position (earlier in the string is better)
+            score = (mapping.priority * 100) + (mapping.match_count * 10) + len(mapping.keyword)
+            
+            # Adjust score based on position (if simple keyword)
+            if not mapping.is_regex:
+                position = description.find(mapping.keyword.lower())
+                if position == 0:  # Matches at the start
+                    score += 50
+                elif position > 0:  # Adjust based on how early it appears
+                    score += max(0, 30 - position)
+                    
+            matches.append((mapping, score))
+    
+    # Sort matches by score, descending
+    matches.sort(key=lambda x: x[1], reverse=True)
+    
+    # If we have any matches, increment the match count for the winner and return its category ID
+    if matches:
+        best_mapping = matches[0][0]
+        best_mapping.match_count += 1
+        db.session.commit()
+        return best_mapping.category_id
+    
+    return None
+
+def update_category_mappings(transaction_id, category_id, learn=False):
+    """
+    Update category mappings based on a manually categorized transaction
+    If learn=True, create a new mapping based on this categorization
+    """
+    transaction = Expense.query.get(transaction_id)
+    if not transaction or not category_id:
+        return False
+        
+    if learn:
+        # Extract a good keyword from the description
+        keyword = extract_keywords(transaction.description)
+        
+        # Check if a similar mapping already exists
+        existing = CategoryMapping.query.filter_by(
+            user_id=transaction.user_id,
+            keyword=keyword,
+            active=True
+        ).first()
+        
+        if existing:
+            # Update the existing mapping
+            existing.category_id = category_id
+            existing.match_count += 1
+            db.session.commit()
+        else:
+            # Create a new mapping
+            new_mapping = CategoryMapping(
+                user_id=transaction.user_id,
+                keyword=keyword,
+                category_id=category_id,
+                match_count=1
+            )
+            db.session.add(new_mapping)
+            db.session.commit()
+        
+        return True
+        
+    return False
+
+def extract_keywords(description):
+    """
+    Extract meaningful keywords from a transaction description
+    Returns the most significant word or phrase
+    """
+    if not description:
+        return ""
+        
+    # Clean up description
+    clean_desc = description.strip().lower()
+    
+    # Split into words
+    words = clean_desc.split()
+    
+    # Remove common words that aren't useful for categorization
+    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'on', 'in', 'with', 'for', 'to', 'from', 'by', 'at', 'of'}
+    filtered_words = [w for w in words if w not in stop_words and len(w) > 2]
+    
+    if not filtered_words:
+        # If no good words remain, use the longest word from the original
+        return max(words, key=len) if words else ""
+    
+    # Use the longest remaining word as the keyword
+    # This is a simple approach - could be improved with more sophisticated NLP
+    return max(filtered_words, key=len)
+
+
+
+def determine_transaction_type(row):
+    """Determine transaction type based on row data from CSV import"""
+    type_column = request.form.get('type_column')
+    negative_is_expense = 'negative_is_expense' in request.form
+    
+    # Check if there's a specific transaction type column
+    if type_column and type_column in row:
+        type_value = row[type_column].strip().lower()
+        
+        # Map common terms to transaction types
+        if type_value in ['expense', 'debit', 'purchase', 'payment', 'withdrawal']:
+            return 'expense'
+        elif type_value in ['income', 'credit', 'deposit', 'refund']:
+            return 'income'
+        elif type_value in ['transfer', 'move']:
+            return 'transfer'
+    
+    # If no type column or unknown value, try to determine from amount sign
+    amount_str = row[request.form.get('amount_column', 'Amount')].strip().replace('$', '').replace(',', '')
+    try:
+        amount = float(amount_str)
+        # Determine type based on amount sign and settings
+        if amount < 0 and negative_is_expense:
+            return 'expense'
+        elif amount > 0 and negative_is_expense:
+            return 'income'
+        elif amount < 0 and not negative_is_expense:
+            return 'income'  # In some systems, negative means money coming in
+        else:
+            return 'expense'  # Default to expense for positive amounts
+    except ValueError:
+        # If amount can't be parsed, default to expense
+        return 'expense'
+
+def get_category_id(category_name, description=None, user_id=None):
+    """Find, create, or auto-suggest a category based on name and description"""
+    # Clean the category name
+    category_name = category_name.strip() if category_name else ""
+    
+    # If we have a user ID and no category name but have a description
+    if user_id and not category_name and description:
+        # Try to auto-categorize based on description
+        auto_category_id = auto_categorize_transaction(description, user_id)
+        if auto_category_id:
+            return auto_category_id
+    
+    # If we have a category name, try to find it
+    if category_name:
+        # Try to find an exact match first
+        category = Category.query.filter(
+            Category.user_id == user_id if user_id else current_user.id,
+            func.lower(Category.name) == func.lower(category_name)
+        ).first()
+        
+        if category:
+            return category.id
+        
+        # Try to find a partial match in subcategories
+        subcategory = Category.query.filter(
+            Category.user_id == user_id if user_id else current_user.id,
+            Category.parent_id.isnot(None),
+            func.lower(Category.name).like(f"%{category_name.lower()}%")
+        ).first()
+        
+        if subcategory:
+            return subcategory.id
+        
+        # Try to find a partial match in parent categories
+        parent_category = Category.query.filter(
+            Category.user_id == user_id if user_id else current_user.id,
+            Category.parent_id.is_(None),
+            func.lower(Category.name).like(f"%{category_name.lower()}%")
+        ).first()
+        
+        if parent_category:
+            return parent_category.id
+        
+        # If auto-categorize is enabled, create a new category
+        if 'auto_categorize' in request.form:
+            # Find "Other" category as parent
+            other_category = Category.query.filter_by(
+                name='Other',
+                user_id=user_id if user_id else current_user.id,
+                is_system=True
+            ).first()
+            
+            new_category = Category(
+                name=category_name[:50],  # Limit to 50 chars
+                icon='fa-tag',
+                color='#6c757d',
+                parent_id=other_category.id if other_category else None,
+                user_id=user_id if user_id else current_user.id
+            )
+            
+            db.session.add(new_category)
+            db.session.flush()  # Get ID without committing
+            
+            return new_category.id
+    
+    # If we still don't have a category, try auto-categorization again with the description
+    if description and user_id:
+        # Try to auto-categorize based on description
+        auto_category_id = auto_categorize_transaction(description, user_id)
+        if auto_category_id:
+            return auto_category_id
+    
+    # Default to None if no match found and auto-categorize is off
+    return None
+
+
+def create_default_category_mappings(user_id):
+    """Create default category mappings for a new user"""
+    # Check if user already has any mappings
+    existing_mappings_count = CategoryMapping.query.filter_by(user_id=user_id).count()
+    
+    # Only create defaults if user has no mappings
+    if existing_mappings_count > 0:
+        return
+    
+    # Get user's categories to map to
+    # We'll need to find the appropriate category IDs for the current user
+    categories = {}
+    
+    # Find common top-level categories
+    for category_name in ["Food", "Transportation", "Housing", "Shopping", "Entertainment", "Health", "Personal", "Other"]:
+        category = Category.query.filter_by(
+            user_id=user_id,
+            name=category_name,
+            parent_id=None
+        ).first()
+        
+        if category:
+            categories[category_name.lower()] = category.id
+            
+            # Also get subcategories
+            for subcategory in category.subcategories:
+                categories[subcategory.name.lower()] = subcategory.id
+    
+    # If we couldn't find any categories, we can't create mappings
+    if not categories:
+        app.logger.warning(f"Could not create default category mappings for user {user_id}: no categories found")
+        return
+    
+    # Default mappings as (keyword, category_key, is_regex, priority)
+    default_mappings = [
+        # Food & Dining
+        ("grocery", "groceries", False, 5),
+        ("groceries", "groceries", False, 5),
+        ("supermarket", "groceries", False, 5),
+        ("walmart", "groceries", False, 3),
+        ("target", "groceries", False, 3),
+        ("costco", "groceries", False, 5),
+        ("safeway", "groceries", False, 5),
+        ("kroger", "groceries", False, 5),
+        ("aldi", "groceries", False, 5),
+        ("trader joe", "groceries", False, 5),
+        ("whole foods", "groceries", False, 5),
+        ("wegmans", "groceries", False, 5),
+        ("publix", "groceries", False, 5),
+        ("sprouts", "groceries", False, 5),
+        ("sams club", "groceries", False, 5),
+
+        # Restaurants
+        ("restaurant", "restaurants", False, 5),
+        ("dining", "restaurants", False, 5),
+        ("takeout", "restaurants", False, 5),
+        ("doordash", "restaurants", False, 5),
+        ("ubereats", "restaurants", False, 5),
+        ("grubhub", "restaurants", False, 5),
+        ("mcdonald", "restaurants", False, 5),
+        ("burger", "restaurants", False, 4),
+        ("pizza", "restaurants", False, 4),
+        ("chipotle", "restaurants", False, 5),
+        ("panera", "restaurants", False, 5),
+        ("kfc", "restaurants", False, 5),
+        ("wendy's", "restaurants", False, 5),
+        ("taco bell", "restaurants", False, 5),
+        ("chick-fil-a", "restaurants", False, 5),
+        ("five guys", "restaurants", False, 5),
+        ("ihop", "restaurants", False, 5),
+        ("denny's", "restaurants", False, 5),
+
+        # Coffee shops
+        ("starbucks", "coffee shops", False, 5),
+        ("coffee", "coffee shops", False, 4),
+        ("dunkin", "coffee shops", False, 5),
+        ("peet", "coffee shops", False, 5),
+        ("tim hortons", "coffee shops", False, 5),
+
+        # Gas & Transportation
+        ("gas station", "gas", False, 5),
+        ("gasoline", "gas", False, 5),
+        ("fuel", "gas", False, 5),
+        ("chevron", "gas", False, 5),
+        ("shell", "gas", False, 5),
+        ("exxon", "gas", False, 5),
+        ("tesla supercharger", "gas", False, 5),
+        ("ev charging", "gas", False, 5),
+
+        # Rideshare & Transit
+        ("uber", "rideshare", False, 5),
+        ("lyft", "rideshare", False, 5),
+        ("taxi", "rideshare", False, 5),
+        ("transit", "public transit", False, 5),
+        ("subway", "public transit", False, 5),
+        ("bus", "public transit", False, 5),
+        ("train", "public transit", False, 5),
+        ("amtrak", "public transit", False, 5),
+        ("greyhound", "public transit", False, 5),
+        ("parking", "transportation", False, 5),
+        ("toll", "transportation", False, 5),
+        ("bike share", "transportation", False, 5),
+        ("scooter rental", "transportation", False, 5),
+
+        # Housing & Utilities
+        ("rent", "rent/mortgage", False, 5),
+        ("mortgage", "rent/mortgage", False, 5),
+        ("airbnb", "rent/mortgage", False, 5),
+        ("vrbo", "rent/mortgage", False, 5),
+        ("water bill", "utilities", False, 5),
+        ("electric", "utilities", False, 5),
+        ("utility", "utilities", False, 5),
+        ("utilities", "utilities", False, 5),
+        ("internet", "utilities", False, 5),
+        ("Ngrid", "utilities", False, 5),
+        ("maintenance", "home maintenance", False, 4),
+        ("repair", "home maintenance", False, 4),
+        ("hvac", "home maintenance", False, 5),
+        ("pest control", "home maintenance", False, 5),
+        ("home security", "home maintenance", False, 5),
+        ("home depot", "home maintenance", False, 5),
+        ("lowe's", "home maintenance", False, 5),
+
+        # Shopping
+        ("amazon", "shopping", False, 5),
+        ("ebay", "shopping", False, 5),
+        ("etsy", "shopping", False, 5),
+        ("clothing", "clothing", False, 5),
+        ("apparel", "clothing", False, 5),
+        ("shoes", "clothing", False, 5),
+        ("electronics", "electronics", False, 5),
+        ("best buy", "electronics", False, 5),
+        ("apple", "electronics", False, 5),
+        ("microsoft", "electronics", False, 5),
+        ("furniture", "shopping", False, 5),
+        ("homegoods", "shopping", False, 5),
+        ("ikea", "shopping", False, 5),
+        ("tj maxx", "shopping", False, 5),
+        ("marshalls", "shopping", False, 5),
+        ("nordstrom", "shopping", False, 5),
+        ("macys", "shopping", False, 5),
+        ("zara", "shopping", False, 5),
+        ("uniqlo", "shopping", False, 5),
+        ("shein", "shopping", False, 5),
+
+        # Entertainment & Subscriptions
+        ("movie", "movies", False, 5),
+        ("cinema", "movies", False, 5),
+        ("theater", "movies", False, 5),
+        ("amc", "movies", False, 5),
+        ("regal", "movies", False, 5),
+        ("netflix", "subscriptions", False, 5),
+        ("hulu", "subscriptions", False, 5),
+        ("spotify", "subscriptions", False, 5),
+        ("apple music", "subscriptions", False, 5),
+        ("disney+", "subscriptions", False, 5),
+        ("hbo", "subscriptions", False, 5),
+        ("prime video", "subscriptions", False, 5),
+        ("paramount+", "subscriptions", False, 5),
+        ("game", "entertainment", False, 4),
+        ("playstation", "entertainment", False, 5),
+        ("xbox", "entertainment", False, 5),
+        ("nintendo", "entertainment", False, 5),
+        ("concert", "entertainment", False, 5),
+        ("festival", "entertainment", False, 5),
+        ("sports ticket", "entertainment", False, 5),
+
+        # Health & Wellness
+        ("gym", "health", False, 5),
+        ("fitness", "health", False, 5),
+        ("doctor", "health", False, 5),
+        ("dentist", "health", False, 5),
+        ("hospital", "health", False, 5),
+        ("pharmacy", "health", False, 5),
+        ("walgreens", "health", False, 5),
+        ("cvs", "health", False, 5),
+        ("rite aid", "health", False, 5),
+        ("vision", "health", False, 5),
+        ("glasses", "health", False, 5),
+        ("contacts", "health", False, 5),
+        ("insurance", "health", False, 5),
+    ]
+
+    
+    # Create the mappings
+    for keyword, category_key, is_regex, priority in default_mappings:
+        # Check if we have a matching category for this keyword
+        if category_key in categories:
+            category_id = categories[category_key]
+            
+            # Create the mapping
+            mapping = CategoryMapping(
+                user_id=user_id,
+                keyword=keyword,
+                category_id=category_id,
+                is_regex=is_regex,
+                priority=priority,
+                match_count=0,
+                active=True
+            )
+            
+            db.session.add(mapping)
+    
+    # Commit all mappings at once
+    try:
+        db.session.commit()
+        app.logger.info(f"Created default category mappings for user {user_id}")
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error creating default category mappings: {str(e)}")
+
+# Then modify the existing create_default_categories function to also create mappings:
+
 def create_default_categories(user_id):
     """Create default expense categories for a new user"""
     default_categories = [
@@ -756,6 +1586,166 @@ def create_default_categories(user_id):
             db.session.add(subcat)
 
     db.session.commit()
+    
+    # Create default category mappings after creating categories
+    create_default_category_mappings(user_id)
+
+def create_default_budgets(user_id):
+    """Create default budget templates for a new user, all deactivated by default"""
+    from app import db, Budget, Category
+    
+    # Get the user's categories first
+    categories = Category.query.filter_by(user_id=user_id).all()
+    category_map = {}
+    
+    # Create a map of category types to their IDs
+    for category in categories:
+        if category.name == "Housing":
+            category_map['housing'] = category.id
+        elif category.name == "Food":
+            category_map['food'] = category.id
+        elif category.name == "Transportation":
+            category_map['transportation'] = category.id
+        elif category.name == "Entertainment":
+            category_map['entertainment'] = category.id
+        elif category.name == "Shopping":
+            category_map['shopping'] = category.id
+        elif category.name == "Health":
+            category_map['health'] = category.id
+        elif category.name == "Personal":
+            category_map['personal'] = category.id
+        elif category.name == "Other":
+            category_map['other'] = category.id
+    
+    # Default budget templates with realistic amounts
+    default_budgets = [
+        {
+            'name': 'Monthly Housing Budget',
+            'category_type': 'housing',
+            'amount': 1200,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Monthly Food Budget',
+            'category_type': 'food',
+            'amount': 600,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Monthly Transportation',
+            'category_type': 'transportation',
+            'amount': 400,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Monthly Entertainment',
+            'category_type': 'entertainment',
+            'amount': 200,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Monthly Shopping',
+            'category_type': 'shopping',
+            'amount': 300,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Monthly Healthcare',
+            'category_type': 'health',
+            'amount': 150,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Monthly Personal',
+            'category_type': 'personal',
+            'amount': 200,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Weekly Grocery Budget',
+            'category_type': 'food',  # Will use subcategory if available
+            'amount': 150,
+            'period': 'weekly',
+            'include_subcategories': False,
+            'subcategory_name': 'Groceries'  # Try to find this subcategory
+        },
+        {
+            'name': 'Weekly Dining Out',
+            'category_type': 'food',  # Will use subcategory if available
+            'amount': 75,
+            'period': 'weekly',
+            'include_subcategories': False,
+            'subcategory_name': 'Restaurants'  # Try to find this subcategory
+        },
+        {
+            'name': 'Monthly Subscriptions',
+            'category_type': 'entertainment',  # Will use subcategory if available
+            'amount': 50,
+            'period': 'monthly',
+            'include_subcategories': False,
+            'subcategory_name': 'Subscriptions'  # Try to find this subcategory
+        },
+        {
+            'name': 'Annual Vacation',
+            'category_type': 'personal',
+            'amount': 1500,
+            'period': 'yearly',
+            'include_subcategories': False
+        }
+    ]
+    
+    # Add budgets to database
+    budgets_added = 0
+    
+    for budget_template in default_budgets:
+        # Determine the category ID to use
+        category_id = None
+        cat_type = budget_template['category_type']
+        
+        if cat_type in category_map:
+            category_id = category_map[cat_type]
+            
+            # Check for subcategory if specified
+            if 'subcategory_name' in budget_template:
+                # Find the category
+                main_category = Category.query.get(category_id)
+                if main_category and hasattr(main_category, 'subcategories'):
+                    # Look for matching subcategory
+                    for subcat in main_category.subcategories:
+                        if budget_template['subcategory_name'].lower() in subcat.name.lower():
+                            category_id = subcat.id
+                            break
+        
+        # If we have a valid category, create the budget
+        if category_id:
+            new_budget = Budget(
+                user_id=user_id,
+                category_id=category_id,
+                name=budget_template['name'],
+                amount=budget_template['amount'],
+                period=budget_template['period'],
+                include_subcategories=budget_template.get('include_subcategories', True),
+                start_date=datetime.utcnow(),
+                is_recurring=True,
+                active=False,  # Deactivated by default
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            
+            db.session.add(new_budget)
+            budgets_added += 1
+    
+    if budgets_added > 0:
+        db.session.commit()
+        
+    return budgets_added
 
 def update_currency_rates():
     """
@@ -1384,12 +2374,43 @@ def utility_processor():
             result.append(cat_data)
 
         return result
+    
+    def get_budget_status_for_category(category_id):
+        """Get budget status for a specific category"""
+        if not current_user.is_authenticated:
+            return None
+            
+        # Find active budget for this category
+        budget = Budget.query.filter_by(
+            user_id=current_user.id,
+            category_id=category_id,
+            active=True
+        ).first()
+        
+        if not budget:
+            return None
+            
+        return {
+            'id': budget.id,
+            'percentage': budget.get_progress_percentage(),
+            'status': budget.get_status(),
+            'amount': budget.amount,
+            'spent': budget.calculate_spent_amount(),
+            'remaining': budget.get_remaining_amount()
+        }
+    
+    def get_account_by_id(account_id):
+        """Retrieve an account by its ID"""
+        return Account.query.get(account_id)
 
+    # Return a single dictionary containing all functions
     return {
         'get_user_color': get_user_color,
         'get_user_by_id': get_user_by_id,
         'get_category_icon_html': get_category_icon_html,
-        'get_categories_as_tree': get_categories_as_tree
+        'get_categories_as_tree': get_categories_as_tree,
+        'get_budget_status_for_category': get_budget_status_for_category,
+        'get_account_by_id': get_account_by_id
     }
     
 @app.route('/get_transaction_details/<other_user_id>')
@@ -1530,7 +2551,7 @@ def signup():
         db.session.add(user)
         db.session.commit()
         create_default_categories(user.id)
-        
+        create_default_budgets(user.id)
         # Send welcome email
         try:
             send_welcome_email(user)
@@ -1590,6 +2611,35 @@ def login():
             login_user(user)
             # Update last login time
             user.last_login = datetime.utcnow()
+
+            if app.config.get('SIMPLEFIN_ENABLED', False):
+                try:
+                    # Check if user has SimpleFin connection
+                    simplefin_settings = SimpleFin.query.filter_by(
+                        user_id=user.id, 
+                        enabled=True
+                    ).first()
+                    
+                    if simplefin_settings:
+                        # Check if last sync was more than 6 hours ago (or never)
+                        if not simplefin_settings.last_sync or (datetime.utcnow() - simplefin_settings.last_sync).total_seconds() > 6 * 3600:
+                            # Start sync in background thread to avoid slowing down login
+                            import threading
+                            sync_thread = threading.Thread(
+                                target=sync_simplefin_for_user,
+                                args=(user.id,)
+                            )
+                            sync_thread.daemon = True
+                            sync_thread.start()
+                            
+                            # Let user know syncing is happening
+                            flash('Your financial accounts are being synchronized in the background.')
+                except Exception as e:
+                    app.logger.error(f"Error checking SimpleFin sync status: {str(e)}")
+                    # Don't show error to user to keep login smooth
+
+
+
             db.session.commit()
             return redirect(url_for('dashboard'))
         
@@ -1631,6 +2681,11 @@ def dashboard():
     users = User.query.all()
     groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
     
+    # Pre-calculate expense splits to avoid repeated calculations in template
+    expense_splits = {}
+    for expense in expenses:
+        expense_splits[expense.id] = expense.calculate_splits()
+    
     # Calculate monthly totals with contributors
     monthly_totals = {}
     if expenses:
@@ -1640,60 +2695,107 @@ def dashboard():
                 monthly_totals[month_key] = {
                     'total': 0.0,
                     'by_card': {},
-                    'contributors': {}
+                    'contributors': {},
+                    'by_account': {}  # New: track by account
                 }
             
-            # Add to total
-            monthly_totals[month_key]['total'] += expense.amount
-            
-            # Add to card totals
-            if expense.card_used not in monthly_totals[month_key]['by_card']:
-                monthly_totals[month_key]['by_card'][expense.card_used] = 0
-            monthly_totals[month_key]['by_card'][expense.card_used] += expense.amount
-            
-            # Calculate splits and add to contributors
-            splits = expense.calculate_splits()
-            
-            # Add payer's portion
-            if splits['payer']['amount'] > 0:
-                payer_email = splits['payer']['email']
-                if payer_email not in monthly_totals[month_key]['contributors']:
-                    monthly_totals[month_key]['contributors'][payer_email] = 0
-                monthly_totals[month_key]['contributors'][payer_email] += splits['payer']['amount']
-            
-            # Add other contributors' portions
-            for split in splits['splits']:
-                if split['email'] not in monthly_totals[month_key]['contributors']:
-                    monthly_totals[month_key]['contributors'][split['email']] = 0
-                monthly_totals[month_key]['contributors'][split['email']] += split['amount']
+            # Add to total - MODIFIED: Only add expenses, not income or transfers
+            if not hasattr(expense, 'transaction_type') or expense.transaction_type == 'expense':
+                monthly_totals[month_key]['total'] += expense.amount
+                
+                # Add to card totals
+                if expense.card_used not in monthly_totals[month_key]['by_card']:
+                    monthly_totals[month_key]['by_card'][expense.card_used] = 0
+                monthly_totals[month_key]['by_card'][expense.card_used] += expense.amount
+                
+                # Add to account totals if available
+                if hasattr(expense, 'account') and expense.account:
+                    account_name = expense.account.name
+                    if account_name not in monthly_totals[month_key]['by_account']:
+                        monthly_totals[month_key]['by_account'][account_name] = 0
+                    monthly_totals[month_key]['by_account'][account_name] += expense.amount
+                
+                # Calculate splits and add to contributors
+                splits = expense_splits[expense.id]
+                
+                # Add payer's portion
+                if splits['payer']['amount'] > 0:
+                    payer_email = splits['payer']['email']
+                    if payer_email not in monthly_totals[month_key]['contributors']:
+                        monthly_totals[month_key]['contributors'][payer_email] = 0
+                    monthly_totals[month_key]['contributors'][payer_email] += splits['payer']['amount']
+                
+                # Add other contributors' portions
+                for split in splits['splits']:
+                    if split['email'] not in monthly_totals[month_key]['contributors']:
+                        monthly_totals[month_key]['contributors'][split['email']] = 0
+                    monthly_totals[month_key]['contributors'][split['email']] += split['amount']
     
     # Calculate total expenses for current user (only their portions for the current year)
     current_year = now.year
     total_expenses = 0
+    total_expenses_only = 0  # NEW: For expenses only
+    # Add these calculations for income and transfers
+    total_income = 0
+    total_transfers = 0
+    monthly_labels = []
+    monthly_amounts = []
 
+    # Sort monthly totals to ensure chronological order
+    sorted_monthly_totals = sorted(monthly_totals.items(), key=lambda x: x[0])
+
+    for month, data in sorted_monthly_totals:
+        monthly_labels.append(month)
+        monthly_amounts.append(data['total'])
+        # Calculate totals for each transaction type
+    for expense in expenses:
+        if hasattr(expense, 'transaction_type'):
+            if expense.transaction_type == 'income':
+                total_income += expense.amount
+            elif expense.transaction_type == 'transfer':
+                total_transfers += expense.amount
+    
+    # Calculate derived metrics
+    net_cash_flow = total_income - total_expenses_only
+    
+    # Calculate savings rate if income is not zero
+    if total_income > 0:
+        savings_rate = (net_cash_flow / total_income) * 100
+    else:
+        savings_rate = 0
     for expense in expenses:
         # Skip if not in current year
         if expense.date.year != current_year:
             continue
+        
+        # NEW: Check if it's an expense
+        is_expense = not hasattr(expense, 'transaction_type') or expense.transaction_type == 'expense'
             
-        splits = expense.calculate_splits()
+        splits = expense_splits[expense.id]
         
         if expense.paid_by == current_user.id:
             # If user paid, add their own portion
             total_expenses += splits['payer']['amount']
+            if is_expense:
+                total_expenses_only += splits['payer']['amount']
             
             # Also add what others owe them (the entire expense)
             for split in splits['splits']:
                 total_expenses += split['amount']
+                if is_expense:
+                    total_expenses_only += split['amount']
         else:
             # If someone else paid, add only this user's portion
             for split in splits['splits']:
                 if split['email'] == current_user.id:
                     total_expenses += split['amount']
+                    if is_expense:
+                        total_expenses_only += split['amount']
                     break
         
     # Calculate current month's total for the current user
     current_month_total = 0
+    current_month_expenses_only = 0  # NEW: For expenses only
     current_month = now.strftime('%Y-%m')
 
     for expense in expenses:
@@ -1701,20 +2803,29 @@ def dashboard():
         if expense.date.strftime('%Y-%m') != current_month:
             continue
             
-        splits = expense.calculate_splits()
+        # NEW: Check if it's an expense
+        is_expense = not hasattr(expense, 'transaction_type') or expense.transaction_type == 'expense'
+            
+        splits = expense_splits[expense.id]
         
         if expense.paid_by == current_user.id:
             # If user paid, add their own portion
             current_month_total += splits['payer']['amount']
+            if is_expense:
+                current_month_expenses_only += splits['payer']['amount']
             
             # Also add what others owe them (the entire expense)
             for split in splits['splits']:
                 current_month_total += split['amount']
+                if is_expense:
+                    current_month_expenses_only += split['amount']
         else:
             # If someone else paid, add only this user's portion
             for split in splits['splits']:
                 if split['email'] == current_user.id:
                     current_month_total += split['amount']
+                    if is_expense:
+                        current_month_expenses_only += split['amount']
                     break
 
 
@@ -1760,18 +2871,20 @@ def dashboard():
 
     categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.name).all()
     currencies = Currency.query.all()
-    print(f"Passing {len(currencies)} currencies to dashboard template")
-    # Pre-calculate expense splits to avoid repeated calculations in template
-    expense_splits = {}
-    for expense in expenses:
-        expense_splits[expense.id] = expense.calculate_splits()
-    currencies = Currency.query.all()
+    
+
+    # Calculate asset and debt trends
+    asset_debt_trends = calculate_asset_debt_trends(current_user)
+
+
     return render_template('dashboard.html', 
                          expenses=expenses,
                          expense_splits=expense_splits,
                          monthly_totals=monthly_totals,
                          total_expenses=total_expenses,
+                         total_expenses_only=total_expenses_only,  # NEW: For expenses only
                          current_month_total=current_month_total,
+                         current_month_expenses_only=current_month_expenses_only,  # NEW: For expenses only
                          unique_cards=unique_cards,
                          users=users,
                          groups=groups,
@@ -1780,33 +2893,114 @@ def dashboard():
                          budget_summary=budget_summary,
                          currencies=currencies,
                          categories=categories,
+                         monthly_labels=monthly_labels,
+                         monthly_amounts=monthly_amounts,
+                         total_income=total_income,
+                         total_transfers=total_transfers,
+                         net_cash_flow=net_cash_flow,
+                         savings_rate=savings_rate,
+                         asset_trends_months=asset_debt_trends['months'],
+                         asset_trends=asset_debt_trends['assets'],
+                         debt_trends=asset_debt_trends['debts'],
+                         total_assets=asset_debt_trends['total_assets'],
+                         total_debts=asset_debt_trends['total_debts'],
+                         net_worth=asset_debt_trends['net_worth'],
                          now=now)
 
+
+#--------------------
+# ROUTES: timezone MANAGEMENT
+#--------------------
+@app.route('/update_timezone', methods=['POST'])
+@login_required_dev
+def update_timezone():
+    """Update user's timezone preference"""
+    timezone = request.form.get('timezone')
+    
+    # Validate timezone
+    if timezone not in pytz.all_timezones:
+        flash('Invalid timezone selected.')
+        return redirect(url_for('profile'))
+    
+    # Update user's timezone
+    current_user.timezone = timezone
+    db.session.commit()
+    
+    flash('Timezone updated successfully.')
+    return redirect(url_for('profile'))
+
+# Utility functions for timezone handling
+def get_user_timezone(user):
+    """Get user's timezone, defaulting to UTC"""
+    return pytz.timezone(user.timezone or 'UTC')
+
+def localize_datetime(dt, user):
+    """Convert datetime to user's local timezone"""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=pytz.UTC)
+    user_tz = get_user_timezone(user)
+    return dt.astimezone(user_tz)
+
+# Context processor for timezone-aware datetime formatting
+@app.context_processor
+def timezone_processor():
+    def format_datetime(dt, format='medium'):
+        """Format datetime in user's local timezone"""
+        if not dt:
+            return ''
+        
+        # Ensure dt is timezone-aware
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=pytz.UTC)
+        
+        # Convert to user's timezone
+        if current_user.is_authenticated:
+            user_tz = pytz.timezone(current_user.timezone or 'UTC')
+            local_dt = dt.astimezone(user_tz)
+        else:
+            local_dt = dt
+        
+        # Format based on preference
+        if format == 'short':
+            return local_dt.strftime('%Y-%m-%d')
+        elif format == 'medium':
+            return local_dt.strftime('%Y-%m-%d %H:%M')
+        elif format == 'long':
+            return local_dt.strftime('%Y-%m-%d %H:%M:%S %Z')
+        
+        return local_dt
+    
+    return {
+        'format_datetime': format_datetime
+    }
 #--------------------
 # ROUTES: EXPENSES MANAGEMENT
 #--------------------
-@app.route('/add_expense', methods=['GET', 'POST'])
+@app.route('/add_expense', methods=['POST'])
 @login_required_dev
 def add_expense():
+    """Add a new transaction (expense, income, or transfer)"""
     print("Request method:", request.method)
     if request.method == 'POST':
         print("Form data:", request.form)
         
         try:
+            # Get transaction type
+            transaction_type = request.form.get('transaction_type', 'expense')
+            
             # Check if this is a personal expense (no splits)
             is_personal_expense = request.form.get('personal_expense') == 'on'
             
-            # Handle split_with based on whether it's a personal expense
-            if is_personal_expense:
-                # For personal expenses, we set split_with to empty
-                # This will make calculate_splits assign the full amount to the payer
+            # Handle split_with based on whether it's a personal expense or non-expense transaction
+            if is_personal_expense or transaction_type in ['income', 'transfer']:
+                # For personal expenses and non-expense transactions, we set split_with to empty
                 split_with_str = None
             else:
                 # Handle multi-select for split_with
                 split_with_ids = request.form.getlist('split_with')
-                if not split_with_ids:
+                if not split_with_ids and transaction_type == 'expense':
                     flash('Please select at least one person to split with or mark as personal expense.')
-                    return redirect(url_for('dashboard'))
+                    return redirect(url_for('transactions'))
                 
                 split_with_str = ','.join(split_with_ids) if split_with_ids else None
             
@@ -1815,12 +3009,11 @@ def add_expense():
                 expense_date = datetime.strptime(request.form['date'], '%Y-%m-%d')
             except ValueError:
                 flash('Invalid date format. Please use YYYY-MM-DD format.')
-                return redirect(url_for('dashboard'))
+                return redirect(url_for('transactions'))
             
             # Process split details if provided
             split_details = None
             if request.form.get('split_details'):
-                import json
                 split_details = request.form.get('split_details')
             
             # Get currency information
@@ -1838,25 +3031,48 @@ def add_expense():
             
             if not selected_currency or not base_currency:
                 flash('Currency configuration error.')
-                return redirect(url_for('dashboard'))
+                return redirect(url_for('transactions'))
             
             # Convert original amount to base currency
-            # Multiply by the rate to convert from selected currency to base currency
-            # For example, if 1 INR = 0.012 USD, then 1 * 0.012 = 0.012 USD
             amount = original_amount * selected_currency.rate_to_base
             
-            # Process category - set to "Other" if not provided
+            # Process category - either use the provided category or auto-categorize
             category_id = request.form.get('category_id')
             if not category_id or category_id.strip() == '':
-                # Find the "Other" category for this user
-                other_category = Category.query.filter_by(
-                    name='Other',
-                    user_id=current_user.id,
-                    is_system=True
-                ).first()
+                # Check if auto-categorization is enabled (this preference could be stored in user settings)
+                auto_categorize_enabled = True  # You can make this a user preference
                 
-                # If "Other" category doesn't exist, leave as None
-                category_id = other_category.id if other_category else None
+                if auto_categorize_enabled:
+                    # Try to auto-categorize based on description
+                    auto_category_id = auto_categorize_transaction(request.form['description'], current_user.id)
+                    if auto_category_id:
+                        category_id = auto_category_id
+                
+                # If still no category_id, use "Other" category as fallback
+                if not category_id or category_id.strip() == '':
+                    # Find the "Other" category for this user
+                    other_category = Category.query.filter_by(
+                        name='Other',
+                        user_id=current_user.id,
+                        is_system=True
+                    ).first()
+                    
+                    # If "Other" category doesn't exist, leave as None
+                    category_id = other_category.id if other_category else None
+            
+            # Get account information
+            account_id = request.form.get('account_id')
+            card_used = "No card"  # Default fallback
+            
+            # For transfers, get destination account
+            destination_account_id = None
+            if transaction_type == 'transfer':
+                destination_account_id = request.form.get('destination_account_id')
+                
+                # Validate different source and destination accounts
+                if account_id == destination_account_id:
+                    flash('Source and destination accounts must be different for transfers.')
+                    return redirect(url_for('transactions'))
             
             # Create expense record
             expense = Expense(
@@ -1865,16 +3081,36 @@ def add_expense():
                 original_amount=original_amount,  # Original amount in selected currency
                 currency_code=currency_code,  # Store the original currency code
                 date=expense_date,
-                card_used=request.form['card_used'],
-                split_method=request.form['split_method'],
+                card_used=card_used,  # Default or legacy value
+                split_method=request.form.get('split_method', 'equal'),
                 split_value=float(request.form.get('split_value', 0)) if request.form.get('split_value') else 0,
                 split_details=split_details,
-                paid_by=request.form['paid_by'],
+                paid_by=current_user.id,  # Always the current user
                 user_id=current_user.id,
                 category_id=category_id,
                 group_id=request.form.get('group_id') if request.form.get('group_id') else None,
                 split_with=split_with_str,
+                transaction_type=transaction_type,
+                account_id=account_id,
+                destination_account_id=destination_account_id
             )
+            
+            # Update account balances
+            if account_id:
+                from_account = Account.query.get(account_id)
+                if from_account and from_account.user_id == current_user.id:
+                    if transaction_type == 'expense':
+                        from_account.balance -= amount
+                    elif transaction_type == 'income':
+                        from_account.balance += amount
+                    elif transaction_type == 'transfer' and destination_account_id:
+                        # For transfers, subtract from source account
+                        from_account.balance -= amount
+                        
+                        # And add to destination account
+                        to_account = Account.query.get(destination_account_id)
+                        if to_account and to_account.user_id == current_user.id:
+                            to_account.balance += amount
             
             # Handle tags if present
             tag_ids = request.form.getlist('tags')
@@ -1886,15 +3122,24 @@ def add_expense():
             
             db.session.add(expense)
             db.session.commit()
-            flash('Expense added successfully!')
-            print("Expense added successfully")
+            
+            # Determine success message based on transaction type
+            if transaction_type == 'expense':
+                flash('Expense added successfully!')
+            elif transaction_type == 'income':
+                flash('Income recorded successfully!')
+            elif transaction_type == 'transfer':
+                flash('Transfer completed successfully!')
+            else:
+                flash('Transaction added successfully!')
+                
+            print("Transaction added successfully")
             
         except Exception as e:
-            print("Error adding expense:", str(e))
+            print("Error adding transaction:", str(e))
             flash(f'Error: {str(e)}')
             
-    return redirect(url_for('dashboard'))
-
+    return redirect(url_for('transactions'))
 
 @app.route('/delete_expense/<int:expense_id>', methods=['POST'])
 @login_required_dev
@@ -2001,102 +3246,72 @@ def update_expense(expense_id):
         # Find the expense
         expense = Expense.query.get_or_404(expense_id)
         
-        # Security check: Only the creator can update the expense
+        # Security check
         if expense.user_id != current_user.id:
             flash('You do not have permission to edit this expense')
             return redirect(url_for('transactions'))
         
-        # Check if this is a personal expense (no splits)
-        is_personal_expense = request.form.get('personal_expense') == 'on'
+        # Get the transaction type
+        transaction_type = request.form.get('transaction_type', 'expense')
         
-        # Handle split_with based on whether it's a personal expense
-        if is_personal_expense:
-            # For personal expenses, we set split_with to empty
-            split_with_str = None
-        else:
-            # Handle multi-select for split_with
-            split_with_ids = request.form.getlist('split_with')
-            if not split_with_ids:
-                flash('Please select at least one person to split with or mark as personal expense.')
-                return redirect(url_for('transactions'))
-            
-            split_with_str = ','.join(split_with_ids) if split_with_ids else None
-        
-        # Parse date with error handling
-        try:
-            expense_date = datetime.strptime(request.form['date'], '%Y-%m-%d')
-        except ValueError:
-            flash('Invalid date format. Please use YYYY-MM-DD format.')
-            return redirect(url_for('transactions'))
-        
-        # Process split details if provided
-        split_details = None
-        if request.form.get('split_details'):
-            split_details = request.form.get('split_details')
-        category_id = request.form.get('category_id')
-
-        #catrgory section
-        if not category_id or not category_id.strip():
-            # Find "Other" category (system category)
-            other_category = Category.query.filter_by(
-                name='Other', 
-                user_id=current_user.id,
-                is_system=True
-            ).first()
-            
-            # Use Other category id if found, otherwise leave as None
-            category_id = other_category.id if other_category else None
-        
-        # Get currency information
-        currency_code = request.form.get('currency_code', 'USD')
-        if not currency_code:
-            # Use user's default currency or system default (USD)
-            currency_code = current_user.default_currency_code or 'USD'
-        
-        # Get original amount in the selected currency
-        original_amount = float(request.form['amount'])
-        
-        # Find the currencies
-        selected_currency = Currency.query.filter_by(code=currency_code).first()
-        base_currency = Currency.query.filter_by(is_base=True).first()
-        
-        if not selected_currency or not base_currency:
-            flash('Currency configuration error.')
-            return redirect(url_for('transactions'))
-        
-        # Convert original amount to base currency
-        amount = original_amount * selected_currency.rate_to_base
-        
-        # Update expense fields
+        # Common fields for all transaction types
         expense.description = request.form['description']
-        expense.amount = amount
-        expense.original_amount = original_amount
-        expense.currency_code = currency_code
-        expense.date = expense_date
-        expense.card_used = request.form['card_used']
-        expense.split_method = request.form['split_method']
-        expense.split_value = float(request.form.get('split_value', 0)) if request.form.get('split_value') else 0
-        expense.split_details = split_details
-        expense.paid_by = request.form['paid_by']
-        expense.group_id = request.form.get('group_id') if request.form.get('group_id') and request.form.get('group_id') != '' else None
-        expense.split_with = split_with_str
-        expense.category_id = category_id
+        expense.amount = float(request.form['amount'])
+        expense.date = datetime.strptime(request.form['date'], '%Y-%m-%d')
+        expense.category_id = request.form.get('category_id') if request.form.get('category_id') else None
+        expense.account_id = request.form.get('account_id') if request.form.get('account_id') else None
         
+        # Set transaction type
+        expense.transaction_type = transaction_type
         
-        # Handle tags - first remove all existing tags
-        expense.tags = []
-        
-        # Add new tags
-        tag_ids = request.form.getlist('tags')
-        if tag_ids:
-            for tag_id in tag_ids:
-                tag = Tag.query.get(int(tag_id))
-                if tag and tag.user_id == current_user.id:
-                    expense.tags.append(tag)
+        # Type-specific processing
+        if transaction_type == 'expense':
+            # Check if this is a personal expense (no splits)
+            is_personal_expense = request.form.get('personal_expense') == 'on'
+            
+            # Handle split_with based on whether it's a personal expense
+            if is_personal_expense:
+                # For personal expenses, we set split_with to empty
+                expense.split_with = None
+            else:
+                # Handle multi-select for split_with
+                split_with_ids = request.form.getlist('split_with')
+                expense.split_with = ','.join(split_with_ids) if split_with_ids else None
+            
+            # Process split details if provided
+            expense.split_details = request.form.get('split_details')
+            expense.split_method = request.form['split_method']
+            expense.paid_by = request.form['paid_by']
+            expense.group_id = request.form.get('group_id') if request.form.get('group_id') and request.form.get('group_id') != '' else None
+            
+            # Clear transfer-specific fields
+            expense.destination_account_id = None
+            
+        elif transaction_type == 'income':
+            # Income has no split details
+            expense.split_with = None
+            expense.split_details = None
+            expense.split_method = 'equal'
+            expense.paid_by = current_user.id
+            expense.group_id = None
+            
+            # Clear transfer-specific fields
+            expense.destination_account_id = None
+            
+        elif transaction_type == 'transfer':
+            # Transfer has no split details
+            expense.split_with = None
+            expense.split_details = None
+            expense.split_method = 'equal'
+            expense.paid_by = current_user.id
+            expense.group_id = None
+            
+            # Set transfer-specific fields
+            expense.destination_account_id = request.form.get('destination_account_id')
         
         # Save changes
         db.session.commit()
-        flash('Expense updated successfully!')
+        flash('Transaction updated successfully!')
         
     except Exception as e:
         db.session.rollback()
@@ -2225,11 +3440,29 @@ def add_recurring():
         if request.form.get('split_details'):
             split_details = request.form.get('split_details')
         
+        # Handle account_id vs card_used transition
+        account_id = request.form.get('account_id')
+        card_used = "Default Card"  # Default value
+        
+        if account_id:
+            if account_id == 'default':
+                # For backward compatibility use a default card name
+                card_used = "Default Card"
+            else:
+                # Try to get the account name to use as card_used for backward compatibility
+                try:
+                    account = Account.query.get(int(account_id))
+                    if account:
+                        card_used = account.name
+                except:
+                    # If account lookup fails, use a default
+                    card_used = "Default Card"
+        
         # Create new recurring expense
         recurring_expense = RecurringExpense(
             description=request.form['description'],
             amount=float(request.form['amount']),
-            card_used=request.form['card_used'],
+            card_used=card_used,  # For backward compatibility
             split_method=request.form['split_method'],
             split_value=float(request.form.get('split_value', 0)) if request.form.get('split_value') else 0,
             split_details=split_details,
@@ -2244,8 +3477,13 @@ def add_recurring():
             active=True
         )
         
-        # Handle tags if present
-        tag_ids = request.form.getlist('tags')
+        # Handle account_id if your model has this field
+        if hasattr(RecurringExpense, 'account_id') and account_id and account_id != 'default':
+            recurring_expense.account_id = int(account_id)
+        
+        # Handle currency if provided
+        if request.form.get('currency_code'):
+            recurring_expense.currency_code = request.form.get('currency_code')
         
         db.session.add(recurring_expense)
         db.session.commit()
@@ -2255,12 +3493,9 @@ def add_recurring():
         if start_date <= today:
             expense = recurring_expense.create_expense_instance(start_date)
             
-            # Add the tags to the expense
-            if tag_ids:
-                for tag_id in tag_ids:
-                    tag = Tag.query.get(int(tag_id))
-                    if tag and tag.user_id == current_user.id:
-                        expense.tags.append(tag)
+            # Pass account_id to the expense if the model has it
+            if hasattr(expense, 'account_id') and hasattr(recurring_expense, 'account_id'):
+                expense.account_id = recurring_expense.account_id
             
             db.session.add(expense)
             db.session.commit()
@@ -2393,10 +3628,28 @@ def update_recurring(recurring_id):
         if request.form.get('split_details'):
             split_details = request.form.get('split_details')
         
+        # Handle account_id vs card_used transition
+        account_id = request.form.get('account_id')
+        if account_id:
+            if account_id == 'default':
+                # Keep the existing card_used value if 'default' is selected
+                pass
+            else:
+                # Try to get the account name
+                try:
+                    account = Account.query.get(int(account_id))
+                    if account:
+                        recurring.card_used = account.name
+                        # Set account_id if the model has this field
+                        if hasattr(recurring, 'account_id'):
+                            recurring.account_id = int(account_id)
+                except:
+                    # Fallback - don't change card_used
+                    pass
+        
         # Update recurring expense fields
         recurring.description = request.form['description']
         recurring.amount = float(request.form['amount'])
-        recurring.card_used = request.form['card_used']
         recurring.split_method = request.form['split_method']
         recurring.split_value = float(request.form.get('split_value', 0)) if request.form.get('split_value') else 0
         recurring.split_details = split_details
@@ -2560,8 +3813,15 @@ def admin_add_user():
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
+
     
-    # Send welcome email
+    create_default_categories(user.id)
+    db.session.commit() 
+
+
+    create_default_budgets(user.id)
+    db.session.commit() 
+
     try:
         send_welcome_email(user)
     except Exception as e:
@@ -2582,11 +3842,68 @@ def admin_delete_user(user_id):
     
     user = User.query.filter_by(id=user_id).first()
     if user:
-        # Delete associated expenses first
-        Expense.query.filter_by(user_id=user_id).delete()
-        db.session.delete(user)
-        db.session.commit()
-        flash('User deleted successfully!')
+        try:
+            # Start a transaction
+            db.session.begin_nested()
+            
+            # Delete all related data first
+            
+            # 1. Delete user's categories (must happen before expenses)
+            Category.query.filter_by(user_id=user_id).delete()
+            
+            # 2. Delete user's expenses
+            Expense.query.filter_by(user_id=user_id).delete()
+            
+            # 3. Delete user's recurring expenses
+            RecurringExpense.query.filter_by(user_id=user_id).delete()
+            
+            # 4. Delete user's budgets
+            Budget.query.filter_by(user_id=user_id).delete()
+            
+            # 5. Delete user's tags
+            Tag.query.filter_by(user_id=user_id).delete()
+            
+            # 6. Delete user's category mappings
+            CategoryMapping.query.filter_by(user_id=user_id).delete()
+            
+            # 7. Delete user's accounts
+            Account.query.filter_by(user_id=user_id).delete()
+            
+            # 8. Delete user's settlements (both as payer and receiver)
+            Settlement.query.filter(or_(
+                Settlement.payer_id == user_id,
+                Settlement.receiver_id == user_id
+            )).delete(synchronize_session=False)
+            
+            # 9. Handle any groups the user created
+            # For groups created by this user, either reassign or delete
+            for group in Group.query.filter_by(created_by=user_id).all():
+                if len(group.members) > 1:
+                    # Find another member to become the owner
+                    for member in group.members:
+                        if member.id != user_id:
+                            group.created_by = member.id
+                            break
+                else:
+                    # Delete the group if no other members
+                    db.session.delete(group)
+            
+            # 10. Remove user from their groups (membership)
+            for group in user.groups:
+                group.members.remove(user)
+            
+            # 11. Handle SimpleFin connection if exists
+            SimpleFin.query.filter_by(user_id=user_id).delete()
+            
+            # Finally, delete the user
+            db.session.delete(user)
+            db.session.commit()
+            flash('User deleted successfully!')
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error deleting user: {str(e)}")
+            flash(f'Error deleting user: {str(e)}')
     
     return redirect(url_for('admin'))
 
@@ -2840,6 +4157,7 @@ def delete_currency(code):
             'success': False, 
             'message': f'An error occurred while deleting currency {code}.'
         }), 500
+    
 @app.route('/currencies/set-base/<string:code>', methods=['POST'])
 @login_required
 def set_base_currency(code):
@@ -2894,6 +4212,7 @@ def set_base_currency(code):
         flash('An error occurred while changing the base currency.', 'error')
     
     return redirect(url_for('manage_currencies'))  # Changed 'currencies' to 'manage_currencies'
+
 @app.route('/update_currency_rates', methods=['POST'])
 @login_required_dev
 def update_rates_route():
@@ -2910,6 +4229,7 @@ def update_rates_route():
         flash('Error updating currency rates. Check the logs for details.')
     
     return redirect(url_for('manage_currencies'))
+
 @app.route('/set_default_currency', methods=['POST'])
 @login_required_dev
 def set_default_currency():
@@ -2927,8 +4247,6 @@ def set_default_currency():
     
     flash(f'Default currency set to {currency.code} ({currency.symbol})')
     return redirect(url_for('manage_currencies'))
-
-
 
 
 #--------------------
@@ -3059,6 +4377,1681 @@ def transactions():
                         users=users,
                         base_currency=base_currency,
                         currencies=currencies)
+
+
+
+@app.route('/get_transaction_form_html')
+@login_required_dev
+def get_transaction_form_html():
+    """Return the HTML for the add transaction form"""
+    base_currency = get_base_currency()
+    users = User.query.all()
+    groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
+    categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.name).all()
+    currencies = Currency.query.all()
+    
+    return render_template('partials/add_transaction_form.html',
+                          users=users,
+                          groups=groups,
+                          categories=categories,
+                          currencies=currencies,
+                          base_currency=base_currency)
+
+@app.route('/get_expense_edit_form/<int:expense_id>')
+@login_required_dev
+def get_expense_edit_form(expense_id):
+    """Return the HTML for editing an expense"""
+    expense = Expense.query.get_or_404(expense_id)
+    
+    # Security check
+    if expense.user_id != current_user.id and current_user.id not in (expense.split_with or ''):
+        return 'Access denied', 403
+    
+    base_currency = get_base_currency()
+    users = User.query.all()
+    groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
+    categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.name).all()
+    currencies = Currency.query.all()
+    
+    accounts = Account.query.filter_by(user_id=current_user.id).all()
+    return render_template('partials/edit_transaction_form.html',
+                          expense=expense,
+                          users=users,
+                          groups=groups,
+                          categories=categories,
+                          currencies=currencies,
+                          accounts=accounts,
+                          user=current_user,
+                          base_currency=base_currency)
+
+
+#--------------------
+# ROUTES: Accounts and Imports 
+#--------------------
+
+@app.route('/accounts')
+@login_required_dev
+def accounts():
+    """View and manage financial accounts"""
+    # Get all user accounts
+    user_accounts = Account.query.filter_by(user_id=current_user.id).all()
+    
+    # Calculate financial summary
+    total_assets = sum(account.balance for account in user_accounts 
+                    if account.type in ['checking', 'savings', 'investment'] and account.balance > 0)
+    
+    total_liabilities = abs(sum(account.balance for account in user_accounts 
+                          if account.type in ['credit', 'loan'] or account.balance < 0))
+    
+    net_worth = total_assets - total_liabilities
+    
+    # Get base currency for display
+    base_currency = get_base_currency()
+    
+    # Get all currencies for the form
+    currencies = Currency.query.all()
+    
+    return render_template('accounts.html',
+                          accounts=user_accounts,
+                          total_assets=total_assets,
+                          total_liabilities=total_liabilities,
+                          net_worth=net_worth,
+                          base_currency=base_currency,
+                          currencies=currencies)
+
+
+
+@app.route('/advanced')
+@login_required_dev
+def advanced():
+    """Display advanced features like account management and imports"""
+    # Get all user accounts
+    accounts = Account.query.filter_by(user_id=current_user.id).all()
+    
+    # Get connected accounts (those with SimpleFin integration)
+    connected_accounts = [account for account in accounts if account.import_source == 'simplefin']
+    
+    # Calculate financial summary
+    total_assets = sum(account.balance for account in accounts 
+                    if account.type in ['checking', 'savings', 'investment'] and account.balance > 0)
+    
+    total_liabilities = abs(sum(account.balance for account in accounts 
+                          if account.type in ['credit', 'loan'] or account.balance < 0))
+    
+    net_worth = total_assets - total_liabilities
+    
+    # Get base currency for display
+    base_currency = get_base_currency()
+    
+    # Get all currencies for the form
+    currencies = Currency.query.all()
+    
+    return render_template('advanced.html',
+                          accounts=accounts,
+                          connected_accounts=connected_accounts,
+                          total_assets=total_assets,
+                          total_liabilities=total_liabilities,
+                          net_worth=net_worth,
+                          base_currency=base_currency,
+                          currencies=currencies)
+
+
+@app.route('/add_account', methods=['POST'])
+@login_required_dev
+def add_account():
+    """Add a new account"""
+    try:
+        name = request.form.get('name')
+        account_type = request.form.get('type')
+        institution = request.form.get('institution')
+        balance = float(request.form.get('balance', 0))
+        currency_code = request.form.get('currency_code', current_user.default_currency_code)
+        
+        # Create new account
+        account = Account(
+            name=name,
+            type=account_type,
+            institution=institution,
+            balance=balance,
+            currency_code=currency_code,
+            user_id=current_user.id
+        )
+        
+        db.session.add(account)
+        db.session.commit()
+        
+        flash('Account added successfully')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error adding account: {str(e)}')
+    
+    return redirect(url_for('accounts'))
+
+
+@app.route('/get_account/<int:account_id>')
+@login_required_dev
+def get_account(account_id):
+    """Get account details via AJAX"""
+    try:
+        account = Account.query.get_or_404(account_id)
+        
+        # Security check
+        if account.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'message': 'You do not have permission to view this account'
+            }), 403
+        
+        # Get transaction count for this account
+        transaction_count = Expense.query.filter_by(account_id=account_id).count()
+        
+        return jsonify({
+            'success': True,
+            'account': {
+                'id': account.id,
+                'name': account.name,
+                'type': account.type,
+                'institution': account.institution,
+                'balance': account.balance,
+                'currency_code': account.currency_code or current_user.default_currency_code,
+                'transaction_count': transaction_count
+            }
+        })
+    except Exception as e:
+        app.logger.error(f"Error retrieving account {account_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+@app.route('/update_account', methods=['POST'])
+@login_required_dev
+def update_account():
+    """Update an existing account"""
+    try:
+        account_id = request.form.get('account_id')
+        account = Account.query.get_or_404(account_id)
+        
+        # Security check
+        if account.user_id != current_user.id:
+            flash('You do not have permission to edit this account')
+            return redirect(url_for('accounts'))
+        
+        # Update fields
+        account.name = request.form.get('name')
+        account.type = request.form.get('type')
+        account.institution = request.form.get('institution')
+        account.balance = float(request.form.get('balance', 0))
+        account.currency_code = request.form.get('currency_code')
+        
+        db.session.commit()
+        flash('Account updated successfully')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating account: {str(e)}')
+    
+    return redirect(url_for('accounts'))
+
+@app.route('/delete_account/<int:account_id>', methods=['DELETE'])
+@login_required_dev
+def delete_account(account_id):
+    """Delete an account"""
+    try:
+        account = Account.query.get_or_404(account_id)
+        
+        # Security check
+        if account.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'message': 'You do not have permission to delete this account'
+            }), 403
+        
+        db.session.delete(account)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Account deleted successfully'
+        })
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting account {account_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+    
+@app.route('/import_csv', methods=['POST'])
+@login_required_dev
+def import_csv():
+    """Import transactions from a CSV file"""
+    if 'csv_file' not in request.files:
+        flash('No file provided')
+        return redirect(url_for('advanced'))
+    
+    csv_file = request.files['csv_file']
+    
+    if csv_file.filename == '':
+        flash('No file selected')
+        return redirect(url_for('advanced'))
+    
+    # Case-insensitive extension check
+    if not csv_file.filename.lower().endswith('.csv'):
+        flash('File must be a CSV')
+        return redirect(url_for('advanced'))
+    
+    imported_expenses = []
+    
+    try:
+        # Get form parameters
+        account_id = request.form.get('account_id')
+        date_format = request.form.get('date_format', 'MM/DD/YYYY')
+        date_column = request.form.get('date_column', 'Date')
+        amount_column = request.form.get('amount_column', 'Amount')
+        description_column = request.form.get('description_column', 'Description')
+        category_column = request.form.get('category_column')
+        type_column = request.form.get('type_column')
+        id_column = request.form.get('id_column')
+        
+        detect_duplicates = 'detect_duplicates' in request.form
+        auto_categorize = 'auto_categorize' in request.form
+        negative_is_expense = 'negative_is_expense' in request.form
+        
+        # Read file content
+        file_content = csv_file.read().decode('utf-8')
+        
+        # Parse CSV
+        import csv
+        import io
+        from datetime import datetime
+        
+        csv_reader = csv.DictReader(io.StringIO(file_content))
+        
+        # Get account if specified
+        account = None
+        if account_id:
+            account = Account.query.get(account_id)
+            if account and account.user_id != current_user.id:
+                flash('Invalid account selected')
+                return redirect(url_for('advanced'))
+        
+        # Get existing cards used
+        existing_cards = db.session.query(Expense.card_used).filter_by(
+            user_id=current_user.id
+        ).distinct().all()
+        existing_cards = [card[0] for card in existing_cards if card[0]]
+        
+        # Use the most frequent card as default if available
+        default_card = "Imported Card"
+        if existing_cards:
+            from collections import Counter
+            card_counter = Counter()
+            for card in existing_cards:
+                card_counter[card] += 1
+            default_card = card_counter.most_common(1)[0][0]
+        
+        # Define date parser based on selected format
+        def parse_date(date_str):
+            if date_format == 'MM/DD/YYYY':
+                return datetime.strptime(date_str, '%m/%d/%Y')
+            elif date_format == 'DD/MM/YYYY':
+                return datetime.strptime(date_str, '%d/%m/%Y')
+            elif date_format == 'YYYY-MM-DD':
+                return datetime.strptime(date_str, '%Y-%m-%d')
+            elif date_format == 'YYYY/MM/DD':
+                return datetime.strptime(date_str, '%Y/%m/%d')
+            else:
+                return datetime.strptime(date_str, '%m/%d/%Y')  # Default
+        
+        # Process each row
+        imported_count = 0
+        duplicate_count = 0
+        
+        for row in csv_reader:
+            try:
+                # Skip if missing required fields
+                if not all(key in row for key in [date_column, amount_column, description_column]):
+                    continue
+                
+                # Extract data
+                date_str = row[date_column].strip()
+                amount_str = row[amount_column].strip().replace('$', '').replace(',', '')
+                description = row[description_column].strip()
+                
+                # Skip if empty data
+                if not date_str or not amount_str or not description:
+                    continue
+                
+                # Parse date
+                transaction_date = parse_date(date_str)
+                
+                # Parse amount (handle negative values)
+                try:
+                    amount = float(amount_str)
+                except ValueError:
+                    continue  # Skip if amount can't be parsed
+                
+                # Try to detect if this is an internal transfer
+                is_transfer, source_account_id, destination_account_id = False, None, None
+                if account and account.id:
+                    is_transfer, source_account_id, destination_account_id = detect_internal_transfer(
+                        description, amount, account.id
+                    )
+                
+                if is_transfer:
+                    # This is an internal transfer
+                    transaction_type = 'transfer'
+                    # Use the detected accounts, falling back to the selected account
+                    source_account_id = source_account_id or account.id
+                    # If we couldn't determine the destination, it stays None
+                else:
+                    # Use the standard transaction type detection
+                    transaction_type = determine_transaction_type(row, account.id if account else None)
+                
+                # Get external ID if available
+                external_id = row.get(id_column) if id_column and id_column in row else None
+                
+                # Check for duplicates if enabled
+                if detect_duplicates and external_id:
+                    existing = Expense.query.filter_by(
+                        user_id=current_user.id,
+                        external_id=external_id,
+                        import_source='csv'
+                    ).first()
+                    
+                    if existing:
+                        duplicate_count += 1
+                        continue
+                
+                # Get category from CSV or auto-categorize (but not for transfers)
+                category_id = None
+                if transaction_type != 'transfer':
+                    category_name = None
+                    if category_column and category_column in row:
+                        category_name = row[category_column].strip()
+                    
+                    # Use enhanced get_category_id that supports auto-categorization
+                    category_id = get_category_id(
+                        category_name, 
+                        description if auto_categorize else None, 
+                        current_user.id
+                    )
+                
+                # Create new transaction
+                transaction = Expense(
+                    description=description,
+                    amount=abs(amount),  # Always store positive amount
+                    date=transaction_date,
+                    card_used=default_card,  # Use most common card or a default
+                    transaction_type=transaction_type,
+                    split_method='equal',
+                    paid_by=current_user.id,
+                    user_id=current_user.id,
+                    category_id=category_id,
+                    account_id=source_account_id or (account.id if account else None),
+                    destination_account_id=destination_account_id,
+                    external_id=external_id,
+                    import_source='csv'
+                )
+                
+                # Add to session
+                db.session.add(transaction)
+                imported_expenses.append(transaction)
+                imported_count += 1
+                
+                # If this is a transfer and we've identified a destination account,
+                # update the balances of both accounts
+                if transaction_type == 'transfer' and transaction.account_id and transaction.destination_account_id:
+                    from_account = Account.query.get(transaction.account_id)
+                    to_account = Account.query.get(transaction.destination_account_id)
+                    
+                    if from_account and to_account and from_account.user_id == current_user.id and to_account.user_id == current_user.id:
+                        from_account.balance -= amount
+                        to_account.balance += amount
+                
+            except Exception as row_error:
+                app.logger.error(f"Error processing CSV row: {str(row_error)}")
+                continue
+        
+        # Commit all transactions
+        db.session.commit()
+        
+        # Update account balance if specified
+        if account and imported_count > 0:
+            # Update the last sync time
+            account.last_sync = datetime.utcnow()
+            db.session.commit()
+        
+        # Flash success message
+        flash(f'Successfully imported {imported_count} transactions. Skipped {duplicate_count} duplicates.')
+        
+        # Redirect to a page showing the imported transactions
+        return render_template('import_results.html', 
+                               expenses=imported_expenses,
+                               count=imported_count,
+                               duplicate_count=duplicate_count)
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error importing CSV: {str(e)}")
+        flash(f'Error importing transactions: {str(e)}')
+    
+    return redirect(url_for('advanced'))
+
+
+#--------------------
+# ROUTES: simplefun
+#--------------------
+@app.route('/connect_simplefin')
+@login_required_dev
+def connect_simplefin():
+    """Redirect users to SimpleFin site to get their setup token"""
+    if not app.config['SIMPLEFIN_ENABLED']:
+        flash('SimpleFin integration is not enabled. Please contact the administrator.')
+        return redirect(url_for('advanced'))
+    
+    # Get the URL for users to obtain their setup token
+    setup_token_url = simplefin_client.get_setup_token_instructions()
+    
+    # Redirect to SimpleFin setup token page
+    return redirect(setup_token_url)
+
+@app.route('/simplefin/process_token', methods=['POST'])
+@login_required_dev
+def process_simplefin_token():
+    """Process the setup token provided by the user"""
+    if not app.config['SIMPLEFIN_ENABLED']:
+        flash('SimpleFin integration is not enabled.')
+        return redirect(url_for('advanced'))
+    
+    setup_token = request.form.get('setup_token')
+    if not setup_token:
+        flash('No setup token provided.')
+        return redirect(url_for('advanced'))
+    
+    # Decode the setup token to get the claim URL
+    claim_url = simplefin_client.decode_setup_token(setup_token)
+    if not claim_url:
+        flash('Invalid setup token. Please try again.')
+        return redirect(url_for('advanced'))
+    
+    # Claim the access URL
+    access_url = simplefin_client.claim_access_url(claim_url)
+    if not access_url:
+        flash('Failed to claim access URL. Please try again with a new setup token.')
+        return redirect(url_for('advanced'))
+    
+    
+    if not simplefin_client.test_access_url(access_url):
+        flash('The access URL appears to be invalid. Please try again with a new setup token.')
+        return redirect(url_for('advanced'))
+    
+    encoded_access_url = base64.b64encode(access_url.encode()).decode()
+    
+    # Create a SimpleFin settings record for this user
+    try:
+        # Check if a SimpleFin settings record already exists for this user
+        simplefin_settings = SimpleFin.query.filter_by(user_id=current_user.id).first()
+        
+        if simplefin_settings:
+            # Update existing settings
+            simplefin_settings.access_url = encoded_access_url
+            simplefin_settings.last_sync = None  # Reset last sync time
+            simplefin_settings.enabled = True
+            simplefin_settings.sync_frequency = 'daily'  # Default to daily
+        else:
+            # Create new settings
+            simplefin_settings = SimpleFin(
+                user_id=current_user.id,
+                access_url=encoded_access_url,
+                last_sync=None,
+                enabled=True,
+                sync_frequency='daily'
+            )
+            db.session.add(simplefin_settings)
+            
+        db.session.commit()
+        
+        # Redirect to fetch accounts page
+        return redirect(url_for('simplefin_fetch_accounts'))
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error saving SimpleFin settings: {str(e)}")
+        flash(f'Error saving SimpleFin settings: {str(e)}')
+        return redirect(url_for('advanced'))
+
+@app.route('/simplefin/fetch_accounts') 
+@login_required_dev 
+def simplefin_fetch_accounts():
+    """Fetch accounts and transactions from SimpleFin"""
+    if not app.config['SIMPLEFIN_ENABLED']:
+        flash('SimpleFin integration is not enabled.')
+        return redirect(url_for('advanced'))
+    
+    try:
+        # Get the user's SimpleFin settings
+        simplefin_settings = SimpleFin.query.filter_by(user_id=current_user.id).first()
+        
+        if not simplefin_settings or not simplefin_settings.access_url:
+            flash('No SimpleFin connection found. Please connect with SimpleFin first.')
+            return redirect(url_for('advanced'))
+        
+        # Decode the access URL
+        access_url = base64.b64decode(simplefin_settings.access_url.encode()).decode()
+        
+        # Fetch accounts and transactions (last 30 days by default)
+        raw_data = simplefin_client.get_accounts_with_transactions(access_url, days_back=30)
+        
+        if not raw_data:
+            flash('Failed to fetch accounts and transactions from SimpleFin.')
+            return redirect(url_for('advanced'))
+        
+        # Process the raw data
+        accounts = simplefin_client.process_raw_accounts(raw_data)
+        
+        # Store account IDs in session instead of full data
+        account_ids = [acc.get('id') for acc in accounts if acc.get('id')]
+        session['simplefin_account_ids'] = account_ids
+        
+        # Render the account selection template
+        return render_template('simplefin_accounts.html', accounts=accounts)
+        
+    except Exception as e:
+        app.logger.error(f"Error fetching SimpleFin accounts: {str(e)}")
+        flash(f'Error fetching accounts: {str(e)}')
+        return redirect(url_for('advanced'))
+@app.route('/simplefin/add_accounts', methods=['POST'])
+@login_required_dev
+def simplefin_add_accounts():
+    """Process selected accounts to add to the system"""
+    if not app.config['SIMPLEFIN_ENABLED']:
+        flash('SimpleFin integration is not enabled.')
+        return redirect(url_for('advanced'))
+    
+    # Get selected account IDs from form
+    account_ids = request.form.getlist('account_ids')
+    if not account_ids:
+        flash('No accounts selected.')
+        return redirect(url_for('advanced'))
+    
+    try:
+        # Get the user's SimpleFin settings
+        simplefin_settings = SimpleFin.query.filter_by(user_id=current_user.id).first()
+        
+        if not simplefin_settings or not simplefin_settings.access_url:
+            flash('No SimpleFin connection found. Please reconnect with SimpleFin.')
+            return redirect(url_for('advanced'))
+        
+        # Decode the access URL
+        access_url = base64.b64decode(simplefin_settings.access_url.encode()).decode()
+        
+        # Fetch accounts and transactions again (instead of relying on session data)
+        raw_data = simplefin_client.get_accounts_with_transactions(access_url, days_back=30)
+        
+        if not raw_data:
+            flash('Failed to fetch accounts from SimpleFin. Please try again.')
+            return redirect(url_for('advanced'))
+        
+        # Process the raw data
+        accounts = simplefin_client.process_raw_accounts(raw_data)
+        
+        # Filter to only selected accounts
+        selected_accounts = [acc for acc in accounts if acc.get('id') in account_ids]
+        
+        # Count for success message
+        accounts_added = 0
+        transactions_added = 0
+        
+        # Get the user's default currency
+        default_currency = current_user.default_currency_code or 'USD'
+        
+        # Process and add each selected account
+        for sf_account in selected_accounts:
+            # Check if account already exists
+            existing_account = Account.query.filter_by(
+                user_id=current_user.id,
+                name=sf_account.get('name'),
+                institution=sf_account.get('institution')
+            ).first()
+            
+            account_obj = None
+            
+            if existing_account:
+                # Update existing account
+                existing_account.balance = sf_account.get('balance', 0)
+                existing_account.import_source = 'simplefin'
+                existing_account.last_sync = datetime.utcnow()
+                existing_account.external_id = sf_account.get('id')
+                existing_account.status = 'active'
+                db.session.commit()
+                accounts_added += 1
+                account_obj = existing_account
+            else:
+                # Create new account
+                new_account = Account(
+                    name=sf_account.get('name'),
+                    type=sf_account.get('type'),
+                    institution=sf_account.get('institution'),
+                    balance=sf_account.get('balance', 0),
+                    currency_code=sf_account.get('currency_code', default_currency),
+                    user_id=current_user.id,
+                    import_source='simplefin',
+                    external_id=sf_account.get('id'),
+                    last_sync=datetime.utcnow(),
+                    status='active'
+                )
+                db.session.add(new_account)
+                db.session.flush()  # Get ID without committing
+                accounts_added += 1
+                account_obj = new_account
+            
+            # Create transaction objects using the enhanced client method
+            transaction_objects, import_count = simplefin_client.create_transactions_from_account(
+                sf_account,
+                account_obj,
+                current_user.id,
+                detect_internal_transfer,  # Your transfer detection function
+                auto_categorize_transaction,  # Your auto-categorization function
+                get_category_id  # Your function to find/create categories
+            )
+            
+            # Check for existing transactions to avoid duplicates
+            transaction_objects_filtered = []
+            for transaction in transaction_objects:
+                existing = Expense.query.filter_by(
+                    user_id=current_user.id,
+                    external_id=transaction.external_id,
+                    import_source='simplefin'
+                ).first()
+                
+                if not existing:
+                    transaction_objects_filtered.append(transaction)
+            
+            # Add filtered transactions to the session
+            for transaction in transaction_objects_filtered:
+                db.session.add(transaction)
+                transactions_added += 1
+                
+                # Handle account balance updates for transfers
+                if transaction.transaction_type == 'transfer' and transaction.destination_account_id:
+                    # Find the destination account
+                    to_account = Account.query.get(transaction.destination_account_id)
+                    if to_account and to_account.user_id == current_user.id:
+                        # For transfers, add to destination account balance
+                        to_account.balance += transaction.amount
+        
+        # Commit all changes
+        db.session.commit()
+        
+        # Update the SimpleFin settings to record the sync time
+        simplefin_settings.last_sync = datetime.utcnow()
+        db.session.commit()
+        
+        flash(f'Successfully added {accounts_added} accounts and {transactions_added} transactions from SimpleFin.')
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error adding SimpleFin accounts: {str(e)}")
+        flash(f'Error adding accounts: {str(e)}')
+    
+    return redirect(url_for('accounts'))
+
+@app.route('/sync_account/<int:account_id>', methods=['POST'])
+@login_required_dev
+def sync_account(account_id):
+    """Sync transactions for a specific account"""
+    try:
+        account = Account.query.get_or_404(account_id)
+        
+        # Security check
+        if account.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'message': 'You do not have permission to sync this account'
+            }), 403
+        
+        # Check if this is a SimpleFin account
+        if account.import_source != 'simplefin' or not account.external_id:
+            return jsonify({
+                'success': False,
+                'message': 'This account is not connected to SimpleFin'
+            }), 400
+        
+        # Get the user's SimpleFin access URL
+        simplefin_settings = SimpleFin.query.filter_by(user_id=current_user.id).first()
+        
+        if not simplefin_settings or not simplefin_settings.access_url:
+            return jsonify({
+                'success': False,
+                'message': 'No SimpleFin connection found. Please reconnect with SimpleFin.',
+                'action': 'reconnect',
+                'redirect': url_for('connect_simplefin')
+            })
+        
+        # Decode the access URL
+        access_url = base64.b64decode(simplefin_settings.access_url.encode()).decode()
+        
+        # Fetch accounts and transactions
+        raw_data = simplefin_client.get_accounts_with_transactions(access_url, days_back=7)  # Last 7 days for manual sync
+        
+        if not raw_data:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to fetch data from SimpleFin.'
+            }), 500
+        
+        # Process the raw data
+        accounts = simplefin_client.process_raw_accounts(raw_data)
+        
+        # Find the matching account
+        sf_account = next((acc for acc in accounts if acc.get('id') == account.external_id), None)
+        
+        if not sf_account:
+            return jsonify({
+                'success': False,
+                'message': 'Account not found in SimpleFin data.'
+            }), 404
+        
+        # Update account details
+        account.balance = sf_account.get('balance', account.balance)
+        account.last_sync = datetime.utcnow()
+        
+        # Create transaction objects using the enhanced client method
+        transaction_objects, _ = simplefin_client.create_transactions_from_account(
+            sf_account,
+            account,
+            current_user.id,
+            detect_internal_transfer,
+            auto_categorize_transaction,
+            get_category_id
+        )
+        
+        # Track new transactions
+        new_transactions = 0
+        
+        # Filter out existing transactions and add new ones
+        for transaction in transaction_objects:
+            # Check if transaction already exists
+            existing = Expense.query.filter_by(
+                user_id=current_user.id,
+                external_id=transaction.external_id,
+                import_source='simplefin'
+            ).first()
+            
+            if not existing:
+                db.session.add(transaction)
+                new_transactions += 1
+                
+                # Handle account balance updates for transfers
+                if transaction.transaction_type == 'transfer' and transaction.destination_account_id:
+                    # Find the destination account
+                    to_account = Account.query.get(transaction.destination_account_id)
+                    if to_account and to_account.user_id == current_user.id:
+                        # For transfers, add to destination account balance
+                        to_account.balance += transaction.amount
+        
+        # Commit changes
+        db.session.commit()
+        
+        # Update the SimpleFin settings last_sync time
+        if simplefin_settings:
+            simplefin_settings.last_sync = datetime.utcnow()
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Account synced successfully. {new_transactions} new transactions imported.',
+            'new_transactions': new_transactions
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error syncing account {account_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+@app.route('/disconnect_account/<int:account_id>', methods=['POST'])
+@login_required_dev
+def disconnect_account(account_id):
+    """Disconnect an account from SimpleFin"""
+    try:
+        account = Account.query.get_or_404(account_id)
+        
+        # Security check
+        if account.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'message': 'You do not have permission to disconnect this account'
+            }), 403
+        
+        # Check if this is a SimpleFin account
+        if account.import_source != 'simplefin':
+            return jsonify({
+                'success': False,
+                'message': 'This account is not connected to SimpleFin'
+            }), 400
+        
+        # Update account to remove SimpleFin connection
+        account.import_source = None
+        account.external_id = None
+        account.status = 'inactive'
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Account disconnected successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error disconnecting account {account_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+
+@app.route('/simplefin/disconnect', methods=['POST'])
+@login_required_dev
+def simplefin_disconnect():
+    """Disconnect SimpleFin integration for the current user"""
+    if not app.config['SIMPLEFIN_ENABLED']:
+        return jsonify({
+            'success': False,
+            'message': 'SimpleFin integration is not enabled.'
+        })
+    
+    try:
+        # Get the user's SimpleFin settings
+        simplefin_settings = SimpleFin.query.filter_by(user_id=current_user.id).first()
+        
+        if not simplefin_settings:
+            return jsonify({
+                'success': False,
+                'message': 'No SimpleFin connection found.'
+            })
+        
+        # Disable the SimpleFin integration
+        simplefin_settings.enabled = False
+        db.session.commit()
+        
+        # Also update all SimpleFin-connected accounts to show as disconnected
+        accounts = Account.query.filter_by(
+            user_id=current_user.id,
+            import_source='simplefin'
+        ).all()
+        
+        for account in accounts:
+            account.import_source = None
+            account.external_id = None
+            account.status = 'inactive'
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'SimpleFin disconnected successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error disconnecting SimpleFin: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        })
+
+@app.route('/simplefin/refresh', methods=['POST'])
+@login_required_dev
+def simplefin_refresh():
+    """Refresh SimpleFin connection and trigger a sync"""
+    if not app.config['SIMPLEFIN_ENABLED']:
+        return jsonify({
+            'success': False,
+            'message': 'SimpleFin integration is not enabled.'
+        })
+    
+    try:
+        # Get the user's SimpleFin settings
+        simplefin_settings = SimpleFin.query.filter_by(user_id=current_user.id).first()
+        
+        if not simplefin_settings or not simplefin_settings.access_url or not simplefin_settings.enabled:
+            # No valid connection, redirect to get a new setup token
+            return jsonify({
+                'success': False,
+                'message': 'No valid SimpleFin connection found. Please reconnect.',
+                'redirect': url_for('connect_simplefin')
+            })
+        
+        # Decode the access URL and test it
+        access_url = base64.b64decode(simplefin_settings.access_url.encode()).decode()
+        
+        if not simplefin_client.test_access_url(access_url):
+            # Access URL no longer valid, redirect to get a new setup token
+            return jsonify({
+                'success': False,
+                'message': 'Your SimpleFin connection has expired. Please reconnect.',
+                'redirect': url_for('connect_simplefin')
+            })
+        
+        # Access URL still valid, redirect to fetch accounts
+        return jsonify({
+            'success': True,
+            'message': 'SimpleFin connection is valid. Fetching accounts...',
+            'redirect': url_for('simplefin_fetch_accounts')
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error refreshing SimpleFin: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        })
+
+
+@app.route('/simplefin/run_scheduled_sync', methods=['POST'])
+@login_required_dev
+def run_scheduled_simplefin_sync():
+    """Manually trigger the scheduled SimpleFin sync (admin only)"""
+    if not current_user.is_admin:
+        flash('Only administrators can manually trigger the scheduled sync.')
+        return redirect(url_for('admin'))
+    
+    try:
+        # Run the sync function
+        sync_all_simplefin_accounts()
+        flash('SimpleFin scheduled sync completed successfully!')
+    except Exception as e:
+        app.logger.error(f"Error running scheduled SimpleFin sync: {str(e)}")
+        flash(f'Error running scheduled sync: {str(e)}')
+    
+    return redirect(url_for('admin'))
+
+# Function to sync all SimpleFin accounts for all users
+def sync_all_simplefin_accounts():
+    """Sync all SimpleFin accounts for all users - runs on a schedule"""
+    with app.app_context():
+        app.logger.info("Starting scheduled SimpleFin sync for all users")
+        
+        try:
+            # Get all users with SimpleFin settings
+            settings_list = SimpleFin.query.filter_by(enabled=True).all()
+            
+            for settings in settings_list:
+                # Skip if last sync was less than 12 hours ago (to prevent excessive syncing)
+                if settings.last_sync and (datetime.utcnow() - settings.last_sync).total_seconds() < 43200:  # 12 hours
+                    continue
+                
+                # Get the user
+                user = User.query.filter_by(id=settings.user_id).first()
+                if not user:
+                    continue
+                
+                # Decode the access URL
+                try:
+                    access_url = base64.b64decode(settings.access_url.encode()).decode()
+                except:
+                    app.logger.error(f"Error decoding access URL for user {settings.user_id}")
+                    continue
+                
+                # Fetch accounts and transactions (last 3 days for scheduled sync)
+                raw_data = simplefin_client.get_accounts_with_transactions(access_url, days_back=3)
+                
+                if not raw_data:
+                    app.logger.error(f"Failed to fetch SimpleFin data for user {settings.user_id}")
+                    continue
+                
+                # Process the raw data
+                accounts = simplefin_client.process_raw_accounts(raw_data)
+                
+                # Find all SimpleFin accounts for this user
+                user_accounts = Account.query.filter_by(
+                    user_id=settings.user_id,
+                    import_source='simplefin'
+                ).all()
+                
+                # Create a mapping of external IDs to account objects
+                account_map = {acc.external_id: acc for acc in user_accounts if acc.external_id}
+                
+                # Track statistics
+                accounts_updated = 0
+                transactions_added = 0
+                
+                # Update each account
+                for sf_account in accounts:
+                    external_id = sf_account.get('id')
+                    if not external_id:
+                        continue
+                    
+                    # Find the corresponding account
+                    if external_id in account_map:
+                        account = account_map[external_id]
+                        
+                        # Update account details
+                        account.balance = sf_account.get('balance', account.balance)
+                        account.last_sync = datetime.utcnow()
+                        accounts_updated += 1
+                        
+                        # Create transaction objects using the enhanced client method
+                        transaction_objects, _ = simplefin_client.create_transactions_from_account(
+                            sf_account,
+                            account,
+                            settings.user_id,
+                            detect_internal_transfer,
+                            auto_categorize_transaction,
+                            get_category_id
+                        )
+                        
+                        # Filter out existing transactions and add new ones
+                        for transaction in transaction_objects:
+                            # Check if transaction already exists
+                            existing = Expense.query.filter_by(
+                                user_id=settings.user_id,
+                                external_id=transaction.external_id,
+                                import_source='simplefin'
+                            ).first()
+                            
+                            if not existing:
+                                db.session.add(transaction)
+                                transactions_added += 1
+                                
+                                # Handle account balance updates for transfers
+                                if transaction.transaction_type == 'transfer' and transaction.destination_account_id:
+                                    # Find the destination account
+                                    to_account = Account.query.get(transaction.destination_account_id)
+                                    if to_account and to_account.user_id == settings.user_id:
+                                        # For transfers, add to destination account balance
+                                        to_account.balance += transaction.amount
+                
+                # Commit changes for this user
+                if accounts_updated > 0 or transactions_added > 0:
+                    db.session.commit()
+                    
+                    # Update the SimpleFin settings last_sync time
+                    settings.last_sync = datetime.utcnow()
+                    db.session.commit()
+                    
+                    app.logger.info(f"SimpleFin sync for user {settings.user_id}: {accounts_updated} accounts updated, {transactions_added} transactions added")
+                
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error in scheduled SimpleFin sync: {str(e)}")
+
+
+def sync_simplefin_for_user(user_id):
+    """Sync SimpleFin accounts for a specific user - to be called on login"""
+    with app.app_context():
+        app.logger.info(f"Starting SimpleFin sync for user {user_id} on login")
+        
+        try:
+            # Get the user's SimpleFin settings
+            settings = SimpleFin.query.filter_by(user_id=user_id, enabled=True).first()
+            
+            if not settings:
+                app.logger.info(f"No SimpleFin settings found for user {user_id}")
+                return
+            
+            # Decode the access URL
+            try:
+                access_url = base64.b64decode(settings.access_url.encode()).decode()
+            except:
+                app.logger.error(f"Error decoding access URL for user {user_id}")
+                return
+            
+            # Fetch accounts and transactions (last 3 days for a login sync)
+            simplefin_instance = simplefin_client
+            raw_data = simplefin_instance.get_accounts_with_transactions(access_url, days_back=3)
+            
+            if not raw_data:
+                app.logger.error(f"Failed to fetch SimpleFin data for user {user_id}")
+                return
+            
+            # Process the raw data
+            accounts = simplefin_instance.process_raw_accounts(raw_data)
+            
+            # Find all SimpleFin accounts for this user
+            user_accounts = Account.query.filter_by(
+                user_id=user_id,
+                import_source='simplefin'
+            ).all()
+            
+            # Create a mapping of external IDs to account objects
+            account_map = {acc.external_id: acc for acc in user_accounts if acc.external_id}
+            
+            # Track statistics
+            accounts_updated = 0
+            transactions_added = 0
+            
+            # Update each account
+            for sf_account in accounts:
+                external_id = sf_account.get('id')
+                if not external_id:
+                    continue
+                
+                # Find the corresponding account
+                if external_id in account_map:
+                    account = account_map[external_id]
+                    
+                    # Update account details
+                    account.balance = sf_account.get('balance', account.balance)
+                    account.last_sync = datetime.utcnow()
+                    accounts_updated += 1
+                    
+                    # Create transaction objects
+                    transaction_objects, _ = simplefin_instance.create_transactions_from_account(
+                        sf_account,
+                        account,
+                        user_id,
+                        detect_internal_transfer,
+                        auto_categorize_transaction,
+                        get_category_id
+                    )
+                    
+                    # Filter out existing transactions and add new ones
+                    for transaction in transaction_objects:
+                        # Check if transaction already exists
+                        existing = Expense.query.filter_by(
+                            user_id=user_id,
+                            external_id=transaction.external_id,
+                            import_source='simplefin'
+                        ).first()
+                        
+                        if not existing:
+                            db.session.add(transaction)
+                            transactions_added += 1
+                            
+                            # Handle account balance updates for transfers
+                            if transaction.transaction_type == 'transfer' and transaction.destination_account_id:
+                                # Find the destination account
+                                to_account = Account.query.get(transaction.destination_account_id)
+                                if to_account and to_account.user_id == user_id:
+                                    # For transfers, add to destination account balance
+                                    to_account.balance += transaction.amount
+            
+            # Commit changes for this user
+            if accounts_updated > 0 or transactions_added > 0:
+                db.session.commit()
+                
+                # Update the SimpleFin settings last_sync time
+                settings.last_sync = datetime.utcnow()
+                db.session.commit()
+                
+                app.logger.info(f"SimpleFin sync on login for user {user_id}: {accounts_updated} accounts updated, {transactions_added} transactions added")
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error in SimpleFin sync on login: {str(e)}")
+
+@app.route('/category_mappings')
+@login_required_dev
+def manage_category_mappings():
+    """View and manage category mappings for auto-categorization"""
+    # Get all mappings for the current user
+    mappings = CategoryMapping.query.filter_by(user_id=current_user.id).order_by(
+        CategoryMapping.active.desc(),
+        CategoryMapping.priority.desc(), 
+        CategoryMapping.match_count.desc()
+    ).all()
+    
+    # Get all categories for the dropdown
+    categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.name).all()
+    
+    return render_template('category_mappings.html', 
+                          mappings=mappings,
+                          categories=categories)
+@app.route('/category_mappings/create_defaults', methods=['POST'])
+@login_required_dev
+def create_default_mappings_route():
+    """Create default category mappings for the current user (on demand)"""
+    try:
+        # Get current count to check if any were created
+        current_count = CategoryMapping.query.filter_by(user_id=current_user.id).count()
+        
+        # Call the function to create default mappings
+        create_default_category_mappings(current_user.id)
+        
+        # Get new count to see how many were created
+        new_count = CategoryMapping.query.filter_by(user_id=current_user.id).count()
+        created_count = new_count - current_count
+        
+        # Return success response
+        return jsonify({
+            'success': True,
+            'count': created_count,
+            'message': f'Successfully created {created_count} default mapping rules.'
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error creating default mappings: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error creating default mappings: {str(e)}'
+        }), 500
+    
+@app.route('/bulk_categorize_transactions', methods=['POST'])
+@login_required_dev
+def bulk_categorize_transactions():
+    """Categorize all uncategorized transactions using category mapping rules"""
+    try:
+        # Get all uncategorized transactions for the current user
+        uncategorized = Expense.query.filter_by(
+            user_id=current_user.id,
+            category_id=None
+        ).all()
+        
+        # Track statistics
+        total_count = len(uncategorized)
+        categorized_count = 0
+        
+        # Process each transaction
+        for expense in uncategorized:
+            # Skip if no description
+            if not expense.description:
+                continue
+                
+            # Try to auto-categorize
+            category_id = auto_categorize_transaction(expense.description, current_user.id)
+            
+            # If we found a category, update the transaction
+            if category_id:
+                expense.category_id = category_id
+                categorized_count += 1
+        
+        # Save all changes
+        db.session.commit()
+        
+        flash(f'Successfully categorized {categorized_count} out of {total_count} transactions!')
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error bulk categorizing transactions: {str(e)}")
+        flash(f'Error: {str(e)}')
+        
+    # Determine where to redirect based on the referrer
+    referrer = request.referrer
+    if 'transactions' in referrer:
+        return redirect(url_for('transactions'))
+    elif 'category_mappings' in referrer:
+        return redirect(url_for('manage_category_mappings'))
+    else:
+        return redirect(url_for('dashboard'))
+
+
+@app.route('/category_mappings/add', methods=['POST'])
+@login_required_dev
+def add_category_mapping():
+    """Add a new category mapping rule"""
+    keyword = request.form.get('keyword', '').strip()
+    category_id = request.form.get('category_id')
+    is_regex = request.form.get('is_regex') == 'on'
+    priority = int(request.form.get('priority', 0))
+    
+    # Validate inputs
+    if not keyword or not category_id:
+        flash('Keyword and category are required.')
+        return redirect(url_for('manage_category_mappings'))
+    
+    # Check if mapping already exists
+    existing = CategoryMapping.query.filter_by(
+        user_id=current_user.id,
+        keyword=keyword
+    ).first()
+    
+    if existing:
+        flash('A mapping with this keyword already exists. Please edit the existing one.')
+        return redirect(url_for('manage_category_mappings'))
+    
+    # Create new mapping
+    mapping = CategoryMapping(
+        user_id=current_user.id,
+        keyword=keyword,
+        category_id=category_id,
+        is_regex=is_regex,
+        priority=priority,
+        active=True
+    )
+    
+    db.session.add(mapping)
+    db.session.commit()
+    
+    flash('Category mapping rule added successfully.')
+    return redirect(url_for('manage_category_mappings'))
+
+@app.route('/category_mappings/edit/<int:mapping_id>', methods=['POST'])
+@login_required_dev
+def edit_category_mapping(mapping_id):
+    """Edit an existing category mapping rule"""
+    mapping = CategoryMapping.query.get_or_404(mapping_id)
+    
+    # Check if mapping belongs to current user
+    if mapping.user_id != current_user.id:
+        flash('You don\'t have permission to edit this mapping.')
+        return redirect(url_for('manage_category_mappings'))
+    
+    # Update fields
+    mapping.keyword = request.form.get('keyword', '').strip()
+    mapping.category_id = request.form.get('category_id')
+    mapping.is_regex = request.form.get('is_regex') == 'on'
+    mapping.priority = int(request.form.get('priority', 0))
+    
+    db.session.commit()
+    
+    flash('Category mapping updated successfully.')
+    return redirect(url_for('manage_category_mappings'))
+
+@app.route('/category_mappings/toggle/<int:mapping_id>', methods=['POST'])
+@login_required_dev
+def toggle_category_mapping(mapping_id):
+    """Toggle the active status of a mapping"""
+    mapping = CategoryMapping.query.get_or_404(mapping_id)
+    
+    # Check if mapping belongs to current user
+    if mapping.user_id != current_user.id:
+        flash('You don\'t have permission to modify this mapping.')
+        return redirect(url_for('manage_category_mappings'))
+    
+    # Toggle active status
+    mapping.active = not mapping.active
+    db.session.commit()
+    
+    status = "activated" if mapping.active else "deactivated"
+    flash(f'Category mapping {status} successfully.')
+    
+    return redirect(url_for('manage_category_mappings'))
+
+@app.route('/category_mappings/delete/<int:mapping_id>', methods=['POST'])
+@login_required_dev
+def delete_category_mapping(mapping_id):
+    """Delete a category mapping rule"""
+    mapping = CategoryMapping.query.get_or_404(mapping_id)
+    
+    # Check if mapping belongs to current user
+    if mapping.user_id != current_user.id:
+        flash('You don\'t have permission to delete this mapping.')
+        return redirect(url_for('manage_category_mappings'))
+    
+    db.session.delete(mapping)
+    db.session.commit()
+    
+    flash('Category mapping deleted successfully.')
+    return redirect(url_for('manage_category_mappings'))
+
+@app.route('/category_mappings/learn_from_history', methods=['POST'])
+@login_required_dev
+def learn_from_transaction_history():
+    """Analyze transaction history to create category mapping suggestions"""
+    # Get number of days to analyze from the form
+    days = int(request.form.get('days', 30))
+    
+    # Calculate start date
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    # Get transactions from the specified period that have categories
+    transactions = Expense.query.filter(
+        Expense.user_id == current_user.id,
+        Expense.date >= start_date,
+        Expense.category_id.isnot(None)
+    ).all()
+    
+    # Group transactions by category and description pattern
+    patterns = {}
+    for transaction in transactions:
+        # Skip transactions without descriptions
+        if not transaction.description:
+            continue
+            
+        # Clean up description and extract a key word/phrase
+        keyword = extract_keywords(transaction.description)
+        if not keyword:
+            continue
+            
+        # Create a unique key for this keyword + category combo
+        key = f"{keyword}_{transaction.category_id}"
+        
+        if key not in patterns:
+            patterns[key] = {
+                'keyword': keyword,
+                'category_id': transaction.category_id,
+                'count': 0,
+                'total_amount': 0,
+                'transactions': []
+            }
+            
+        # Update the pattern
+        patterns[key]['count'] += 1
+        patterns[key]['total_amount'] += transaction.amount
+        patterns[key]['transactions'].append(transaction.id)
+    
+    # Find significant patterns (occurred at least 3 times)
+    significant_patterns = [p for p in patterns.values() if p['count'] >= 3]
+    
+    # Sort by frequency
+    significant_patterns.sort(key=lambda x: x['count'], reverse=True)
+    
+    # Create mappings for these patterns (only if they don't already exist)
+    created_count = 0
+    for pattern in significant_patterns[:15]:  # Limit to top 15
+        # Check if this pattern already exists
+        existing = CategoryMapping.query.filter_by(
+            user_id=current_user.id,
+            keyword=pattern['keyword'],
+            category_id=pattern['category_id']
+        ).first()
+        
+        if not existing:
+            # Create a new mapping
+            mapping = CategoryMapping(
+                user_id=current_user.id,
+                keyword=pattern['keyword'],
+                category_id=pattern['category_id'],
+                is_regex=False,
+                priority=0,
+                match_count=pattern['count'],
+                active=True
+            )
+            
+            db.session.add(mapping)
+            created_count += 1
+    
+    if created_count > 0:
+        db.session.commit()
+        flash(f'Created {created_count} new category mapping rules from your transaction history.')
+    else:
+        flash('No new mapping patterns were found in your transaction history.')
+    
+    return redirect(url_for('manage_category_mappings'))
+
+
+@app.route('/category_mappings/upload', methods=['POST'])
+@login_required_dev
+def upload_category_mappings():
+    """Upload and import category mappings from a CSV file"""
+    if 'mapping_file' not in request.files:
+        flash('No file provided')
+        return redirect(url_for('manage_category_mappings'))
+    
+    mapping_file = request.files['mapping_file']
+    
+    if mapping_file.filename == '':
+        flash('No file selected')
+        return redirect(url_for('manage_category_mappings'))
+    
+    # Case-insensitive extension check
+    if not mapping_file.filename.lower().endswith('.csv'):
+        flash('File must be a CSV')
+        return redirect(url_for('manage_category_mappings'))
+    
+    try:
+        # Read file content
+        file_content = mapping_file.read().decode('utf-8')
+        
+        # Parse CSV
+        import csv
+        import io
+        
+        csv_reader = csv.DictReader(io.StringIO(file_content))
+        required_fields = ['keyword', 'category']
+        
+        # Validate CSV structure
+        if not all(field in csv_reader.fieldnames for field in required_fields):
+            flash(f'CSV must contain at least these columns: {", ".join(required_fields)}')
+            return redirect(url_for('manage_category_mappings'))
+        
+        # Process rows
+        imported_count = 0
+        skipped_count = 0
+        
+        for row in csv_reader:
+            try:
+                # Get required fields
+                keyword = row['keyword'].strip()
+                category_name = row['category'].strip()
+                
+                # Get optional fields with defaults
+                is_regex = str(row.get('is_regex', 'false')).lower() in ['true', '1', 'yes', 'y']
+                priority = int(row.get('priority', 0))
+                
+                # Skip empty keywords
+                if not keyword or not category_name:
+                    skipped_count += 1
+                    continue
+                
+                # Check if mapping already exists
+                existing = CategoryMapping.query.filter_by(
+                    user_id=current_user.id,
+                    keyword=keyword
+                ).first()
+                
+                if existing:
+                    # Skip duplicate mappings
+                    skipped_count += 1
+                    continue
+                
+                # Find the category by name (case-insensitive search)
+                # First try to find exact match
+                category = Category.query.filter(
+                    Category.user_id == current_user.id,
+                    func.lower(Category.name) == func.lower(category_name)
+                ).first()
+                
+                # If not found, try subcategories
+                if not category:
+                    category = Category.query.filter(
+                        Category.user_id == current_user.id,
+                        Category.parent_id.isnot(None),
+                        func.lower(Category.name) == func.lower(category_name)
+                    ).first()
+                
+                # If still not found, try partial matches
+                if not category:
+                    category = Category.query.filter(
+                        Category.user_id == current_user.id,
+                        func.lower(Category.name).like(f"%{category_name.lower()}%")
+                    ).first()
+                
+                # If no category found, use "Other"
+                if not category:
+                    category = Category.query.filter_by(
+                        name='Other',
+                        user_id=current_user.id,
+                        is_system=True
+                    ).first()
+                
+                # If we still can't find a category, skip this mapping
+                if not category:
+                    skipped_count += 1
+                    continue
+                
+                # Create mapping
+                new_mapping = CategoryMapping(
+                    user_id=current_user.id,
+                    keyword=keyword,
+                    category_id=category.id,
+                    is_regex=is_regex,
+                    priority=priority,
+                    match_count=0,
+                    active=True
+                )
+                
+                db.session.add(new_mapping)
+                imported_count += 1
+                
+            except Exception as e:
+                app.logger.error(f"Error importing mapping row: {str(e)}")
+                skipped_count += 1
+                continue
+        
+        # Commit all successfully parsed mappings
+        if imported_count > 0:
+            db.session.commit()
+            
+        flash(f'Successfully imported {imported_count} mappings. Skipped {skipped_count} rows.')
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error importing category mappings: {str(e)}")
+        flash(f'Error importing mappings: {str(e)}')
+    
+    return redirect(url_for('manage_category_mappings'))
+
+@app.route('/category_mappings/export', methods=['GET'])
+@login_required_dev
+def export_category_mappings():
+    """Export category mappings to a CSV file"""
+    try:
+        # Get all active mappings for the current user
+        mappings = CategoryMapping.query.filter_by(
+            user_id=current_user.id,
+            active=True
+        ).all()
+        
+        if not mappings:
+            flash('No active mappings to export.')
+            return redirect(url_for('manage_category_mappings'))
+        
+        # Create CSV in memory
+        import csv
+        import io
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header row
+        writer.writerow(['keyword', 'category', 'is_regex', 'priority'])
+        
+        # Write data rows
+        for mapping in mappings:
+            category_name = mapping.category.name if mapping.category else "Unknown"
+            writer.writerow([
+                mapping.keyword,
+                category_name,
+                'true' if mapping.is_regex else 'false',
+                mapping.priority
+            ])
+        
+        # Prepare for download
+        output.seek(0)
+        
+        # Generate timestamp for filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"category_mappings_{timestamp}.csv"
+        
+        # Send file
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        app.logger.error(f"Error exporting category mappings: {str(e)}")
+        flash(f'Error exporting mappings: {str(e)}')
+        return redirect(url_for('manage_category_mappings'))
 
 #--------------------
 # ROUTES: House maintanance
@@ -3206,7 +6199,7 @@ def export_transactions():
 #--------------------
 # ROUTES: Categories
 #--------------------
-# Add these functions to your app.py file
+
 
 def has_default_categories(user_id):
     """Check if a user already has the default category set"""
@@ -3384,11 +6377,12 @@ def delete_category(category_id):
 #--------------------
 # ROUTES: Budget
 #--------------------
-
 @app.route('/budgets')
 @login_required_dev
 def budgets():
     """View and manage budgets"""
+    from datetime import datetime  # Add this import if not already at the top
+    
     # Get all budgets for the current user
     user_budgets = Budget.query.filter_by(user_id=current_user.id).order_by(Budget.created_at.desc()).all()
     
@@ -3418,10 +6412,20 @@ def budgets():
     # Get base currency for display
     base_currency = get_base_currency()
     
+    # Calculate total budget and spent for current month
+    total_month_budget = sum(data['budget'].amount for data in budget_data if data['budget'].period == 'monthly')
+    total_month_spent = sum(data['spent'] for data in budget_data if data['budget'].period == 'monthly')
+    
+    # Pass the current date to the template
+    now = datetime.now()
+    
     return render_template('budgets.html',
                           budget_data=budget_data,
                           categories=categories,
-                          base_currency=base_currency)
+                          base_currency=base_currency,
+                          total_month_budget=total_month_budget,
+                          total_month_spent=total_month_spent,
+                          now=now)  # Pass the current date to the template
 
 @app.route('/budgets/add', methods=['POST'])
 @login_required_dev
@@ -3633,7 +6637,11 @@ def get_budget(budget_id):
             'message': f'Error: {str(e)}'
         }), 500
 
-# Add this method to get budget status for the dashboard
+
+
+
+
+
 def get_budget_summary():
     """Get budget summary for current user"""
     # Get all active budgets
@@ -3866,8 +6874,234 @@ def utility_processor():
         # Previous functions...
         'get_budget_status_for_category': get_budget_status_for_category
     }
+@app.route('/budgets/trends-data')
+@login_required_dev
+def budget_trends_data():
+    """Get budget trends data for chart visualization"""
+    budget_id = request.args.get('budget_id')
+    
+    # Default time period (last 6 months)
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=180)
+    
+    # Prepare response data structure
+    response = {
+        'labels': [],
+        'actual': [],
+        'budget': [],
+        'colors': []
+    }
+    
+    # Generate monthly labels
+    current_date = start_date
+    while current_date <= end_date:
+        month_label = current_date.strftime('%b %Y')
+        response['labels'].append(month_label)
+        current_date = (current_date.replace(day=28) + timedelta(days=4)).replace(day=1)
+    
+    # If no budget selected, return all budgets aggregated by month
+    if not budget_id:
+        # Get all active budgets
+        budgets = Budget.query.filter_by(user_id=current_user.id, active=True).all()
+        
+        # For each month, calculate total budget and spending
+        for i, month in enumerate(response['labels']):
+            month_date = datetime.strptime(month, '%b %Y')
+            month_start = month_date.replace(day=1)
+            if month_date.month == 12:
+                month_end = month_date.replace(year=month_date.year+1, month=1, day=1) - timedelta(days=1)
+            else:
+                month_end = month_date.replace(month=month_date.month+1, day=1) - timedelta(days=1)
+            
+            # Sum all budgets for this month
+            monthly_budget = 0
+            for budget in budgets:
+                if budget.period == 'monthly':
+                    monthly_budget += budget.amount
+                elif budget.period == 'yearly':
+                    monthly_budget += budget.amount / 12
+                elif budget.period == 'weekly':
+                    # Calculate weeks in this month
+                    weeks_in_month = (month_end - month_start).days / 7
+                    monthly_budget += budget.amount * weeks_in_month
+            
+            response['budget'].append(monthly_budget)
+            
+            # Calculate actual spending for this month
+            expenses = Expense.query.filter(
+                Expense.user_id == current_user.id,
+                Expense.date >= month_start,
+                Expense.date <= month_end
+            ).all()
+            
+            monthly_spent = sum(expense.amount for expense in expenses)
+            response['actual'].append(monthly_spent)
+            
+            # Set color based on whether spending exceeds budget
+            color = '#ef4444' if monthly_spent > monthly_budget else '#22c55e'
+            response['colors'].append(color)
+    else:
+        # Get specific budget
+        budget = Budget.query.get_or_404(budget_id)
+        
+        # Security check
+        if budget.user_id != current_user.id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        for i, month in enumerate(response['labels']):
+            month_date = datetime.strptime(month, '%b %Y')
+            month_start = month_date.replace(day=1)
+            if month_date.month == 12:
+                month_end = month_date.replace(year=month_date.year+1, month=1, day=1) - timedelta(days=1)
+            else:
+                month_end = month_date.replace(month=month_date.month+1, day=1) - timedelta(days=1)
+            
+            # Get budget amount for this month
+            monthly_budget = 0
+            if budget.period == 'monthly':
+                monthly_budget = budget.amount
+            elif budget.period == 'yearly':
+                monthly_budget = budget.amount / 12
+            elif budget.period == 'weekly':
+                # Calculate weeks in this month
+                weeks_in_month = (month_end - month_start).days / 7
+                monthly_budget = budget.amount * weeks_in_month
+                
+            response['budget'].append(monthly_budget)
+            
+            # Calculate actual spending for this category in this month
+            category_expenses = []
+            if budget.include_subcategories:
+                # Get all subcategory IDs
+                subcategory_ids = []
+                if budget.category:
+                    subcategory_ids = [subcat.id for subcat in budget.category.subcategories]
+                
+                # Include parent and subcategories
+                category_filter = [budget.category_id]
+                if subcategory_ids:
+                    category_filter.extend(subcategory_ids)
+                
+                category_expenses = Expense.query.filter(
+                    Expense.user_id == current_user.id,
+                    Expense.date >= month_start,
+                    Expense.date <= month_end,
+                    Expense.category_id.in_(category_filter)
+                ).all()
+            else:
+                # Only include parent category
+                category_expenses = Expense.query.filter(
+                    Expense.user_id == current_user.id,
+                    Expense.date >= month_start,
+                    Expense.date <= month_end,
+                    Expense.category_id == budget.category_id
+                ).all()
+            
+            monthly_spent = sum(expense.amount for expense in category_expenses)
+            response['actual'].append(monthly_spent)
+            
+            # Set color based on whether spending exceeds budget
+            color = '#ef4444' if monthly_spent > monthly_budget else '#22c55e'
+            response['colors'].append(color)
+    
+    return jsonify(response)
 
-
+@app.route('/budgets/transactions/<int:budget_id>')
+@login_required_dev
+def budget_transactions(budget_id):
+    """Get transactions related to a specific budget"""
+    # Get the budget
+    budget = Budget.query.get_or_404(budget_id)
+    
+    # Security check
+    if budget.user_id != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    # Default time period (last 30 days)
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=30)
+    
+    # Query construction depends on whether to include subcategories
+    if budget.include_subcategories and budget.category:
+        # Get all subcategory IDs
+        subcategory_ids = [subcat.id for subcat in budget.category.subcategories]
+        
+        # Create category filter
+        category_filter = [budget.category_id]
+        if subcategory_ids:
+            category_filter.extend(subcategory_ids)
+        
+        expenses = Expense.query.filter(
+            Expense.user_id == current_user.id,
+            Expense.date >= start_date,
+            Expense.category_id.in_(category_filter)
+        ).order_by(Expense.date.desc()).limit(50).all()
+    else:
+        # Only include parent category
+        expenses = Expense.query.filter(
+            Expense.user_id == current_user.id,
+            Expense.date >= start_date,
+            Expense.category_id == budget.category_id
+        ).order_by(Expense.date.desc()).limit(50).all()
+    
+    # Format transactions for the response
+    transactions = []
+    for expense in expenses:
+        transaction = {
+            'id': expense.id,
+            'description': expense.description,
+            'amount': expense.amount,
+            'date': expense.date.strftime('%Y-%m-%d'),
+            'payment_method': expense.card_used,
+            'transaction_type': getattr(expense, 'transaction_type', 'expense')
+        }
+        
+        # Add category information
+        if expense.category_id and expense.category:
+            transaction['category_name'] = expense.category.name
+            transaction['category_icon'] = expense.category.icon
+            transaction['category_color'] = expense.category.color
+        else:
+            transaction['category_name'] = 'Uncategorized'
+            transaction['category_icon'] = 'fa-tag'
+            transaction['category_color'] = '#6c757d'
+        
+        # Add tags if available
+        if hasattr(expense, 'tags'):
+            transaction['tags'] = [tag.name for tag in expense.tags]
+        
+        transactions.append(transaction)
+    
+    return jsonify({
+        'transactions': transactions,
+        'budget_id': budget_id,
+        'budget_name': budget.name or (budget.category.name if budget.category else "Budget")
+    })
+@app.route('/api/categories')
+@login_required_dev
+def get_categories_api():
+    """API endpoint to fetch categories for the current user"""
+    try:
+        # Get all categories for the current user
+        categories = Category.query.filter_by(user_id=current_user.id).all()
+        
+        # Convert to JSON-serializable format
+        result = []
+        for category in categories:
+            result.append({
+                'id': category.id,
+                'name': category.name,
+                'icon': category.icon,
+                'color': category.color,
+                'parent_id': category.parent_id,
+                # Add this to help with displaying in the UI
+                'is_parent': category.parent_id is None
+            })
+        
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"Error fetching categories: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 #--------------------
 # ROUTES: user 
 #--------------------
@@ -3950,7 +7184,7 @@ def update_color():
 #--------------------
 # ROUTES: stats and reports
 #--------------------
-# Add this to the beginning of your route in app.py
+
 # This helps verify what data is actually being passed to the template
 
 def generate_monthly_report_data(user_id, year, month):
@@ -4217,7 +7451,7 @@ def generate_monthly_report():
     
     return render_template('generate_report.html', months=months)
 
-# 4. Add a scheduler function
+
 def send_automatic_monthly_reports():
     """Send monthly reports to all users who have opted in"""
     with app.app_context():
@@ -4243,7 +7477,9 @@ def send_automatic_monthly_reports():
         
         app.logger.info(f"Sent {success_count}/{len(users)} monthly reports")
 
-
+#--------------------
+# # statss
+#--------------------
 
 @app.route('/stats')
 @login_required_dev
@@ -4706,6 +7942,50 @@ def stats():
     
     app.logger.info(f"Tag names: {tag_names}")
     app.logger.info(f"Tag totals: {tag_totals}")
+    expenses = Expense.query.filter(
+        or_(
+            Expense.user_id == current_user.id,
+            Expense.split_with.like(f'%{current_user.id}%')
+        )
+    ).order_by(Expense.date.desc()).all()
+    
+    # Initialize new variables
+    total_expenses_only = 0
+    total_income = 0
+    total_transfers = 0
+    
+    # Calculate totals for each transaction type
+    for expense in expenses:
+        if hasattr(expense, 'transaction_type'):
+            if expense.transaction_type == 'expense' or expense.transaction_type is None:
+                total_expenses_only += expense.amount
+            elif expense.transaction_type == 'income':
+                total_income += expense.amount
+            elif expense.transaction_type == 'transfer':
+                total_transfers += expense.amount
+        else:
+            # For backward compatibility, treat as expense if no transaction_type
+            total_expenses_only += expense.amount
+    
+    # Calculate derived metrics
+    net_cash_flow = total_income - total_expenses_only
+    
+    # Calculate savings rate if income is not zero
+    if total_income > 0:
+        savings_rate = (net_cash_flow / total_income) * 100
+    else:
+        savings_rate = 0
+    
+    # Calculate expense to income ratio
+    if total_income > 0:
+        expense_income_ratio = (total_expenses_only / total_income) * 100
+    else:
+        expense_income_ratio = 100  # Default to 100% if no income
+    
+    # Provide placeholder values for other metrics
+    income_trend = 5.2  # Example value
+    liquidity_ratio = 3.5  # Example value
+    account_growth = 7.8  # Example value
 
     return render_template('stats.html',
                           expenses=expenses,
@@ -4728,6 +8008,15 @@ def stats():
                           group_totals=group_totals,
                           base_currency=base_currency,
                           top_expenses=top_expenses,
+                          total_expenses_only=total_expenses_only,  # New: For expenses only
+                          total_income=total_income,
+                          total_transfers=total_transfers,
+                          income_trend=income_trend,
+                          net_cash_flow=net_cash_flow,
+                          savings_rate=savings_rate,
+                          expense_income_ratio=expense_income_ratio,
+                          liquidity_ratio=liquidity_ratio,
+                          account_growth=account_growth,
                           # New data for enhanced charts
                           category_names=category_names,
                           category_totals=category_totals,

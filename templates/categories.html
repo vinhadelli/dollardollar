@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 
-    <!-- dev-signature: 29a41de6a866d56c36aba5159f45257c -->
 {% block content %}
 <div class="container">
     <div class="row mb-4">
@@ -90,7 +89,7 @@
     <div class="row">
         {% for category in categories %}
         <div class="col-md-6 mb-4">
-            <div class="card h-100">
+            <div class="card h-100" id="category-card-{{ category.id }}">
                 <div class="card-header d-flex justify-content-between align-items-center" style="background-color: {{ category.color }}20;">
                     <h5 class="card-title mb-0 d-flex align-items-center">
                         <i class="fas {{ category.icon }} me-2" style="color: {{ category.color }};"></i>
@@ -102,7 +101,7 @@
                             <i class="fas fa-ellipsis-v"></i>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end bg-dark" aria-labelledby="categoryActions{{ category.id }}">
-                            <li><a class="dropdown-item text-light" href="#" onclick="editCategory({{ category.id }}, '{{ category.name }}', '{{ category.icon }}', '{{ category.color }}')">
+                            <li><a class="dropdown-item text-light" href="#" onclick="toggleEditCategoryForm({{ category.id }})">
                                 <i class="fas fa-edit me-2"></i>Edit
                             </a></li>
                             <li><hr class="dropdown-divider border-secondary"></li>
@@ -118,13 +117,48 @@
                     {% endif %}
                 </div>
 
+                <!-- Inline Edit Form (Hidden by default) -->
+                <div id="editCategoryForm{{ category.id }}" class="card-body border-bottom" style="display: none;">
+                    <h6 class="mb-3">Edit Category</h6>
+                    <form action="{{ url_for('edit_category', category_id=category.id) }}" method="POST">
+                        <div class="mb-3">
+                            <label for="edit_name{{ category.id }}" class="form-label">Category Name</label>
+                            <input type="text" class="form-control bg-dark text-light" id="edit_name{{ category.id }}" name="name" value="{{ category.name }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit_icon{{ category.id }}" class="form-label">Icon</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-dark text-light" id="edit-icon-preview{{ category.id }}">
+                                    <i class="fas {{ category.icon }}"></i>
+                                </span>
+                                <select class="form-select bg-dark text-light edit-icon-select" id="edit_icon{{ category.id }}" name="icon" data-preview-id="edit-icon-preview{{ category.id }}">
+                                    {% for icon in icons %}
+                                        <option value="{{ icon }}" {% if icon == category.icon %}selected{% endif %}>{{ icon }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit_color{{ category.id }}" class="form-label">Color</label>
+                            <div class="input-group">
+                                <input type="color" class="form-control form-control-color bg-dark edit-category-color" id="edit_color{{ category.id }}" name="color" value="{{ category.color }}" data-hex-id="edit_colorHex{{ category.id }}">
+                                <input type="text" class="form-control bg-dark text-light" id="edit_colorHex{{ category.id }}" value="{{ category.color }}" readonly>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button type="button" class="btn btn-secondary me-2" onclick="toggleEditCategoryForm({{ category.id }})">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+
                 <div class="card-body">
                     <!-- Subcategories -->
                     {% if category.subcategories %}
                         <h6 class="mt-3 mb-3">Subcategories</h6>
                         <div class="list-group">
                             {% for subcategory in category.subcategories %}
-                                <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
+                                <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center" id="subcategory-item-{{ subcategory.id }}">
                                     <div class="d-flex align-items-center">
                                         <i class="fas {{ subcategory.icon }} me-2" style="color: {{ subcategory.color }};"></i>
                                         <span class="text-white">{{ subcategory.name }}</span>
@@ -135,7 +169,7 @@
                                             <i class="fas fa-ellipsis-v"></i>
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-end bg-dark" aria-labelledby="subcategoryActions{{ subcategory.id }}">
-                                            <li><a class="dropdown-item text-light" href="#" onclick="editCategory({{ subcategory.id }}, '{{ subcategory.name }}', '{{ subcategory.icon }}', '{{ subcategory.color }}')">
+                                            <li><a class="dropdown-item text-light" href="#" onclick="toggleEditSubcategoryForm({{ subcategory.id }})">
                                                 <i class="fas fa-edit me-2"></i>Edit
                                             </a></li>
                                             <li><hr class="dropdown-divider border-secondary"></li>
@@ -149,6 +183,40 @@
                                         </ul>
                                     </div>
                                     {% endif %}
+                                </div>
+                                
+                                <!-- Inline Edit Form for Subcategory (Hidden by default) -->
+                                <div id="editSubcategoryForm{{ subcategory.id }}" class="list-group-item bg-dark border-secondary" style="display: none;">
+                                    <form action="{{ url_for('edit_category', category_id=subcategory.id) }}" method="POST">
+                                        <div class="mb-3">
+                                            <label for="edit_subname{{ subcategory.id }}" class="form-label">Name</label>
+                                            <input type="text" class="form-control bg-dark text-light" id="edit_subname{{ subcategory.id }}" name="name" value="{{ subcategory.name }}" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="edit_subicon{{ subcategory.id }}" class="form-label">Icon</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text bg-dark text-light" id="edit-subicon-preview{{ subcategory.id }}">
+                                                    <i class="fas {{ subcategory.icon }}"></i>
+                                                </span>
+                                                <select class="form-select bg-dark text-light edit-icon-select" id="edit_subicon{{ subcategory.id }}" name="icon" data-preview-id="edit-subicon-preview{{ subcategory.id }}">
+                                                    {% for icon in icons %}
+                                                        <option value="{{ icon }}" {% if icon == subcategory.icon %}selected{% endif %}>{{ icon }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="edit_subcolor{{ subcategory.id }}" class="form-label">Color</label>
+                                            <div class="input-group">
+                                                <input type="color" class="form-control form-control-color bg-dark edit-subcategory-color" id="edit_subcolor{{ subcategory.id }}" name="color" value="{{ subcategory.color }}" data-hex-id="edit_subcolorHex{{ subcategory.id }}">
+                                                <input type="text" class="form-control bg-dark text-light" id="edit_subcolorHex{{ subcategory.id }}" value="{{ subcategory.color }}" readonly>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex justify-content-end">
+                                            <button type="button" class="btn btn-secondary me-2" onclick="toggleEditSubcategoryForm({{ subcategory.id }})">Cancel</button>
+                                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                                        </div>
+                                    </form>
                                 </div>
                             {% endfor %}
                         </div>
@@ -220,162 +288,186 @@
         {% endfor %}
     </div>
 </div>
-
-<!-- Edit Category Modal -->
-<div class="modal fade" id="editCategoryModal" tabindex="-1" aria-labelledby="editCategoryModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content bg-dark text-light">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editCategoryModalLabel">Edit Category</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form id="editCategoryForm" method="POST">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="edit_name" class="form-label">Category Name</label>
-                        <input type="text" class="form-control bg-dark text-light" id="edit_name" name="name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit_icon" class="form-label">Icon</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-dark text-light" id="edit-selected-icon-preview">
-                                <i class="fas fa-tag"></i>
-                            </span>
-                            <select class="form-select bg-dark text-light" id="edit_icon" name="icon">
-                                {% for icon in icons %}
-                                    <option value="{{ icon }}">{{ icon }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit_color" class="form-label">Color</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color bg-dark" id="edit_color" name="color" value="#6c757d">
-                            <input type="text" class="form-control bg-dark text-light" id="edit_colorHex" value="#6c757d" readonly>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 {% endblock %}
-
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Toggle category form visibility
-        document.getElementById('toggleCategoryForm').addEventListener('click', toggleCategoryForm);
+    // Toggle category form visibility
+    document.getElementById('toggleCategoryForm').addEventListener('click', toggleCategoryForm);
 
-        // Update color hex value when the color picker changes
-        setupColorPicker('color', 'colorHex');
-        setupColorPicker('edit_color', 'edit_colorHex');
+    // Update color hex value when the color picker changes
+    setupColorPicker('color', 'colorHex');
 
-        // Update icon preview when the icon dropdown changes
-        setupIconPreview('icon', 'selected-icon-preview');
-        setupIconPreview('edit_icon', 'edit-selected-icon-preview');
+    // Update icon preview when the icon dropdown changes
+    setupIconPreview('icon', 'selected-icon-preview');
 
-        // Setup subcategory forms
-        setupSubcategoryButtons();
+    // Setup subcategory forms
+    setupSubcategoryButtons();
 
-        // Setup subcategory color pickers
-        document.querySelectorAll('.subcategory-color').forEach(picker => {
-            const hexId = picker.dataset.hexId;
-            setupColorPicker(picker.id, hexId);
-        });
+    // Setup subcategory color pickers
+    document.querySelectorAll('.subcategory-color').forEach(picker => {
+        const hexId = picker.dataset.hexId;
+        setupColorPicker(picker.id, hexId);
+    });
 
-        // Setup subcategory icon previews
-        document.querySelectorAll('.subcategory-icon-select').forEach(select => {
-            const previewId = select.dataset.previewId;
-            setupIconPreview(select.id, previewId);
+    // Setup subcategory icon previews
+    document.querySelectorAll('.subcategory-icon-select').forEach(select => {
+        const previewId = select.dataset.previewId;
+        setupIconPreview(select.id, previewId);
+    });
+    
+    // Setup edit category color pickers
+    document.querySelectorAll('.edit-category-color, .edit-subcategory-color').forEach(picker => {
+        const hexId = picker.dataset.hexId;
+        setupColorPicker(picker.id, hexId);
+    });
+    
+    // Setup edit category icon previews
+    document.querySelectorAll('.edit-icon-select').forEach(select => {
+        const previewId = select.dataset.previewId;
+        setupIconPreview(select.id, previewId);
+    });
+});
+
+function toggleCategoryForm() {
+    const form = document.getElementById('categoryFormContainer');
+    const button = document.getElementById('toggleCategoryForm');
+
+    if (form.style.display === 'none') {
+        form.style.display = 'block';
+        button.innerHTML = '<i class="fas fa-times me-2"></i>Cancel';
+        button.classList.replace('btn-primary', 'btn-secondary');
+    } else {
+        form.style.display = 'none';
+        button.innerHTML = '<i class="fas fa-plus me-2"></i>Add Category';
+        button.classList.replace('btn-secondary', 'btn-primary');
+    }
+}
+
+function toggleEditCategoryForm(categoryId) {
+    const editForm = document.getElementById(`editCategoryForm${categoryId}`);
+    
+    // Close any other open edit forms first
+    document.querySelectorAll('[id^="editCategoryForm"]').forEach(form => {
+        if (form.id !== `editCategoryForm${categoryId}` && form.style.display !== 'none') {
+            form.style.display = 'none';
+        }
+    });
+    
+    // Close any open subcategory edit forms
+    document.querySelectorAll('[id^="editSubcategoryForm"]').forEach(form => {
+        form.style.display = 'none';
+    });
+    
+    // Reset subcategory item displays
+    document.querySelectorAll('[id^="subcategory-item-"]').forEach(item => {
+        item.style.display = 'flex';
+    });
+    
+    // Toggle this form
+    if (editForm.style.display === 'none') {
+        editForm.style.display = 'block';
+    } else {
+        editForm.style.display = 'none';
+    }
+}
+
+function toggleEditSubcategoryForm(subcategoryId) {
+    const editForm = document.getElementById(`editSubcategoryForm${subcategoryId}`);
+    const itemDisplay = document.getElementById(`subcategory-item-${subcategoryId}`);
+    
+    // Close any other open edit forms first
+    document.querySelectorAll('[id^="editSubcategoryForm"]').forEach(form => {
+        if (form.id !== `editSubcategoryForm${subcategoryId}` && form.style.display !== 'none') {
+            form.style.display = 'none';
+            // Show the corresponding item display
+            const otherSubcatId = form.id.replace('editSubcategoryForm', '');
+            const otherItemDisplay = document.getElementById(`subcategory-item-${otherSubcatId}`);
+            if (otherItemDisplay) otherItemDisplay.style.display = 'flex';
+        }
+    });
+    
+    // Close any open category edit forms
+    document.querySelectorAll('[id^="editCategoryForm"]').forEach(form => {
+        form.style.display = 'none';
+    });
+    
+    // Toggle this form
+    if (editForm.style.display === 'none') {
+        editForm.style.display = 'block';
+        if (itemDisplay) itemDisplay.style.display = 'none';
+    } else {
+        editForm.style.display = 'none';
+        if (itemDisplay) itemDisplay.style.display = 'flex';
+    }
+}
+
+function setupSubcategoryButtons() {
+    // Show subcategory form buttons
+    document.querySelectorAll('.add-subcategory-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const categoryId = this.dataset.categoryId;
+            
+            // Close any open edit forms first
+            document.querySelectorAll('[id^="editCategoryForm"], [id^="editSubcategoryForm"]').forEach(form => {
+                form.style.display = 'none';
+            });
+            
+            // Reset subcategory item displays
+            document.querySelectorAll('[id^="subcategory-item-"]').forEach(item => {
+                item.style.display = 'flex';
+            });
+            
+            // Close any other open subcategory forms
+            document.querySelectorAll('[id^="subcategoryForm"]').forEach(form => {
+                if (form.id !== `subcategoryForm${categoryId}` && form.style.display !== 'none') {
+                    form.style.display = 'none';
+                    // Show the corresponding button
+                    const otherCatId = form.id.replace('subcategoryForm', '');
+                    document.querySelector(`.add-subcategory-btn[data-category-id="${otherCatId}"]`).style.display = 'inline-block';
+                }
+            });
+            
+            document.getElementById(`subcategoryForm${categoryId}`).style.display = 'block';
+            this.style.display = 'none';
         });
     });
 
-    function toggleCategoryForm() {
-        const form = document.getElementById('categoryFormContainer');
-        const button = document.getElementById('toggleCategoryForm');
-
-        if (form.style.display === 'none') {
-            form.style.display = 'block';
-            button.innerHTML = '<i class="fas fa-times me-2"></i>Cancel';
-            button.classList.replace('btn-primary', 'btn-secondary');
-        } else {
-            form.style.display = 'none';
-            button.innerHTML = '<i class="fas fa-plus me-2"></i>Add Category';
-            button.classList.replace('btn-secondary', 'btn-primary');
-        }
-    }
-
-    function setupSubcategoryButtons() {
-        // Show subcategory form buttons
-        document.querySelectorAll('.add-subcategory-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const categoryId = this.dataset.categoryId;
-                document.getElementById(`subcategoryForm${categoryId}`).style.display = 'block';
-                this.style.display = 'none';
-            });
+    // Cancel subcategory form buttons
+    document.querySelectorAll('.cancel-subcategory-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const categoryId = this.dataset.categoryId;
+            document.getElementById(`subcategoryForm${categoryId}`).style.display = 'none';
+            document.querySelector(`.add-subcategory-btn[data-category-id="${categoryId}"]`).style.display = 'inline-block';
         });
+    });
+}
 
-        // Cancel subcategory form buttons
-        document.querySelectorAll('.cancel-subcategory-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const categoryId = this.dataset.categoryId;
-                document.getElementById(`subcategoryForm${categoryId}`).style.display = 'none';
-                document.querySelector(`.add-subcategory-btn[data-category-id="${categoryId}"]`).style.display = 'inline-block';
-            });
+function setupColorPicker(colorId, hexId) {
+    const colorPicker = document.getElementById(colorId);
+    const colorHex = document.getElementById(hexId);
+
+    if (colorPicker && colorHex) {
+        colorPicker.addEventListener('input', function() {
+            colorHex.value = this.value;
         });
     }
+}
 
-    function setupColorPicker(colorId, hexId) {
-        const colorPicker = document.getElementById(colorId);
-        const colorHex = document.getElementById(hexId);
+function setupIconPreview(iconId, previewId) {
+    const iconSelect = document.getElementById(iconId);
+    const iconPreview = document.getElementById(previewId);
 
-        if (colorPicker && colorHex) {
-            colorPicker.addEventListener('input', function() {
-                colorHex.value = this.value;
-            });
-        }
+    if (iconSelect && iconPreview) {
+        iconSelect.addEventListener('change', function() {
+            const iconClass = this.value;
+            iconPreview.innerHTML = `<i class="fas ${iconClass}"></i>`;
+        });
+
+        // Initialize preview with the default or selected value
+        const initialIconClass = iconSelect.value;
+        iconPreview.innerHTML = `<i class="fas ${initialIconClass}"></i>`;
     }
-
-    function setupIconPreview(iconId, previewId) {
-        const iconSelect = document.getElementById(iconId);
-        const iconPreview = document.getElementById(previewId);
-
-        if (iconSelect && iconPreview) {
-            iconSelect.addEventListener('change', function() {
-                const iconClass = this.value;
-                iconPreview.innerHTML = `<i class="fas ${iconClass}"></i>`;
-            });
-
-            // Initialize preview with the default or selected value
-            const initialIconClass = iconSelect.value;
-            iconPreview.innerHTML = `<i class="fas ${initialIconClass}"></i>`;
-        }
-    }
-
-    function editCategory(categoryId, name, icon, color) {
-        // Set the form action URL
-        const form = document.getElementById('editCategoryForm');
-        form.action = `/categories/edit/${categoryId}`;
-
-        // Set the current values
-        document.getElementById('edit_name').value = name;
-        document.getElementById('edit_icon').value = icon;
-        document.getElementById('edit_color').value = color;
-        document.getElementById('edit_colorHex').value = color;
-
-        // Update the icon preview
-        const iconPreview = document.getElementById('edit-selected-icon-preview');
-        iconPreview.innerHTML = `<i class="fas ${icon}"></i>`;
-
-        // Show the modal
-        const modal = new bootstrap.Modal(document.getElementById('editCategoryModal'));
-        modal.show();
-    }
+}
 </script>
 {% endblock %}

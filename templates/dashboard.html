@@ -1,250 +1,491 @@
 {% extends "base.html" %}
 
-    <!-- dev-signature: 29a41de6a866d56c36aba5159f45257c -->
 {% block content %}
-<div class="container">
-    <!-- Add Expense Button -->
-    <div class="mb-4 d-flex justify-content-end">
-        <button id="toggleExpenseForm" class="btn btn-primary">
-            <i class="fas fa-plus me-2"></i>Add New Expense
-        </button>
-    </div>
-    
-    <!-- Add Expense Form (Hidden by default) -->
-    <div id="expenseFormContainer" class="expense-form mb-4" style="display: none;">
-        <h4 class="mb-3">Add New Expense</h4>
-        <form method="POST" action="{{ url_for('add_expense') }}">
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="description" class="form-label">Description</label>
-                    <input type="text" class="form-control bg-dark text-light" id="description" name="description" required>
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label for="amount" class="form-label">Amount ({{ base_currency.symbol }})</label>
-                    <input type="number" step="0.01" class="form-control bg-dark text-light" id="amount" name="amount" required>
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label for="currency_code" class="form-label">Currency</label>
-                    <select class="form-control bg-dark text-light" id="currency_code" name="currency_code">
-                        {% for currency in currencies %}
-                            <option value="{{ currency.code }}" 
-                                    {% if currency.code == current_user.default_currency_code %}selected{% endif %}>
-                                {{ currency.code }} ({{ currency.symbol }})
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="date" class="form-label">Date</label>
-                    <input type="date" class="form-control bg-dark text-light" id="date" name="date" required>
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label for="card_used" class="form-label">Card Used</label>
-                    <input type="text" class="form-control bg-dark text-light" id="card_used" name="card_used" required>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="paid_by" class="form-label">Paid By</label>
-                    <select class="form-control bg-dark text-light" id="paid_by" name="paid_by" required>
-                        {% for user in users %}
-                            <option value="{{ user.id }}" 
-                                     data-color="{{ user.user_color|default('#15803d') }}"
-                                    {% if user.id == current_user.id %}selected{% endif %}>{{ user.name }} ({{ user.id }})</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-6 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <label for="split_with" class="form-label">Split With (select multiple)</label>
-                        <div class="form-check form-switch ms-2">
-                            <input class="form-check-input" type="checkbox" id="personal_expense_check" name="personal_expense" onchange="togglePersonalExpense()">
-                            <label class="form-check-label" for="personal_expense_check">Personal expense</label>
-                        </div>
-                    </div>
-                    <select class="form-select bg-dark text-light" id="split_with" name="split_with" multiple>
-                        {% for user in users %}
-                            <option value="{{ user.id }}"
-                                    data-color="{{ user.user_color|default('#15803d') }}">
-                                {{ user.name }} ({{ user.id }})</option>
-                        {% endfor %}
-                    </select>
-                    <small class="text-muted d-block mt-1">Check "Personal expense" for transactions with no splits, or select people to split with</small>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="split_method" class="form-label">Split Method</label>
-                    <select class="form-control bg-dark text-light" id="split_method" name="split_method" required onchange="toggleSplitOptions()">
-                        <option value="equal">Equal Split Among All</option>
-                        <option value="custom">Custom Amount for Each Person</option>
-                        <option value="percentage">Percentage Split for Each Person</option>
-                    </select>
-                </div>
-                <div class="col-md-6 mb-3" id="split_value_container" style="display: none;">
-                    <label for="split_value" class="form-label">Split Value (Legacy - Deprecated)</label>
-                    <input type="number" step="0.01" class="form-control bg-dark text-light" id="split_value" name="split_value">
-                    <small class="text-muted">This field is only for backward compatibility.</small>
-                </div>
-            </div>
-            
-            <!-- Custom Split Values Container (Hidden by default) -->
-            <div id="custom_split_container" class="mb-3" style="display: none;">
-                <div class="card bg-dark">
-                    <div class="card-header">
-                        <h5 class="mb-0">Customize Split Values</h5>
-                        <small class="text-muted" id="split_instruction">Set how much each person pays</small>
-                    </div>
-                    <div class="card-body">
-                        <div id="split_values_container">
-                            <!-- Will be populated by JavaScript -->
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center mt-3">
-                            <div>
-                                <span class="text-muted">Total: {{ base_currency.symbol }}<span id="split_total">0.00</span></span>
-                                <span class="ms-2 text-muted">Expense: {{ base_currency.symbol }}<span id="expense_amount">0.00</span></span>
-                            </div>
-                            <div>
-                                <span class="badge bg-success" id="split_status">Balanced</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Hidden input to store the split details as JSON -->
-                <input type="hidden" id="split_details" name="split_details">
-            </div>
-            <div class="mb-3">
-                <label for="category_id" class="form-label">Category</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-dark text-light" id="category-icon-preview">
-                        <i class="fas fa-tag"></i>
-                    </span>
-                    <select class="form-select bg-dark text-light" id="category_id" name="category_id">
-                        <option value="">Select a category</option>
-                        {% for top_category in current_user.categories if not top_category.parent_id %}
-                            <optgroup label="{{ top_category.name }}">
-                                {% for subcat in top_category.subcategories %}
-                                    <option value="{{ subcat.id }}" 
-                                            data-icon="{{ subcat.icon }}" 
-                                            data-color="{{ subcat.color }}">
-                                        {{ subcat.name }}
-                                    </option>
-                                {% endfor %}
-                            </optgroup>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            
-            <!-- Group Selection -->
-            <div class="mb-3">
-                <label for="group_id" class="form-label">Group (Optional)</label>
-                <select class="form-control bg-dark text-light" name="group_id">
-                    <option value="">No Group (Personal Expense)</option>
-                    {% for group in current_user.groups %}
-                        <option value="{{ group.id }}">{{ group.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <!-- Tag Selection -->
-            <div class="mb-3">
-                <label for="tags" class="form-label">Tags (Optional)</label>
-                <div class="tag-selector">
-                    {% for tag in current_user.tags %}
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input tag-checkbox" type="checkbox" id="tag{{ tag.id }}" name="tags" value="{{ tag.id }}" 
-                            style="background-color: {{ tag.color }}; border-color: {{ tag.color }};">
-                        <label class="form-check-label" for="tag{{ tag.id }}">{{ tag.name }}</label>
-                    </div>
-                    {% endfor %}
-                    
-                    {% if current_user.tags|length == 0 %}
-                    <p class="text-muted small">No tags created yet. <a href="{{ url_for('manage_tags') }}" class="text-warning">Create tags</a> to categorize expenses.</p>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="d-flex justify-content-end">
-                <button type="button" class="btn btn-secondary me-2" onclick="toggleExpenseForm()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Add Expense</button>
-            </div>
-        </form>
-    </div>
+<style>
+    /* Enhanced styling with brighter text while keeping the same background */
 
-<!-- Summary Cards -->
+/* Modern card styling with hover effect - keeping same background */
+.modern-card {
+    background-color: rgba(17, 24, 39, 0.8); /* Keeping original background */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.modern-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+}
+
+.modern-card .card-header {
+    background-color: rgba(21, 128, 61, 0.3); /* Keeping original green header */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Brighten card titles and content */
+.modern-card .card-header h5, 
+.modern-card .card-title {
+    color: rgba(255, 255, 255, 0.95); /* Brighter card titles */
+    font-weight: 600;
+}
+
+.modern-card .card-body {
+    color: rgba(255, 255, 255, 0.85); /* Brighter body text */
+}
+
+/* Welcome Card Styling - same background, brighter text */
+.welcome-card {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: all 0.3s ease;
+    background: rgba(17, 24, 39, 0.8); /* Keeping original card color */
+}
+
+.welcome-card:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+.welcome-title {
+    font-size: 1.85rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: #ffffffef !important; /* Pure white with !important to override any other styles */
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); /* Stronger shadow for better contrast */
+}
+
+.welcome-date {
+    color: rgba(255, 255, 255, 0.7); /* BRIGHTENED from #6c757d to a whiter shade */
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
+
+.quote-container {
+    position: relative;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem; /* Add padding for closing quote */
+    margin-top: 1.5rem;
+}
+
+.quote-text {
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.8); /* Brightened quote text */
+    font-size: 1.1rem;
+    margin: 0;
+    padding: 0;
+    border-left: none;
+}
+
+.quote-icon {
+    color: rgba(46, 204, 113, 0.6); /* BRIGHTENED from rgba(21, 128, 61, 0.4) to a more vibrant green */
+    font-size: 1.5rem;
+    position: absolute;
+    left: 0;
+    top: -0.5rem;
+}
+
+.quote-container::after {
+    content: "\f10e"; /* Font Awesome quote-right unicode */
+    font-family: "Font Awesome 5 Free";
+    font-weight: 900;
+    color: rgba(21, 128, 61, 0.4); /* Match opening quote color */
+    font-size: 1.5rem;
+    position: absolute;
+    right: 0;
+    bottom: -0.5rem;
+}
+/* Stats Cards - same background, brighter text */
+.stats-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.stat-card {
+    background: rgba(17, 24, 39, 0.8); /* Keeping original card color */
+    border-radius: 12px;
+    padding: 1.5rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stat-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.25rem;
+}
+
+.stat-icon {
+    width: 45px;
+    height: 45px;
+    border-radius: 12px;
+    background-color: rgba(21, 128, 61, 0.15); /* Keeping original */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+}
+
+.stat-icon i {
+    color: #2ecc71; /* BRIGHTENED from #15803d to a more vibrant green */
+    font-size: 1.25rem;
+}
+
+.stat-title {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.8); /* BRIGHTENED from #adb5bd to a whiter shade */
+    margin: 0;
+    font-weight: 500;
+}
+
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0.25rem 0 0;
+    color: white; /* Adding explicit white color */
+}
+
+.stat-comparison {
+    display: flex;
+    align-items: center;
+    margin-top: auto;
+}
+
+.comparison-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    height: 28px;
+    border-radius: 24px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-right: 0.75rem;
+}
+
+.comparison-badge.success {
+    background-color: rgba(21, 128, 61, 0.15); /* Keeping original background */
+    color: #2ecc71; /* BRIGHTENED from #20c997 to a more vibrant green */
+}
+
+.comparison-badge.danger {
+    background-color: rgba(220, 53, 69, 0.15); /* Keeping original background */
+    color: #ff5b5b; /* BRIGHTENED from #dc3545 to a more vibrant red */
+}
+
+.comparison-text {
+    color: rgba(255, 255, 255, 0.8); /* BRIGHTENED from a dimmer color to more visible text */
+}
+
+.highlight {
+    color: white; /* Ensuring highlights are pure white */
+    font-weight: 600;
+}
+
+/* Button styling with brighter text */
+.btn-modern {
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    color: white; /* Ensuring button text is white */
+}
+
+.btn-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Table styling with brighter text */
+.table-modern {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table-modern thead th {
+    background-color: rgba(0, 0, 0, 0.2);
+    color: rgba(255, 255, 255, 0.75); /* BRIGHTENED from #adb5bd to a whiter shade */
+    font-weight: 600;
+    padding: 12px 15px;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.table-modern tbody tr {
+    transition: background-color 0.2s;
+}
+
+.table-modern tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.table-modern td {
+    padding: 12px 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    vertical-align: middle;
+    color: rgba(255, 255, 255, 0.85); /* Adding explicit brighter text color */
+}
+
+/* Additional text brightness improvements */
+.text-muted {
+    color: rgba(255, 255, 255, 0.7) !important; /* BRIGHTENED from the default Bootstrap text-muted */
+}
+
+.text-success {
+    color: #2ecc71 !important; /* BRIGHTENED success text */
+}
+
+.text-danger {
+    color: #ff5b5b !important; /* BRIGHTENED danger text */
+}
+
+.text-warning {
+    color: #f1c40f !important; /* BRIGHTENED warning text */
+}
+
+/* Make sure all labels and general text are bright enough */
+.card-body label, .card-body p, .card h6, .card-text {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+/* Make all badge text white and bold for readability */
+.badge {
+    color: white;
+    font-weight: 600;
+}
+
+/* Make sure all list items are bright enough */
+.list-group-item {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+/* Ensure form labels are bright enough */
+.form-label {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+/* Ensure chart legends and tooltips have bright text */
+.chart-container .chartjs-tooltip,
+.chart-container .chartjs-legend {
+    color: white;
+}
+</style>
+
+<div class="container">
+    <!-- Compact Welcome Header -->
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <div class="card welcome-card">
+                <div class="card-body p-3">
+                    <div class="row align-items-center">
+                        <div class="col-lg-5">
+                            <div class="welcome-content">
+                                <h3 class="welcome-title mb-1">Hello, {{ current_user.name }}! 👋</h3>
+                                <p class="welcome-date text-muted small mb-0">{{ now.strftime('%A, %B %d, %Y') }}</p>
+                            </div>
+                        </div>
+                        <div class="col-lg-7">
+                            {% set current_month_name = now.strftime('%B') %}
+                            {% set previous_month_data = namespace(total=0) %}
+                            {% for month, data in monthly_totals.items()|sort(reverse=true) %}
+                                {% if loop.index == 2 %}
+                                    {% set previous_month_data.total = data.total %}
+                                {% endif %}
+                            {% endfor %}
+                            
+                            <div class="stats-container">
+                                <div class="stat-card border-0">
+                                    <div class="d-flex align-items-center">
+                                        <div class="stat-icon me-3">
+                                            <i class="fas fa-chart-line"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h6 class="stat-title mb-1">This Month's Spending</h6>
+                                            <h4 class="stat-value mb-0">{{ base_currency.symbol }}{{ "%.2f"|format(current_month_expenses_only) }}</h4>
+                                        </div>
+                                        
+                                        {% if previous_month_data.total > 0 %}
+                                            {% set spending_diff = current_month_total - previous_month_data.total %}
+                                            {% set diff_percentage = (spending_diff / previous_month_data.total * 100)|round %}
+                                            
+                                            <div class="ms-auto stat-comparison">
+                                                {% if spending_diff < 0 %}
+                                                    <div class="comparison-badge success">
+                                                        <i class="fas fa-arrow-down"></i> {{ diff_percentage|abs }}%
+                                                    </div>
+                                                {% elif spending_diff > 0 %}
+                                                    <div class="comparison-badge danger">
+                                                        <i class="fas fa-arrow-up"></i> {{ diff_percentage }}%
+                                                    </div>
+                                                {% else %}
+                                                    <div class="comparison-badge info">
+                                                        <i class="fas fa-equals"></i> 0%
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    {% if budget_summary and budget_summary.total_budgets > 0 %}
+                                        <div class="budget-quick-stat mt-2">
+                                            <div class="progress" style="height: 4px;">
+                                                {% set budget_percentage = budget_summary.over_budget + budget_summary.approaching_limit %}
+                                                {% set total_budgets = budget_summary.total_budgets %}
+                                                {% set percentage = (budget_percentage / total_budgets * 100)|round %}
+                                                <div class="progress-bar {% if percentage > 50 %}bg-danger{% elif percentage > 30 %}bg-warning{% else %}bg-success{% endif %}" 
+                                                     style="width: {{ percentage }}%;" 
+                                                     aria-valuenow="{{ percentage }}" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100"></div>
+                                            </div>
+                                            <div class="d-flex justify-content-between align-items-center mt-1">
+                                                <small class="text-muted">Budget Health</small>
+                                                <small class="ms-auto">
+                                                    {% if budget_summary.over_budget > 0 %}
+                                                        <span class="text-danger">{{ budget_summary.over_budget }} over</span>
+                                                    {% endif %}
+                                                    {% if budget_summary.approaching_limit > 0 %}
+                                                        {% if budget_summary.over_budget > 0 %} / {% endif %}
+                                                        <span class="text-warning">{{ budget_summary.approaching_limit }} close</span>
+                                                    {% endif %}
+                                                    {% if budget_summary.over_budget == 0 and budget_summary.approaching_limit == 0 %}
+                                                        <span class="text-success">All good</span>
+                                                    {% endif %}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>  
+
 <div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title text-muted mb-3">Yearly Total</h5>
-                <h2 class="mb-0">{{ base_currency.symbol }}{{ "%.2f"|format(total_expenses) }}</h2>
-            </div>
+<!-- Income vs Expense Chart Card -->
+<div class="col-md-7">
+    <div class="modern-card">
+        <div class="card-header">
+            <h5 class="card-title"><i class="fas fa-chart-line me-2"></i>Assets vs Debts</h5>
+            <p class="text-muted mb-0">Financial Trend Overview</p>
         </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title text-muted mb-3">Monthly Budget</h5>
-                {% set monthly_budgets = [] %}
-                {% for budget in current_user.budgets if budget.period == 'monthly' and budget.active %}
-                    {% set _ = monthly_budgets.append(budget) %}
-                {% endfor %}
-                
-                {% if monthly_budgets %}
-                    {% set total_monthly_budget = namespace(value=0) %}
-                    {% set total_spent = namespace(value=0) %}
-                    
-                    {% for budget in monthly_budgets %}
-                        {% set total_monthly_budget.value = total_monthly_budget.value + budget.amount %}
-                        {% set total_spent.value = total_spent.value + budget.calculate_spent_amount() %}
-                    {% endfor %}
-                    
-                    {% set percentage = (total_spent.value / total_monthly_budget.value * 100)|round(1) if total_monthly_budget.value > 0 else 0 %}
-                    
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h2 class="mb-0">{{ base_currency.symbol }}{{ "%.2f"|format(total_spent.value) }}</h2>
-                        <span class="text-muted">/ {{ base_currency.symbol }}{{ "%.2f"|format(total_monthly_budget.value) }}</span>
-                    </div>
-                    
-                    <div class="progress" style="height: 8px;">
-                        <div class="progress-bar {% if percentage > 100 %}bg-danger{% elif percentage > 85 %}bg-warning{% else %}bg-success{% endif %}" 
-                             role="progressbar" 
-                             style="width: {{ percentage if percentage <= 100 else 100 }}%;" 
-                             aria-valuenow="{{ percentage }}" 
-                             aria-valuemin="0" 
-                             aria-valuemax="100"></div>
-                    </div>
-                    <small class="d-block mt-1 text-end">{{ percentage }}% used</small>
-                {% else %}
-                    <div class="d-flex align-items-center justify-content-between">
-                        <h2 class="mb-0">{{ base_currency.symbol }}{{ "%.2f"|format(current_month_total) }}</h2>
-                        <a href="{{ url_for('budgets') }}" class="btn btn-sm btn-outline-light">
-                            <i class="fas fa-plus me-1"></i>Set Budget
-                        </a>
-                    </div>
-                    <p class="text-muted mt-2 small">No monthly budget set</p>
-                {% endif %}
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="assetDebtChart" height="230"></canvas>
             </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title text-muted mb-3">Active Cards</h5>
-                <h2 class="mb-0">{{ unique_cards|length }}</h2>
+            <div class="chart-stats">
+                <div class="stat-item">
+                    <div class="stat-name">
+                        <i class="fas fa-piggy-bank text-success me-1"></i>
+                        Total Assets
+                    </div>
+                    <div class="stat-value text-success">
+                        {{ base_currency.symbol }}{{ "%.2f"|format(total_assets|default(0)) }}
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-name">
+                        <i class="fas fa-credit-card text-danger me-1"></i>
+                        Total Debts
+                    </div>
+                    <div class="stat-value text-danger">
+                        {{ base_currency.symbol }}{{ "%.2f"|format(total_debts|default(0)) }}
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-name">
+                        <i class="fas fa-wallet text-info me-1"></i>
+                        Net Worth
+                    </div>
+                    <div class="stat-value {{ 'text-success' if net_worth|default(0) >= 0 else 'text-danger' }}">
+                        {{ base_currency.symbol }}{{ "%.2f"|format(net_worth|default(0)|abs) }}
+                        <small>
+                            {{ 'Surplus' if net_worth|default(0) >= 0 else 'Deficit' }}
+                        </small>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
-
+    
+    <!-- Top Spending Categories Donut Chart -->
+    <div class="col-md-5">
+        <div class="modern-card">
+            <div class="card-header">
+                <h5 class="card-title"><i class="fas fa-tags me-2"></i>Top Spending Categories</h5>
+                <p class="text-muted mb-0">Where your money goes</p>
+            </div>
+            <div class="card-body">
+                <div class="donut-container">
+                    <canvas id="categoryDonutChart" height="230"></canvas>
+                </div>
+                
+                <div id="categoryLegend" class="mt-3">
+                    <!-- Will be populated with JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+ 
+    // Pre-process category data to avoid Jinja2 rendering issues
+    const categoryData = [];
+    
+    {% set categories_with_expenses = {} %}
+    {% for expense in expenses %}
+        {% if expense.category and (expense.transaction_type == 'expense' or expense.transaction_type is undefined) %}
+            {% if expense.category.name in categories_with_expenses %}
+                {% set _ = categories_with_expenses.update({expense.category.name: {
+                    'amount': categories_with_expenses[expense.category.name].amount + expense.amount,
+                    'color': expense.category.color|default('#6c757d'),
+                    'icon': expense.category.icon|default('fa-tag')
+                }}) %}
+            {% else %}
+                {% set _ = categories_with_expenses.update({expense.category.name: {
+                    'amount': expense.amount,
+                    'color': expense.category.color|default('#6c757d'),
+                    'icon': expense.category.icon|default('fa-tag')
+                }}) %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+    
+    {% set sorted_categories = [] %}
+    {% for category_name, data in categories_with_expenses.items() %}
+        {% set _ = sorted_categories.append((category_name, data)) %}
+    {% endfor %}
+    
+    {% set sorted_categories = sorted_categories|sort(attribute='1.amount', reverse=true) %}
+    
+    {% for category_name, data in sorted_categories[:6] %}
+        categoryData.push({
+            name: "{{ category_name|replace('"', '\\"') }}",
+            amount: {{ data.amount }},
+            color: "{{ data.color|default('#6c757d')|replace('"', '\\"') }}"
+        });
+    {% endfor %}
+</script>
     <!-- IOU Summary Cards -->
 <div class="row mb-4">
     <div class="col-md-12">
-        <div class="card">
+        <div class="card modern-card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">💸 Money Owed</h5>
                 <a href="{{ url_for('settlements') }}" class="btn btn-sm btn-outline-light">
@@ -382,23 +623,250 @@
 </div>
 
     <!-- Monthly Breakdown -->
-    <!-- Monthly Breakdown -->
+<!-- Monthly Expenses Breakdown -->
 <div class="row mb-4">
     <div class="col-md-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Monthly Spending Breakdown</h5>
+        <div class="modern-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Monthly Expenses Breakdown</h5>
+                <div>
+                    <span class="badge bg-secondary me-2">Expenses Only</span>
+                    <button id="toggleExpenseForm" class="btn btn-primary btn-sm btn-modern">
+                        <i class="fas fa-plus me-2"></i>Add New Transaction
+                    </button>
+                </div>
             </div>
+               <!-- Add Transaction Form (Hidden by default) -->
+<div id="expenseFormContainer" class="expense-form p-4 m-0 border-0" style="display: none;">
+    <h4 class="mb-3">Add New Transaction</h4>
+    <form method="POST" action="{{ url_for('add_expense') }}">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="transaction_type" class="form-label">Transaction Type</label>
+                <select class="form-control bg-dark text-light" id="transaction_type" name="transaction_type" required onchange="handleTransactionTypeChange()">
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                    <option value="transfer">Internal Transfer</option>
+                </select>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="description" class="form-label">Description</label>
+                <input type="text" class="form-control bg-dark text-light" id="description" name="description" required>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="amount" class="form-label">Amount ({{ base_currency.symbol }})</label>
+                <input type="number" step="0.01" class="form-control bg-dark text-light" id="amount" name="amount" required>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="currency_code" class="form-label">Currency</label>
+                <select class="form-control bg-dark text-light" id="currency_code" name="currency_code">
+                    {% for currency in currencies %}
+                        <option value="{{ currency.code }}" 
+                                {% if currency.code == current_user.default_currency_code %}selected{% endif %}>
+                            {{ currency.code }} ({{ currency.symbol }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="date" class="form-label">Date</label>
+                <input type="date" class="form-control bg-dark text-light" id="date" name="date" required>
+            </div>
+        </div>
+        
+        <div class="row" id="account_row">
+            <div class="col-md-6 mb-3">
+                <label for="account_id" class="form-label" id="account_label">Account</label>
+                <select class="form-control bg-dark text-light" id="account_id" name="account_id" required>
+                    <option value="">Select an account</option>
+                    {% for account in current_user.accounts %}
+                        <option value="{{ account.id }}">{{ account.name }} ({{ account.type }})</option>
+                    {% endfor %}
+                    
+                    {% if current_user.accounts|length == 0 %}
+                        <option value="default">Default Account</option>
+                    {% endif %}
+                </select>
+                <small class="text-muted d-block mt-1" id="account_help_text">
+                    {% if current_user.accounts|length == 0 %}
+                        No accounts created yet. <a href="{{ url_for('advanced') }}" class="text-warning">Create accounts</a> to better track your finances.
+                    {% endif %}
+                </small>
+            </div>
+            <div class="col-md-6 mb-3" id="to_account_container" style="display: none;">
+                <label for="destination_account_id" class="form-label">To Account</label>
+                <select class="form-control bg-dark text-light" id="destination_account_id" name="destination_account_id">
+                    <option value="">Select destination account</option>
+                    {% for account in current_user.accounts %}
+                        <option value="{{ account.id }}">{{ account.name }} ({{ account.type }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="paid_by" class="form-label">Paid By</label>
+                <select class="form-control bg-dark text-light" id="paid_by" name="paid_by" required>
+                    {% for user in users %}
+                        <option value="{{ user.id }}" {% if user.id == current_user.id %}selected{% endif %}>{{ user.name }} ({{ user.id }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="row" id="split_section">
+            <div class="col-md-6 mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <label class="form-label">Split With</label>
+                    <div class="form-check form-switch ms-2">
+                        <input class="form-check-input" type="checkbox" id="personal_expense_check" name="personal_expense" onchange="togglePersonalExpense()">
+                        <label class="form-check-label" for="personal_expense_check">Personal expense</label>
+                    </div>
+                </div>
+                
+                <!-- IMPROVED SPLIT WITH INTERFACE -->
+                <div id="split_with_container" class="bg-dark border border-secondary rounded p-2 mb-2">
+                    <!-- Selected users display area -->
+                    <div id="selected_users_display" class="d-flex flex-wrap gap-1 mb-2">
+                        <!-- Selected users will appear here as badges -->
+                    </div>
+                    
+                    <!-- Dropdown with Add button -->
+                    <select class="form-select bg-dark text-light border-secondary" id="user_dropdown">
+                        <option value="">-- Select a user to add --</option>
+                        {% for user in users %}
+                            {% if user.id != current_user.id %}
+                            <option value="{{ user.id }}" 
+                                    data-color="{{ user.user_color|default('#15803d') }}" 
+                                    data-name="{{ user.name }}">
+                                {{ user.name }}
+                            </option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                    
+                    <!-- Hidden actual select that will be submitted with the form -->
+                    <select class="d-none" id="split_with" name="split_with" multiple>
+                        {% for user in users %}
+                            <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <small class="text-muted d-block mt-1">Check "Personal expense" for transactions with no splits, or select people to split with</small>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="split_method" class="form-label">Split Method</label>
+                <select class="form-control bg-dark text-light" id="split_method" name="split_method" required onchange="toggleSplitOptions()">
+                    <option value="equal">Equal Split Among All</option>
+                    <option value="custom">Custom Amount for Each Person</option>
+                    <option value="percentage">Percentage Split for Each Person</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6 mb-3" id="split_value_container" style="display: none;">
+                <label for="split_value" class="form-label">Split Value (Legacy - Deprecated)</label>
+                <input type="number" step="0.01" class="form-control bg-dark text-light" id="split_value" name="split_value">
+                <small class="text-muted">This field is only for backward compatibility.</small>
+            </div>
+        </div>
+        
+        <!-- Custom Split Values Container (Hidden by default) -->
+        <div id="custom_split_container" class="mb-3" style="display: none;">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5 class="mb-0">Customize Split Values</h5>
+                    <small class="text-muted" id="split_instruction">Set how much each person pays</small>
+                </div>
+                <div class="card-body">
+                    <div id="split_values_container">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div>
+                            <span class="text-muted">Total: {{ base_currency.symbol }}<span id="split_total">0.00</span></span>
+                            <span class="ms-2 text-muted">Expense: {{ base_currency.symbol }}<span id="expense_amount">0.00</span></span>
+                        </div>
+                        <div>
+                            <span class="badge bg-success" id="split_status">Balanced</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Hidden input to store the split details as JSON -->
+            <input type="hidden" id="split_details" name="split_details">
+        </div>
+        
+        <div class="mb-3">
+            <label for="category_id" class="form-label">Category</label>
+            <div class="input-group">
+                <span class="input-group-text bg-dark text-light" id="category-icon-preview">
+                    <i class="fas fa-tag"></i>
+                </span>
+                <select class="form-select bg-dark text-light" id="category_id" name="category_id">
+                    <option value="">Select a category</option>
+                    {% for top_category in current_user.categories if not top_category.parent_id %}
+                        <optgroup label="{{ top_category.name }}">
+                            {% for subcat in top_category.subcategories %}
+                                <option value="{{ subcat.id }}" 
+                                        data-icon="{{ subcat.icon }}" 
+                                        data-color="{{ subcat.color }}">
+                                    {{ subcat.name }}
+                                </option>
+                            {% endfor %}
+                        </optgroup>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6 mb-3" id="group_section">
+                <label for="group_id" class="form-label">Group (Optional)</label>
+                <select class="form-control bg-dark text-light" id="group_id" name="group_id">
+                    <option value="">No Group (Personal Transaction)</option>
+                    {% for group in current_user.groups %}
+                        <option value="{{ group.id }}">{{ group.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+                <label for="tags" class="form-label">Tags (Optional)</label>
+                <div class="tag-selector">
+                    {% for tag in current_user.tags %}
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input tag-checkbox" type="checkbox" id="tag{{ tag.id }}" name="tags" value="{{ tag.id }}" 
+                            style="background-color: {{ tag.color }}; border-color: {{ tag.color }};">
+                        <label class="form-check-label" for="tag{{ tag.id }}">{{ tag.name }}</label>
+                    </div>
+                    {% endfor %}
+                    
+                    {% if current_user.tags|length == 0 %}
+                    <p class="text-muted small">No tags created yet. <a href="{{ url_for('manage_tags') }}" class="text-warning">Create tags</a> to categorize transactions.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="d-flex justify-content-end">
+            <button type="button" class="btn btn-secondary me-2" onclick="toggleExpenseForm()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Add Transaction</button>
+        </div>
+    </form>
+</div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table">
+                    <table class="table table-modern">
                         <thead>
                             <tr>
                                 <th>Month</th>
                                 <th>Total</th>
                                 <th>Categories</th>
                                 <th>Contributors</th>
-                                <th>Cards Used</th>
+                                <th>Accounts</th>
                                 <th>Details</th>
                             </tr>
                         </thead>
@@ -411,7 +879,7 @@
                                     <!-- Categories for this month -->
                                     {% set categories_for_month = {} %}
                                     {% for expense in expenses %}
-                                        {% if expense.date.strftime('%Y-%m') == month and expense.category %}
+                                        {% if expense.date.strftime('%Y-%m') == month and expense.category and (not expense.transaction_type or expense.transaction_type == 'expense') %}
                                             {% if expense.category.name in categories_for_month %}
                                                 {% set _ = categories_for_month.update({expense.category.name: categories_for_month[expense.category.name] + expense.amount}) %}
                                             {% else %}
@@ -476,7 +944,7 @@
                                         <div class="p-3">
                                             <h6 class="mb-3">Expense Details for {{ month }}</h6>
                                             <div class="table-responsive">
-                                                <table class="table table-sm">
+                                                <table class="table table-sm table-modern">
                                                     <thead>
                                                         <tr>
                                                             <th>Date</th>
@@ -490,7 +958,7 @@
                                                     </thead>
                                                     <tbody>
                                                         {% for expense in expenses %}
-                                                            {% if expense.date.strftime('%Y-%m') == month %}
+                                                            {% if expense.date.strftime('%Y-%m') == month and (not expense.transaction_type or expense.transaction_type == 'expense') %}
                                                                 {% set splits = expense_splits[expense.id] %}
                                                                 <tr>
                                                                     <td>{{ expense.date.strftime('%d') }}</td>
@@ -508,7 +976,7 @@
                                                                     <td>{{ splits.payer.name }}</td>
                                                                     <td>{{ expense.card_used }}</td>
                                                                     <td>
-                                                                     <!-- Payer's portion -->
+                                                                        <!-- Payer's portion -->
                                                                         {% if splits.payer.amount > 0 %}
                                                                         <small class="d-block mb-1">
                                                                             {% set payer_user = get_user_by_id(splits.payer.email) %}
@@ -549,149 +1017,1077 @@
     </div>
 </div>
 {% endblock %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% block scripts %}
+<script>
+    initializeFormState();
+    // IMPROVED DASHBOARD TRANSACTION FUNCTIONS
 
-    <script>
-        // Expense Form Toggle
-        document.getElementById('toggleExpenseForm').addEventListener('click', function() {
-            var form = document.getElementById('expenseFormContainer');
-            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+
+
+document.addEventListener('DOMContentLoaded', function() {
+
+
+
+    const quotes = [
+        "A budget is telling your money where to go instead of wondering where it went.",
+        "Do not save what is left after spending, but spend what is left after saving.",
+        "Financial peace isn't the acquisition of stuff. It's learning to live on less than you make.",
+        "The art is not in making money, but in keeping it.",
+        "It's not how much money you make, but how much money you keep.",
+        "The goal isn't more money. The goal is living life on your terms.",
+        "Never depend on a single income. Make an investment to a second source.",
+        "Your net worth is not your self-worth.",
+        "The habit of saving is itself an education; it fosters every virtue, teaches self-denial, cultivates the sense of order, trains to forethought.",
+        "Wealth is not his that has it, but his that enjoys it."
+    ];
+    
+    // Set a random quote with proper quotation marks
+    const quoteElement = document.getElementById('finance-quote');
+    if (quoteElement) {
+        const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+        // Add quotation marks around the quote
+        quoteElement.textContent = `${randomQuote}`; // This adds quotes at the beginning and end
+    }
+    
+    const categorySelect = document.getElementById('category_id');
+    const categoryIconPreview = document.getElementById('category-icon-preview');
+
+    if (categorySelect && categoryIconPreview) {
+        categorySelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.value) {
+                const icon = selectedOption.getAttribute('data-icon');
+                const color = selectedOption.getAttribute('data-color');
+                categoryIconPreview.innerHTML = `<i class="fas ${icon}" style="color: ${color};"></i>`;
+            } else {
+                categoryIconPreview.innerHTML = `<i class="fas fa-tag"></i>`;
+            }
         });
-
-        // Settlement Form Toggle
-        function toggleSettlementForm() {
-            var form = document.getElementById('settlementFormContainer');
-            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+    
+    // Expense Form Toggle
+    const toggleButton = document.getElementById('toggleExpenseForm');
+    if (toggleButton) {
+        toggleButton.addEventListener('click', toggleExpenseForm);
+    }
+    
+    // Transaction Type Change
+    const transactionTypeSelect = document.getElementById('transaction_type');
+    if (transactionTypeSelect) {
+        transactionTypeSelect.addEventListener('change', function() {
+            handleTransactionTypeChange();
+            updateFormLabels();
+            
+            // Remove destination account if not a transfer
+            if (this.value !== 'transfer') {
+                removeTransferDestinationAccount();
+            }
+        });
+    }
+    
+    // Personal Expense Toggle
+    const personalExpenseCheck = document.getElementById('personal_expense_check');
+    if (personalExpenseCheck) {
+        personalExpenseCheck.addEventListener('change', togglePersonalExpense);
+    }
+    
+    // Split Method Change
+    const splitMethodSelect = document.getElementById('split_method');
+    if (splitMethodSelect) {
+        splitMethodSelect.addEventListener('change', toggleSplitOptions);
+    }
+    
+    // Amount input change
+    const amountInput = document.getElementById('amount');
+    if (amountInput) {
+        amountInput.addEventListener('input', updateSplitValues);
+    }
+    
+    // Paid By Change
+    // Modify your existing Paid By Change event handler
+        // Replace your existing Paid By Change event handler
+const paidBySelect = document.getElementById('paid_by');
+if (paidBySelect) {
+    paidBySelect.addEventListener('change', function() {
+        // Get current user ID - using data attribute to ensure proper rendering
+        const currentUserId = "{{ current_user.id }}";
+        const selectedPayerId = this.value;
+        
+        // If the payer is not the current user, make sure current user is in the split
+        if (selectedPayerId !== currentUserId) {
+            // Check if current user is already in the split
+            if (!isUserSelected(currentUserId)) {
+                // Add current user directly to the hidden select
+                const hiddenSplitWith = document.getElementById('split_with');
+                if (hiddenSplitWith) {
+                    // Find the option for current user and select it
+                    for (let i = 0; i < hiddenSplitWith.options.length; i++) {
+                        const option = hiddenSplitWith.options[i];
+                        if (option.value === currentUserId) {
+                            option.selected = true;
+                            
+                            // Also add visual badge for current user
+                            const selectedUsersDisplay = document.getElementById('selected_users_display');
+                            if (selectedUsersDisplay) {
+                                const badge = document.createElement('div');
+                                badge.className = 'badge d-flex align-items-center gap-1 p-2 mb-1 me-1';
+                                badge.style.backgroundColor = '#15803d'; // Default color
+                                
+                                // Get user name from current user data
+                                const userName = "{{ current_user.name }}";
+                                
+                                badge.innerHTML = `
+                                    <span>${userName}</span>
+                                    <button type="button" class="btn-close btn-close-white p-0" 
+                                            style="font-size: 0.5rem;" 
+                                            data-user-id="${currentUserId}" 
+                                            aria-label="Remove"></button>
+                                `;
+                                
+                                // Add badge to display
+                                selectedUsersDisplay.appendChild(badge);
+                                
+                                // Add click handler for the remove button
+                                const removeBtn = badge.querySelector('.btn-close');
+                                if (removeBtn) {
+                                    removeBtn.addEventListener('click', function() {
+                                        badge.remove();
+                                        option.selected = false;
+                                        generateSplitInputs();
+                                    });
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
         }
+        
+        // Update split values after potentially adding the current user
+        generateSplitInputs();
+    });
+}
+    
+    // Initialize tag checkboxes
+    initializeTagCheckboxes();
+    
+    // Initialize form if shown by default
+    const form = document.getElementById('expenseFormContainer');
+    if (form && form.style.display !== 'none') {
+        handleTransactionTypeChange();
+    }
+    const userDropdown = document.getElementById('user_dropdown');
+    if (userDropdown) {
+        userDropdown.addEventListener('change', function() {
+            if (this.value) {
+                addSelectedUser();
+            }
+        });
+    }
+});
+function addSelectedUser() {
+    const userDropdown = document.getElementById('user_dropdown');
+    const selectedUsersDisplay = document.getElementById('selected_users_display');
+    const hiddenSplitWith = document.getElementById('split_with');
+    
+    if (!userDropdown || !userDropdown.value) return;
+    
+    const selectedOption = userDropdown.options[userDropdown.selectedIndex];
+    const userId = selectedOption.value;
+    const userName = selectedOption.dataset.name;
+    const userColor = selectedOption.dataset.color;
+    
+    // Skip if already added
+    if (isUserSelected(userId)) {
+        // Reset dropdown to placeholder
+        userDropdown.value = '';
+        return;
+    }
+    
+    // Create visual badge
+    const badge = document.createElement('div');
+    badge.className = 'badge d-flex align-items-center gap-1 p-2 mb-1 me-1';
+    badge.style.backgroundColor = userColor || '#15803d';
+    badge.innerHTML = `
+        <span>${userName}</span>
+        <button type="button" class="btn-close btn-close-white p-0" 
+                style="font-size: 0.5rem;" 
+                data-user-id="${userId}" 
+                aria-label="Remove"></button>
+    `;
+    
+    // Add the badge to the display
+    selectedUsersDisplay.appendChild(badge);
+    
+    // Select the corresponding option in the hidden select
+    selectUser(userId, true);
+    
+    // Reset dropdown to placeholder
+    userDropdown.value = '';
+    
+    // Update split options if needed
+    generateSplitInputs();
+    
+    // Add click handler for remove button
+    const removeBtn = badge.querySelector('.btn-close');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', function() {
+            // Remove badge
+            badge.remove();
+            
+            // Deselect in hidden select
+            selectUser(userId, false);
+            
+            // Update split options
+            generateSplitInputs();
+        });
+    }
+}
 
-        // Prepare Settlement Function
-        function prepareSettlement(userId, userName, amount, iOwe) {
-            var payerSelect = document.getElementById('payer_id');
-            var receiverSelect = document.getElementById('receiver_id');
-            var amountInput = document.getElementById('settlement_amount');
-            var dateInput = document.getElementById('settlement_date');
+// Check if a user is already selected
+function isUserSelected(userId) {
+    const hiddenSplitWith = document.getElementById('split_with');
+    if (!hiddenSplitWith) return false;
+    
+    for (const option of hiddenSplitWith.options) {
+        if (option.value === userId && option.selected) {
+            return true;
+        }
+    }
+    return false;
+}
 
-            // Logic to set payer and receiver based on iOwe
-            if (iOwe) {
-                payerSelect.value = "{{ current_user.id }}";
-                receiverSelect.value = userId;
+// Select or deselect a user in the hidden select
+function selectUser(userId, selected) {
+    const hiddenSplitWith = document.getElementById('split_with');
+    if (!hiddenSplitWith) return;
+    
+    for (const option of hiddenSplitWith.options) {
+        if (option.value === userId) {
+            option.selected = selected;
+            break;
+        }
+    }
+}
+// Initialize tag checkboxes
+function initializeTagCheckboxes() {
+    const tagCheckboxes = document.querySelectorAll('.tag-checkbox');
+    
+    tagCheckboxes.forEach(checkbox => {
+        const originalColor = checkbox.style.backgroundColor;
+        
+        // Set initial state based on checked status
+        if (checkbox.checked) {
+            checkbox.style.backgroundColor = checkbox.style.borderColor;
+        } else {
+            checkbox.style.backgroundColor = 'transparent';
+        }
+        
+        // Add change event listener
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                this.style.backgroundColor = this.style.borderColor || originalColor;
             } else {
-                payerSelect.value = userId;
-                receiverSelect.value = "{{ current_user.id }}";
+                this.style.backgroundColor = 'transparent';
             }
-            amountInput.value = amount;
-            dateInput.value = new Date().toISOString().split('T')[0];
+        });
+    });
+}
 
-            toggleSettlementForm();
-        }
+// Update split values when amount or other fields change
+function updateSplitValues() {
+    // Skip if personal expense is checked or not in expense mode
+    if (document.getElementById('personal_expense_check')?.checked) return;
+    if (document.getElementById('transaction_type')?.value !== 'expense') return;
+    
+    const splitMethod = document.getElementById('split_method').value;
+    
+    // Only regenerate split inputs for custom or percentage splits
+    if (splitMethod === 'custom' || splitMethod === 'percentage') {
+        generateSplitInputs();
+    }
+}
 
-        // Toggle Personal Expense
-        function togglePersonalExpense() {
-            var splitSelect = document.getElementById('split_with');
-            var isPersonal = document.getElementById('personal_expense_check').checked;
+// Initialize form based on transaction type
+function initializeFormState() {
+    // Set default date to today
+    const dateInput = document.getElementById('date');
+    if (dateInput && !dateInput.value) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+    
+    // Initialize all form fields based on the selected transaction type
+    handleTransactionTypeChange();
+    
+    // Make sure labels are up to date
+    updateFormLabels();
+}
 
-            splitSelect.disabled = isPersonal;
-            if (isPersonal) {
-                splitSelect.value = []; // Clear selection
+// Handle Transaction Type Change
+function handleTransactionTypeChange() {
+    const transactionType = document.getElementById('transaction_type').value;
+    const splitSection = document.getElementById('split_section');
+    const customSplitContainer = document.getElementById('custom_split_container');
+    const splitValueContainer = document.getElementById('split_value_container');
+    const groupSection = document.getElementById('group_section');
+    const personalExpenseCheck = document.getElementById('personal_expense_check');
+    const accountLabel = document.querySelector('label[for="account_id"]');
+    const toAccountContainer = document.getElementById('to_account_container');
+    
+    // Show/hide fields based on transaction type
+    if (transactionType === 'expense') {
+        // Show splitting options for expenses
+        if (splitSection) splitSection.style.display = 'flex';
+        if (groupSection) groupSection.style.display = 'block';
+        if (toAccountContainer) toAccountContainer.style.display = 'none';
+        
+        // Update account label
+        if (accountLabel) accountLabel.textContent = 'Payment Account';
+        
+        // Re-enable personal expense toggle
+        if (personalExpenseCheck) {
+            personalExpenseCheck.disabled = false;
+            personalExpenseCheck.closest('.form-switch').style.opacity = '1';
+            
+            // Apply personal expense settings if checked
+            if (personalExpenseCheck.checked) {
+                togglePersonalExpense();
             }
         }
+    } 
+    else if (transactionType === 'income') {
+        // Hide splitting options for income
+        if (splitSection) splitSection.style.display = 'none';
+        if (customSplitContainer) customSplitContainer.style.display = 'none';
+        if (splitValueContainer) splitValueContainer.style.display = 'none';
+        if (groupSection) groupSection.style.display = 'none';
+        if (toAccountContainer) toAccountContainer.style.display = 'none';
+        
+        // Update account label
+        if (accountLabel) accountLabel.textContent = 'Deposit Account';
+        
+        // Force personal on income
+        if (personalExpenseCheck) {
+            personalExpenseCheck.checked = true;
+            personalExpenseCheck.disabled = true;
+            personalExpenseCheck.closest('.form-switch').style.opacity = '0.5';
+        }
+    }
+    else if (transactionType === 'transfer') {
+        // Hide splitting options for transfers
+        if (splitSection) splitSection.style.display = 'none';
+        if (customSplitContainer) customSplitContainer.style.display = 'none';
+        if (splitValueContainer) splitValueContainer.style.display = 'none';
+        if (groupSection) groupSection.style.display = 'none';
+        
+        // Update account label
+        if (accountLabel) accountLabel.textContent = 'From Account';
+        
+        // Show destination account for transfers
+        addTransferDestinationAccount();
+        
+        // Force personal on transfers
+        if (personalExpenseCheck) {
+            personalExpenseCheck.checked = true;
+            personalExpenseCheck.disabled = true;
+            personalExpenseCheck.closest('.form-switch').style.opacity = '0.5';
+        }
+    }
+    
+    // Update form title and button text
+    updateFormLabels();
+}
 
-        // Toggle Split Options
-        function toggleSplitOptions() {
-            var splitMethod = document.getElementById('split_method').value;
-            var customSplitContainer = document.getElementById('custom_split_container');
-            var splitValueContainer = document.getElementById('split_value_container');
+// Add destination account field for transfers
+function addTransferDestinationAccount() {
+    // Check if the container exists first
+    const toAccountContainer = document.getElementById('to_account_container');
+    if (toAccountContainer) {
+        toAccountContainer.style.display = 'block';
+        return;
+    }
+    
+    // If it doesn't exist, create it dynamically
+    const accountSelect = document.getElementById('account_id');
+    if (accountSelect) {
+        const accountRow = accountSelect.closest('.row');
+        const accountCol = accountSelect.closest('.col-md-6');
+        
+        // Create destination account element
+        const destinationCol = document.createElement('div');
+        destinationCol.className = 'col-md-6 mb-3';
+        destinationCol.id = 'to_account_container';
+        
+        // Clone the account dropdown for destination
+        const destinationHtml = `
+            <label for="destination_account_id" class="form-label">To Account</label>
+            <select class="form-control bg-dark text-light" id="destination_account_id" name="destination_account_id" required>
+                ${accountSelect.innerHTML}
+            </select>
+        `;
+        
+        destinationCol.innerHTML = destinationHtml;
+        
+        // Add the new field after the account field
+        if (accountCol && accountRow) {
+            accountRow.appendChild(destinationCol);
+        }
+    }
+}
 
-            if (splitMethod === 'custom' || splitMethod === 'percentage') {
-                customSplitContainer.style.display = 'block';
-                splitValueContainer.style.display = 'none';
-                generateSplitInputs(); // Generate split inputs based on selected users
-            } else if (splitMethod === 'equal') {
-                customSplitContainer.style.display = 'none';
-                splitValueContainer.style.display = 'none';
-            } else {
-                splitValueContainer.style.display = 'block';
-                customSplitContainer.style.display = 'none';
+// Remove destination account for non-transfer transactions
+function removeTransferDestinationAccount() {
+    const destinationContainer = document.getElementById('to_account_container');
+    if (destinationContainer) {
+        destinationContainer.style.display = 'none';
+    }
+}
+
+// Toggle expense form visibility
+function toggleExpenseForm() {
+    const form = document.getElementById('expenseFormContainer');
+    const toggleButton = document.getElementById('toggleExpenseForm');
+    
+    if (form && toggleButton) {
+        if (form.style.display === 'none' || form.style.display === '') {
+            form.style.display = 'block';
+            toggleButton.innerHTML = '<i class="fas fa-times me-2"></i>Cancel';
+            toggleButton.classList.replace('btn-primary', 'btn-secondary');
+            
+            // Initialize form based on default transaction type
+            handleTransactionTypeChange();
+            
+            // Set current date as default
+            const dateInput = document.getElementById('date');
+            if (dateInput && !dateInput.value) {
+                dateInput.value = new Date().toISOString().split('T')[0];
+            }
+        } else {
+            form.style.display = 'none';
+            toggleButton.innerHTML = '<i class="fas fa-plus me-2"></i>Add New Transaction';
+            toggleButton.classList.replace('btn-secondary', 'btn-primary');
+            
+            // Reset form fields when closing
+            const formElement = form.querySelector('form');
+            if (formElement) formElement.reset();
+            
+            // Reset any custom UI elements
+            resetFormUI();
+        }
+    }
+}
+
+
+function resetFormUI() {
+    // Reset transaction type to expense
+    const transactionTypeSelect = document.getElementById('transaction_type');
+    if (transactionTypeSelect) {
+        transactionTypeSelect.value = 'expense';
+        handleTransactionTypeChange();
+    }
+    
+    // Reset personal expense checkbox
+    const personalExpenseCheck = document.getElementById('personal_expense_check');
+    if (personalExpenseCheck) {
+        personalExpenseCheck.checked = false;
+        togglePersonalExpense();
+    }
+    
+    // Reset split method dropdown
+    const splitMethodSelect = document.getElementById('split_method');
+    if (splitMethodSelect) {
+        splitMethodSelect.value = 'equal';
+    }
+    
+    // Reset split with selection
+    const splitWithSelect = document.getElementById('split_with');
+    if (splitWithSelect) {
+        for (let i = 0; i < splitWithSelect.options.length; i++) {
+            splitWithSelect.options[i].selected = false;
+        }
+    }
+    
+    // Reset visual user badges
+    const selectedUsersDisplay = document.getElementById('selected_users_display');
+    if (selectedUsersDisplay) {
+        selectedUsersDisplay.innerHTML = '';
+    }
+    
+    // Reset user dropdown
+    const userDropdown = document.getElementById('user_dropdown');
+    if (userDropdown) {
+        userDropdown.value = '';
+    }
+    
+    // Reset tag checkboxes
+    const tagCheckboxes = document.querySelectorAll('.tag-checkbox');
+    tagCheckboxes.forEach(checkbox => {
+        checkbox.checked = false;
+        checkbox.style.backgroundColor = 'transparent';
+    });
+    
+    // Reset category icon preview
+    const categoryIconPreview = document.getElementById('category-icon-preview');
+    if (categoryIconPreview) {
+        categoryIconPreview.innerHTML = '<i class="fas fa-tag"></i>';
+    }
+}
+
+// Toggle personal expense mode
+// Replace your current togglePersonalExpense function with this one
+function togglePersonalExpense() {
+    const splitWithContainer = document.getElementById('split_with_container');
+    const hiddenSplitWith = document.getElementById('split_with');
+    const isPersonal = document.getElementById('personal_expense_check').checked;
+    const splitMethodElement = document.getElementById('split_method');
+    const splitMethodContainer = splitMethodElement ? splitMethodElement.closest('.col-md-6') : null;
+    const customSplitContainer = document.getElementById('custom_split_container');
+    const splitValueContainer = document.getElementById('split_value_container');
+    const selectedUsersDisplay = document.getElementById('selected_users_display');
+    const userDropdown = document.getElementById('user_dropdown');
+    
+    if (isPersonal) {
+        // This is a personal expense - simplify the form
+        if (splitWithContainer) {
+            splitWithContainer.classList.add('opacity-50');
+            splitWithContainer.style.pointerEvents = 'none';
+        }
+        
+        if (splitMethodContainer) {
+            splitMethodContainer.style.display = 'none';
+        }
+        
+        if (customSplitContainer) {
+            customSplitContainer.style.display = 'none';
+        }
+        
+        if (splitValueContainer) {
+            splitValueContainer.style.display = 'none';
+        }
+        
+        // Clear any existing split_with selections
+        if (hiddenSplitWith) {
+            for (let i = 0; i < hiddenSplitWith.options.length; i++) {
+                hiddenSplitWith.options[i].selected = false;
             }
         }
+        
+        // Clear the visual display of selected users
+        if (selectedUsersDisplay) {
+            selectedUsersDisplay.innerHTML = '';
+        }
+        
+        // Disable the user dropdown
+        if (userDropdown) {
+            userDropdown.disabled = true;
+        }
+    } else {
+        // This is a shared expense - enable the split options
+        if (splitWithContainer) {
+            splitWithContainer.classList.remove('opacity-50');
+            splitWithContainer.style.pointerEvents = 'auto';
+        }
+        
+        if (splitMethodContainer) {
+            splitMethodContainer.style.display = 'block';
+        }
+        
+        // Enable the user dropdown
+        if (userDropdown) {
+            userDropdown.disabled = false;
+        }
+        
+        // Show custom split container if needed
+        toggleSplitOptions();
+    }
+}
 
-        // Generate Split Inputs
-        function generateSplitInputs() {
-            var splitSelect = document.getElementById('split_with');
-            var splitValuesContainer = document.getElementById('split_values_container');
-            var splitMethod = document.getElementById('split_method').value;
-            var expenseAmount = parseFloat(document.getElementById('amount').value) || 0;
-            var selectedUsers = Array.from(splitSelect.selectedOptions).map(option => ({
-                id: option.value,
-                name: option.text.split(' (')[0],
-                color: option.dataset.color
-            }));
+// Toggle split options based on selected method
+function toggleSplitOptions() {
+    const splitMethod = document.getElementById('split_method').value;
+    const customSplitContainer = document.getElementById('custom_split_container');
+    const splitValueContainer = document.getElementById('split_value_container');
+    const transactionType = document.getElementById('transaction_type').value;
+    const personalExpenseCheck = document.getElementById('personal_expense_check');
+    
+    // Only show custom split options for expense transactions that aren't personal
+    if (transactionType !== 'expense' || (personalExpenseCheck && personalExpenseCheck.checked)) {
+        if (customSplitContainer) customSplitContainer.style.display = 'none';
+        if (splitValueContainer) splitValueContainer.style.display = 'none';
+        return;
+    }
 
-            splitValuesContainer.innerHTML = ''; // Clear previous inputs
-            selectedUsers.forEach(user => {
-                var input = document.createElement('div');
-                input.className = 'mb-2';
-                input.innerHTML = `
-                    <label class="form-label">${user.name} (${user.id})</label>
+    if (splitMethod === 'custom' || splitMethod === 'percentage') {
+        if (customSplitContainer) customSplitContainer.style.display = 'block';
+        if (splitValueContainer) splitValueContainer.style.display = 'none';
+        generateSplitInputs(); // Generate split inputs based on selected users
+    } else if (splitMethod === 'equal') {
+        if (customSplitContainer) customSplitContainer.style.display = 'none';
+        if (splitValueContainer) splitValueContainer.style.display = 'none';
+    } else {
+        if (splitValueContainer) splitValueContainer.style.display = 'block';
+        if (customSplitContainer) customSplitContainer.style.display = 'none';
+    }
+}
+
+// Update form labels based on transaction type
+function updateFormLabels() {
+    const transactionType = document.getElementById('transaction_type').value;
+    const formTitle = document.querySelector('#expenseFormContainer h4');
+    const submitButton = document.querySelector('#expenseFormContainer button[type="submit"]');
+    
+    if (formTitle) {
+        formTitle.textContent = 'Add New ' + capitalizeFirstLetter(transactionType);
+    }
+    
+    if (submitButton) {
+        submitButton.textContent = 'Add ' + capitalizeFirstLetter(transactionType);
+    }
+}
+
+// Helper function for capitalization
+function capitalizeFirstLetter(string) {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+// Generate Split Inputs
+function generateSplitInputs() {
+    const splitSelect = document.getElementById('split_with');
+    const splitValuesContainer = document.getElementById('split_values_container');
+    const splitMethod = document.getElementById('split_method').value;
+    const expenseAmount = parseFloat(document.getElementById('amount').value) || 0;
+    const paidById = document.getElementById('paid_by').value;
+    
+    if (!splitValuesContainer || !splitSelect) return;
+    
+    // Clear previous inputs
+    splitValuesContainer.innerHTML = '';
+    
+    // Get selected users from the split_with select
+    const selectedUsers = Array.from(splitSelect.selectedOptions).map(option => ({
+        id: option.value,
+        name: option.text.split(' (')[0]
+    }));
+    
+    // Add the payer if they're not already in the list
+    const paidBySelect = document.getElementById('paid_by');
+    const paidByOption = paidBySelect ? paidBySelect.options[paidBySelect.selectedIndex] : null;
+    
+    let allParticipants = [...selectedUsers];
+    let payerIncluded = selectedUsers.some(user => user.id === paidById);
+    
+    if (paidByOption && !payerIncluded) {
+        allParticipants.unshift({
+            id: paidById,
+            name: paidByOption.text.split(' (')[0],
+            isPayer: true
+        });
+    } else {
+        // Mark the payer in the participants list
+        allParticipants = allParticipants.map(user => ({
+            ...user,
+            isPayer: user.id === paidById
+        }));
+    }
+    
+    // Update instruction text
+    const splitInstruction = document.getElementById('split_instruction');
+    if (splitInstruction) {
+        if (splitMethod === 'percentage') {
+            splitInstruction.textContent = 'Set what percentage each person pays (total should be 100%)';
+        } else {
+            splitInstruction.textContent = 'Set how much each person pays';
+        }
+    }
+    
+    // If no participants, show a message
+    if (allParticipants.length === 0) {
+        splitValuesContainer.innerHTML = '<p class="text-center text-warning">Please select people to split with</p>';
+        return;
+    }
+    
+    // Calculate default values
+    let defaultValue = 0;
+    if (allParticipants.length > 0) {
+        if (splitMethod === 'percentage') {
+            // For percentage, distribute evenly to 100%
+            defaultValue = (100 / allParticipants.length).toFixed(1);
+        } else {
+            // For custom amounts, distribute expense amount evenly
+            defaultValue = (expenseAmount / allParticipants.length).toFixed(2);
+        }
+    }
+    
+    // Create input fields for each participant
+    allParticipants.forEach(user => {
+        const row = document.createElement('div');
+        row.className = 'row mb-2 align-items-center';
+        
+        // Different input setup based on split method
+        if (splitMethod === 'percentage') {
+            row.innerHTML = `
+                <div class="col-md-6">
+                    <span class="badge ${user.isPayer ? 'bg-primary' : 'bg-secondary'} me-1">
+                        ${user.isPayer ? '💰 ' : ''}${user.name}
+                    </span>
+                    ${user.isPayer ? '<small class="text-muted">(Paid)</small>' : ''}
+                </div>
+                <div class="col-md-6">
                     <div class="input-group">
-                        <span class="input-group-text" style="background-color: ${user.color};"></span>
-                        <input type="number" class="form-control split-input" data-user-id="${user.id}" value="0">
+                        <input type="number" class="form-control bg-dark text-light split-input"
+                            data-user-id="${user.id}" 
+                            value="${defaultValue}" min="0" max="100" step="0.1">
+                        <span class="input-group-text bg-dark text-light">%</span>
                     </div>
-                `;
-                splitValuesContainer.appendChild(input);
-            });
-
-            // Add event listeners to split inputs
-            var splitInputs = document.querySelectorAll('.split-input');
-            splitInputs.forEach(input => {
-                input.addEventListener('input', updateSplitTotals);
-            });
-
-            // Update totals initially
-            updateSplitTotals();
-            document.getElementById('expense_amount').textContent = expenseAmount.toFixed(2);
+                </div>
+            `;
+        } else {
+            row.innerHTML = `
+                <div class="col-md-6">
+                    <span class="badge ${user.isPayer ? 'bg-primary' : 'bg-secondary'} me-1">
+                        ${user.isPayer ? '💰 ' : ''}${user.name}
+                    </span>
+                    ${user.isPayer ? '<small class="text-muted">(Paid)</small>' : ''}
+                </div>
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text bg-dark text-light">$</span>
+                        <input type="number" class="form-control bg-dark text-light split-input"
+                            data-user-id="${user.id}" 
+                            value="${defaultValue}" min="0" step="0.01">
+                    </div>
+                </div>
+            `;
         }
+        
+        splitValuesContainer.appendChild(row);
+    });
+    
+    // Add event listeners to inputs for real-time updates
+    const inputs = splitValuesContainer.querySelectorAll('.split-input');
+    inputs.forEach(input => {
+        input.addEventListener('input', updateSplitTotals);
+    });
+    
+    // Update totals initially
+    updateSplitTotals();
+}
 
-        // Update Split Totals
-        function updateSplitTotals() {
-            var splitInputs = document.querySelectorAll('.split-input');
-            var total = 0;
-            var expenseAmount = parseFloat(document.getElementById('amount').value) || 0;
+// Update split totals when input values change
+function updateSplitTotals() {
+    const splitInputs = document.querySelectorAll('.split-input');
+    const totalElement = document.getElementById('split_total');
+    const statusElement = document.getElementById('split_status');
+    const expenseAmount = parseFloat(document.getElementById('amount').value) || 0;
+    const expenseAmountEl = document.getElementById('expense_amount');
+    const splitMethod = document.getElementById('split_method').value;
+    
+    if (!totalElement || !statusElement || !splitInputs.length) return;
+    
+    // Calculate total from all inputs
+    let total = 0;
+    let splitValues = {};
+    
+    splitInputs.forEach(input => {
+        const value = parseFloat(input.value) || 0;
+        const userId = input.getAttribute('data-user-id');
+        total += value;
+        splitValues[userId] = value;
+    });
+    
+    // Update total display
+    if (splitMethod === 'percentage') {
+        totalElement.textContent = total.toFixed(1) + '%';
+        if (expenseAmountEl) expenseAmountEl.textContent = '100.0%';
+        
+        // Update status based on percentage total (should equal 100%)
+        if (Math.abs(total - 100) < 0.1) {
+            statusElement.textContent = 'Balanced';
+            statusElement.className = 'badge bg-success';
+        } else if (total < 100) {
+            statusElement.textContent = 'Under';
+            statusElement.className = 'badge bg-warning';
+        } else {
+            statusElement.textContent = 'Over';
+            statusElement.className = 'badge bg-danger';
+        }
+    } else {
+        totalElement.textContent = total.toFixed(2);
+        if (expenseAmountEl) expenseAmountEl.textContent = expenseAmount.toFixed(2);
+        
+        // Update status based on amount total (should equal expense amount)
+        if (Math.abs(total - expenseAmount) < 0.01) {
+            statusElement.textContent = 'Balanced';
+            statusElement.className = 'badge bg-success';
+        } else if (total < expenseAmount) {
+            statusElement.textContent = 'Under';
+            statusElement.className = 'badge bg-warning';
+        } else {
+            statusElement.textContent = 'Over';
+            statusElement.className = 'badge bg-danger';
+        }
+    }
+    
+    // Create split details object
+    const splitDetails = {
+        type: splitMethod === 'percentage' ? 'percentage' : 'amount',
+        values: splitValues
+    };
+    
+    // Store as JSON string
+    const splitDetailsInput = document.getElementById('split_details');
+    if (splitDetailsInput) {
+        splitDetailsInput.value = JSON.stringify(splitDetails);
+    }
+}
 
-            splitInputs.forEach(input => {
-                total += parseFloat(input.value) || 0;
-            });
+// Prepare Settlement Function
+function prepareSettlement(userId, userName, amount, iOwe) {
+    const payerSelect = document.getElementById('payer_id');
+    const receiverSelect = document.getElementById('receiver_id');
+    const amountInput = document.getElementById('settlement_amount');
+    const dateInput = document.getElementById('settlement_date');
 
-            document.getElementById('split_total').textContent = total.toFixed(2);
-            document.getElementById('expense_amount').textContent = expenseAmount.toFixed(2);
+    if (!payerSelect || !receiverSelect || !amountInput || !dateInput) return;
 
-            // Update split status and details
-            var statusBadge = document.getElementById('split_status');
-            if (total === expenseAmount) {
-                statusBadge.className = 'badge bg-success';
-                statusBadge.textContent = 'Balanced';
-            } else if (total < expenseAmount) {
-                statusBadge.className = 'badge bg-warning';
-                statusBadge.textContent = 'Under';
-            } else {
-                statusBadge.className = 'badge bg-danger';
-                statusBadge.textContent = 'Over';
+    // Logic to set payer and receiver based on iOwe
+    if (iOwe) {
+        payerSelect.value = "{{ current_user.id }}";
+        receiverSelect.value = userId;
+    } else {
+        payerSelect.value = userId;
+        receiverSelect.value = "{{ current_user.id }}";
+    }
+    amountInput.value = amount;
+    dateInput.value = new Date().toISOString().split('T')[0];
+
+    toggleSettlementForm();
+}
+
+// Toggle settlement form visibility
+function toggleSettlementForm() {
+    const form = document.getElementById('settlementFormContainer');
+    
+    if (form) {
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        
+        // Scroll to the form if showing
+        if (form.style.display === 'block') {
+            form.scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+}
+function setupAssetDebtChart() {
+    const ctx = document.getElementById('assetDebtChart');
+    if (!ctx) return;
+    
+    // Use the pre-processed monthly data
+    let months = {{ asset_trends_months|tojson|safe }};
+    let assetData = {{ asset_trends|tojson|safe }};
+    let debtData = {{ debt_trends|tojson|safe }};
+    
+    // Fallback if no data
+    if (!months || months.length === 0) {
+        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+        assetData = [5000, 5500, 6000, 5800, 6200, 6500];
+        debtData = [2000, 1800, 1600, 1500, 1400, 1300];
+    }
+    
+    // Create the chart
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: months,
+            datasets: [
+                {
+                    label: 'Assets',
+                    data: assetData,
+                    borderColor: 'rgba(46, 213, 115, 0.8)',  // Green for assets
+                    backgroundColor: 'rgba(46, 213, 115, 0.2)',
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'Debts',
+                    data: debtData,
+                    borderColor: 'rgba(255, 71, 87, 0.8)',  // Red for debts
+                    backgroundColor: 'rgba(255, 71, 87, 0.2)',
+                    fill: true,
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += '{{ base_currency.symbol }}' + context.parsed.y.toFixed(2);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '{{ base_currency.symbol }}' + value;
+                        }
+                    }
+                }
             }
-
-            // Store split details as JSON
-            var splitDetails = Array.from(splitInputs).map(input => ({
-                user_id: input.dataset.userId,
-                amount: parseFloat(input.value) || 0
-            }));
-            document.getElementById('split_details').value = JSON.stringify(splitDetails);
         }
+    });
+}
 
-        // Category Icon Update
-        document.getElementById('category_id').addEventListener('change', function() {
-            var selectedOption = this.options[this.selectedIndex];
-            var icon = selectedOption.dataset.icon || 'fas fa-tag';
-            var color = selectedOption.dataset.color || '#000';
-            document.getElementById('category-icon-preview').innerHTML = `<i class="${icon}" style="color: ${color};"></i>`;
+
+
+
+
+function setupCategoryDonutChart() {
+    // Get or create category data
+    const categoriesToUse = [];
+    
+    // Instead of complex Jinja2 processing, let's use a safer approach
+    // First check if we have categories data in the page
+    const hasCategories = typeof categoryData !== 'undefined' && Array.isArray(categoryData);
+    
+    if (hasCategories && categoryData.length > 0) {
+        // Use pre-processed category data from the page if available
+        categoryData.forEach(cat => {
+            categoriesToUse.push(cat);
         });
-    </script>
+    } else {
+        // Use sample data if no categories are available
+        categoriesToUse.push(
+            { name: 'Food', amount: 850, color: '#FF6B6B' },
+            { name: 'Housing', amount: 1200, color: '#4ECDC4' },
+            { name: 'Transportation', amount: 400, color: '#FF9F1C' },
+            { name: 'Entertainment', amount: 300, color: '#7785AC' },
+            { name: 'Utilities', amount: 250, color: '#5D5D5D' }
+        );
+    }
+    
+    // If no categories with data, use sample data
+    if (categoriesToUse.length === 0) {
+        categoriesToUse.push(
+            { name: 'Food', amount: 850, color: '#FF6B6B' },
+            { name: 'Housing', amount: 1200, color: '#4ECDC4' },
+            { name: 'Transportation', amount: 400, color: '#FF9F1C' },
+            { name: 'Entertainment', amount: 300, color: '#7785AC' },
+            { name: 'Utilities', amount: 250, color: '#5D5D5D' }
+        );
+    }
+    
+    const categoryNames = categoriesToUse.map(c => c.name);
+    const categoryValues = categoriesToUse.map(c => c.amount);
+    const categoryColors = categoriesToUse.map(c => c.color);
+    
+    // Create the donut chart
+    const ctx = document.getElementById('categoryDonutChart');
+    if (!ctx) return;
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: categoryNames,
+            datasets: [{
+                data: categoryValues,
+                backgroundColor: categoryColors,
+                borderColor: 'rgba(0, 0, 0, 0.1)',
+                borderWidth: 2,
+                borderRadius: 2,
+                hoverOffset: 15
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw;
+                            const percentage = ((value / categoryValues.reduce((a, b) => a + b, 0)) * 100).toFixed(1);
+                            return `${label}: {{ base_currency.symbol }}${value.toFixed(2)} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Create custom legend
+    createCategoryLegend(categoriesToUse);
+}
+
+function createCategoryLegend(categories) {
+    const legendContainer = document.getElementById('categoryLegend');
+    if (!legendContainer) return;
+    
+    // Calculate total
+    const total = categories.reduce((sum, category) => sum + category.amount, 0);
+    
+    // Create scrollable container
+    const scrollContainer = document.createElement('div');
+    scrollContainer.className = 'legend-container';
+    
+    // Add each category to legend
+    categories.forEach(category => {
+        const percentage = ((category.amount / total) * 100).toFixed(1);
+        
+        const item = document.createElement('div');
+        item.className = 'category-legend-item';
+        
+        const colorDot = document.createElement('div');
+        colorDot.className = 'color-dot';
+        colorDot.style.backgroundColor = category.color;
+        
+        const nameElem = document.createElement('div');
+        nameElem.className = 'category-name';
+        nameElem.textContent = category.name;
+        
+        const amountElem = document.createElement('div');
+        amountElem.className = 'category-amount';
+        amountElem.textContent = `${percentage}%`;
+        
+        item.appendChild(colorDot);
+        item.appendChild(nameElem);
+        item.appendChild(amountElem);
+        
+        scrollContainer.appendChild(item);
+    });
+    
+    legendContainer.appendChild(scrollContainer);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+
+    setupCategoryDonutChart();
+    setupAssetDebtChart();
+
+});
+</script>
 {% endblock %}
