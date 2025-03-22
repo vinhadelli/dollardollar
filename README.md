@@ -210,7 +210,7 @@ This license requires anyone who runs a modified version of this software, inclu
 Here's a visual tour of DollarDollar Bill Y'all:
 
 ### Dashboard Overview
-<img width="1478" alt="Screenshot 2025-03-09 at 10 32 13 PM" src="https://github.com/user-attachments/assets/b1735fba-7181-49e3-b49b-c1cc3a5b4281" />
+<img width="1509" alt="Screenshot 2025-03-22 at 5 36 38 PM" src="https://github.com/user-attachments/assets/32542178-011c-4043-801f-75d50f773cf1" />
 
 ### Expense Splitting
 <img width="1478" alt="Screenshot 2025-03-09 at 10 32 56 PM" src="https://github.com/user-attachments/assets/29f254a0-7773-4050-9251-ed8ba5b4df83" />
@@ -228,9 +228,17 @@ Here's a visual tour of DollarDollar Bill Y'all:
 <img width="1427" alt="Screenshot 2025-03-05 at 10 24 59 PM" src="https://github.com/user-attachments/assets/b0992c09-ea21-4f45-b85d-ce5378fdbdbc" />
 
 ### Budgets
-<img width="1499" alt="Screenshot 2025-03-13 at 4 15 12 PM" src="https://github.com/user-attachments/assets/b387e51d-53e5-4bd7-80e8-da5c66dfefcd" />
+<img width="1509" alt="Screenshot 2025-03-22 at 5 36 30 PM" src="https://github.com/user-attachments/assets/8db5c16b-37e4-4bf4-aa0e-396810e0380d" />
+
 ### Categories
 <img width="1499" alt="Screenshot 2025-03-13 at 4 15 28 PM" src="https://github.com/user-attachments/assets/23d17592-b440-49f2-a0c5-dca9e8b57b2f" />
+
+### Category Rules
+<img width="1509" alt="Screenshot 2025-03-22 at 5 37 01 PM" src="https://github.com/user-attachments/assets/f66bcd98-86bd-482b-b032-88ed7f6fcbe5" />
+### Simplefin
+<img width="1509" alt="Screenshot 2025-03-22 at 5 37 11 PM" src="https://github.com/user-attachments/assets/24d85439-7871-41a4-a415-cf0564881249" />
+
+
 
 ## 🙏 Acknowledgements
 
