@@ -98,6 +98,8 @@ Born from a desire to move beyond restrictive financial tracking platforms, this
 4. Access the app at `http://localhost:5006`
 
 
+##You can also copy the docker-compose.yml and .env.example  without cloning the repo.
+
 ## 💼 Usage
 
 ### Recurring Transactions
