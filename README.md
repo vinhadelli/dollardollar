@@ -25,13 +25,16 @@ Born from a desire to move beyond restrictive financial tracking platforms, this
 
 ## 🚀 Key Features
 
-### Expense Tracking
+### Transaction and Budget Tracking
 - 📊 Detailed transaction logging
 - 💱 Multi-currency support with automatic conversion
 - 💳 Multi-card support
 - 📅 Date-based expense tracking
 - 🔄 Recurring transactions
 - 🏷️ Customizable tags for expense categorization
+- 💼 Auto categorization
+- Integration with Simplefin (auto tracking accounts and transactions)
+- Budgets with notifications
 
 ### Splitting Capabilities
 - 💸 Multiple split methods:
