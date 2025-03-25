@@ -6855,85 +6855,88 @@ def edit_category(category_id):
 @app.route('/categories/delete/<int:category_id>', methods=['POST'])
 @login_required_dev
 def delete_category(category_id):
-    """Delete a category"""
-    category = Category.query.get_or_404(category_id)
-
-    # Check if category belongs to current user
-    if category.user_id != current_user.id:
-        flash('You don\'t have permission to delete this category')
-        return redirect(url_for('manage_categories'))
-
-    # Don't allow deleting system categories
-    if category.is_system:
-        flash('System categories cannot be deleted')
-        return redirect(url_for('manage_categories'))
-
+    """Debug-enhanced category deletion route"""
     try:
-        # Start a database transaction
-        db.session.begin_nested()
+        # Find the category
+        category = Category.query.get_or_404(category_id)
         
-        # Find 'Other' category
+        # Extensive logging
+        app.logger.info(f"Attempting to delete category: {category.name} (ID: {category.id})")
+        app.logger.info(f"Category details - User ID: {category.user_id}, Is System: {category.is_system}")
+        
+        # Security checks
+        if category.user_id != current_user.id:
+            app.logger.warning(f"Unauthorized delete attempt for category {category_id}")
+            flash('You don\'t have permission to delete this category')
+            return redirect(url_for('manage_categories'))
+
+        # Don't allow deleting system categories
+        if category.is_system:
+            app.logger.warning(f"Attempted to delete system category {category_id}")
+            flash('System categories cannot be deleted')
+            return redirect(url_for('manage_categories'))
+
+        # Check related records before deletion
+        expense_count = Expense.query.filter_by(category_id=category_id).count()
+        recurring_count = RecurringExpense.query.filter_by(category_id=category_id).count()
+        budget_count = Budget.query.filter_by(category_id=category_id).count()
+        mapping_count = CategoryMapping.query.filter_by(category_id=category_id).count()
+        
+        app.logger.info(f"Related records - Expenses: {expense_count}, Recurring: {recurring_count}, Budgets: {budget_count}, Mappings: {mapping_count}")
+        
+        # Find 'Other' category (fallback)
         other_category = Category.query.filter_by(
             name='Other', 
             user_id=current_user.id,
             is_system=True
         ).first()
         
-        # FIRST: Delete any category mappings that reference this category
+        app.logger.info(f"Other category found: {bool(other_category)}")
+        
+        # Subcategories handling
+        if category.subcategories:
+            app.logger.info(f"Handling {len(category.subcategories)} subcategories")
+            for subcategory in category.subcategories:
+                # Update or delete related records for subcategory
+                Expense.query.filter_by(category_id=subcategory.id).update({
+                    'category_id': other_category.id if other_category else None
+                })
+                RecurringExpense.query.filter_by(category_id=subcategory.id).update({
+                    'category_id': other_category.id if other_category else None
+                })
+                CategoryMapping.query.filter_by(category_id=subcategory.id).delete()
+                
+                # Log subcategory deletion
+                app.logger.info(f"Deleting subcategory: {subcategory.name} (ID: {subcategory.id})")
+                db.session.delete(subcategory)
+        
+        # Update or delete main category's related records
+        Expense.query.filter_by(category_id=category_id).update({
+            'category_id': other_category.id if other_category else None
+        })
+        RecurringExpense.query.filter_by(category_id=category_id).update({
+            'category_id': other_category.id if other_category else None
+        })
+        Budget.query.filter_by(category_id=category_id).update({
+            'category_id': other_category.id if other_category else None
+        })
         CategoryMapping.query.filter_by(category_id=category_id).delete()
         
-        # Check if category has expenses associated with it
-        if category.expenses:
-            if other_category:
-                # Move expenses to 'Other' category
-                for expense in category.expenses:
-                    expense.category_id = other_category.id
-            else:
-                # If 'Other' doesn't exist, clear category_id
-                for expense in category.expenses:
-                    expense.category_id = None
-
-        # Also handle recurring expenses with this category
-        recurring_expenses = RecurringExpense.query.filter_by(category_id=category_id).all()
-        if recurring_expenses:
-            if other_category:
-                # Move recurring expenses to 'Other' category
-                for rec_expense in recurring_expenses:
-                    rec_expense.category_id = other_category.id
-            else:
-                # If 'Other' doesn't exist, clear category_id
-                for rec_expense in recurring_expenses:
-                    rec_expense.category_id = None
-                    
-        # Handle budgets that reference this category
-        budgets = Budget.query.filter_by(category_id=category_id).all()
-        if budgets:
-            if other_category:
-                # Move budgets to 'Other' category
-                for budget in budgets:
-                    budget.category_id = other_category.id
-            else:
-                # If 'Other' doesn't exist, delete the budgets
-                for budget in budgets:
-                    db.session.delete(budget)
-
-        # Delete subcategories first
-        for subcategory in category.subcategories:
-            # Also delete any category mappings for subcategories
-            CategoryMapping.query.filter_by(category_id=subcategory.id).delete()
-            db.session.delete(subcategory)
-
-        # Finally delete the category itself
+        # Actually delete the category
         db.session.delete(category)
+        
+        # Commit changes
         db.session.commit()
-
+        
+        app.logger.info(f"Category {category.name} (ID: {category_id}) deleted successfully")
         flash('Category deleted successfully')
         
     except Exception as e:
+        # Rollback and log any errors
         db.session.rollback()
-        app.logger.error(f"Error deleting category: {str(e)}")
+        app.logger.error(f"Error deleting category {category_id}: {str(e)}", exc_info=True)
         flash(f'Error deleting category: {str(e)}')
-        
+    
     return redirect(url_for('manage_categories'))
 
 #--------------------
