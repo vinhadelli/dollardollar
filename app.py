@@ -38,7 +38,7 @@ from session_timeout import DemoTimeout, demo_time_limited
 
 os.environ['OPENSSL_LEGACY_PROVIDER'] = '1'
 
-APP_VERSION = "4.1.5"
+APP_VERSION = "4.2"
 
 try:
     ssl._create_default_https_context = ssl._create_unverified_context
