@@ -40,7 +40,7 @@ from fmp_cache import FMPCache
 
 os.environ['OPENSSL_LEGACY_PROVIDER'] = '1'
 
-APP_VERSION = "4.2"
+APP_VERSION = "4.3"
 
 try:
     ssl._create_default_https_context = ssl._create_unverified_context
