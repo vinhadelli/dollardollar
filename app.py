@@ -35,6 +35,8 @@ from simplefin_client import SimpleFin
 
 from session_timeout import DemoTimeout, demo_time_limited
 
+from fmp_cache import FMPCache
+
 
 os.environ['OPENSSL_LEGACY_PROVIDER'] = '1'
 
@@ -56,7 +58,12 @@ app = Flask(__name__)
 
 # Configure from environment variables with sensible defaults
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback_secret_key_change_in_production')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///instance/expenses.db')
+#app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///instance/expenses.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
+    'SQLALCHEMY_DATABASE_URI', 
+    f'sqlite:///{os.path.join(app.instance_path, "expenses.db")}'
+)
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['DEVELOPMENT_MODE'] = os.getenv('DEVELOPMENT_MODE', 'True').lower() == 'true'
 app.config['DISABLE_SIGNUPS'] = os.environ.get('DISABLE_SIGNUPS', 'False').lower() == 'true'  # Default to allowing signups
@@ -64,6 +71,13 @@ app.config['LOCAL_LOGIN_DISABLE'] = os.getenv('LOCAL_LOGIN_DISABLE', 'False').lo
 
 app.config['SIMPLEFIN_ENABLED'] = os.getenv('SIMPLEFIN_ENABLED', 'True').lower() == 'true'
 app.config['SIMPLEFIN_SETUP_TOKEN_URL'] = os.getenv('SIMPLEFIN_SETUP_TOKEN_URL', 'https://beta-bridge.simplefin.org/setup-token')
+
+
+
+# Investment envs
+app.config['INVESTMENT_TRACKING_ENABLED'] = os.getenv('INVESTMENT_TRACKING_ENABLED', 'False').lower() == 'true'
+app.config['FMP_API_KEY'] = os.getenv('FMP_API_KEY', None)
+app.config['FMP_API_URL'] = os.getenv('FMP_API_URL', 'https://financialmodelingprep.com/api/v3')
 
 
 
@@ -102,6 +116,7 @@ simplefin_client = SimpleFin(app)
 
 mail = Mail(app)
 
+fmp_cache = FMPCache()
 
 # Logging configuration
 log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
@@ -879,6 +894,137 @@ class Budget(db.Model):
             
 
 
+
+class Portfolio(db.Model):
+    __tablename__ = 'portfolios'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(200))
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False)
+    account_id = db.Column(db.Integer, db.ForeignKey('accounts.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref=db.backref('portfolios', lazy=True))
+    account = db.relationship('Account', backref=db.backref('portfolios', lazy=True))
+    investments = db.relationship('Investment', backref=db.backref('portfolio', lazy=True), 
+                                 cascade='all, delete-orphan')
+    
+    def calculate_total_value(self):
+        """Calculate the current total value of all investments in this portfolio"""
+        return sum(investment.current_value for investment in self.investments)
+    
+    def calculate_total_cost(self):
+        """Calculate the total cost basis of all investments in this portfolio"""
+        return sum(investment.cost_basis for investment in self.investments)
+    
+    def calculate_gain_loss(self):
+        """Calculate the total gain/loss in this portfolio"""
+        return self.calculate_total_value() - self.calculate_total_cost()
+    
+    def calculate_gain_loss_percentage(self):
+        """Calculate the percentage gain/loss of this portfolio"""
+        cost = self.calculate_total_cost()
+        if cost == 0:
+            return 0
+        return (self.calculate_gain_loss() / cost) * 100
+
+class Investment(db.Model):
+    __tablename__ = 'investments'
+    id = db.Column(db.Integer, primary_key=True)
+    portfolio_id = db.Column(db.Integer, db.ForeignKey('portfolios.id'), nullable=False)
+    symbol = db.Column(db.String(20), nullable=False)
+    name = db.Column(db.String(100))
+    shares = db.Column(db.Float, nullable=False, default=0)
+    purchase_price = db.Column(db.Float, nullable=False, default=0)
+    current_price = db.Column(db.Float, default=0)
+    purchase_date = db.Column(db.DateTime, default=datetime.utcnow)
+    last_update = db.Column(db.DateTime)
+    notes = db.Column(db.Text)
+    
+    # Additional fields for analysis
+    sector = db.Column(db.String(50))
+    industry = db.Column(db.String(50))
+    
+    def __repr__(self):
+        return f"<Investment {self.symbol} ({self.shares} shares)>"
+    
+    @property
+    def cost_basis(self):
+        """Calculate the total cost of this investment"""
+        return self.shares * self.purchase_price
+    
+    @property
+    def current_value(self):
+        """Calculate the current value of this investment"""
+        return self.shares * self.current_price
+    
+    @property
+    def gain_loss(self):
+        """Calculate the gain or loss for this investment"""
+        return self.current_value - self.cost_basis
+    
+    @property
+    def gain_loss_percentage(self):
+        """Calculate the percentage gain or loss"""
+        if self.cost_basis == 0:
+            return 0
+        return (self.gain_loss / self.cost_basis) * 100
+
+# Transaction history for investments
+class InvestmentTransaction(db.Model):
+    __tablename__ = 'investment_transactions'
+    id = db.Column(db.Integer, primary_key=True)
+    investment_id = db.Column(db.Integer, db.ForeignKey('investments.id'), nullable=False)
+    transaction_type = db.Column(db.String(20), nullable=False)  # buy, sell, dividend, split
+    shares = db.Column(db.Float, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    date = db.Column(db.DateTime, default=datetime.utcnow)
+    fees = db.Column(db.Float, default=0)
+    notes = db.Column(db.Text)
+    
+    # Relationship
+    
+    investment = db.relationship('Investment', backref=db.backref('transactions', lazy=True, cascade='all, delete-orphan'))
+    
+    @property
+    def transaction_value(self):
+        """Calculate the total value of this transaction"""
+        return self.shares * self.price + self.fees
+
+# Model to store user's Financial Modeling Prep API key
+class UserApiSettings(db.Model):
+    __tablename__ = 'user_api_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(120), db.ForeignKey('users.id'), nullable=False, unique=True)
+    fmp_api_key = db.Column(db.String(100))  # Encrypted API key
+    last_used = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    user = db.relationship('User', backref=db.backref('api_settings', uselist=False))
+    
+    def set_api_key(self, api_key):
+        """Encrypt and store the API key"""
+        if not api_key:
+            self.fmp_api_key = None
+            return
+            
+        # Simple encryption - in production use proper encryption
+        import base64
+        self.fmp_api_key = base64.b64encode(api_key.encode()).decode()
+        
+    def get_api_key(self):
+        """Decrypt and return the API key"""
+        if not self.fmp_api_key:
+            return None
+            
+        # Simple decryption - in production use proper decryption
+        import base64
+        return base64.b64decode(self.fmp_api_key.encode()).decode()
+
+
 #--------------------
 # AUTH AND UTILITIES
 #--------------------
@@ -946,10 +1092,78 @@ def restrict_demo_access(f):
 # BUSINESS LOGIC FUNCTIONS
 #--------------------
 
-# enhance transfer detection
+
+#  sync investments with accounts
+def sync_investments_with_accounts(user_id):
+    """Sync investment portfolios with their linked accounts, but only for manually added accounts"""
+    try:
+        # Get all portfolios for the user that are linked to accounts
+        portfolios = Portfolio.query.filter(
+            Portfolio.user_id == user_id,
+            Portfolio.account_id.isnot(None)
+        ).all()
+        
+        if not portfolios:
+            return  # No linked portfolios, nothing to sync
+            
+        for portfolio in portfolios:
+            # Skip if no linked account
+            if not portfolio.account_id:
+                continue
+                
+            account = Account.query.get(portfolio.account_id)
+            if not account:
+                continue
+                
+            # CRITICAL: Skip accounts that came from SimpleFin
+            if account.import_source == 'simplefin':
+                continue
+                
+            # Calculate current portfolio value
+            portfolio_value = portfolio.calculate_total_value()
+            
+            # Update the account balance to match the portfolio value
+            account.balance = portfolio_value
+            
+        # Save all changes
+        db.session.commit()
+        
+    except Exception as e:
+        app.logger.error(f"Error syncing investments with accounts: {str(e)}")
+        db.session.rollback()  # Rollback on error
+
+
+
+#for investment api
+def check_fmp_api_key(user_id):
+    """Check if the user has a valid FMP API key set up"""
+    api_settings = UserApiSettings.query.filter_by(user_id=user_id).first()
+    
+    if not api_settings or not api_settings.fmp_api_key:
+        return False
+    
+    # Test the API key with a simple request
+    api_key = api_settings.get_api_key()
+    test_url = f"{app.config['FMP_API_URL']}/stock/list?apikey={api_key}"
+    
+    try:
+        response = requests.get(test_url)
+        if response.status_code == 200:
+            # Update last used timestamp
+            api_settings.last_used = datetime.utcnow()
+            db.session.commit()
+            return True
+        return False
+    except:
+        return False
+
+
+
+
+
 def calculate_asset_debt_trends(current_user):
     """
-    Calculate asset and debt trends for a user's accounts
+    Calculate asset and debt trends for a user's accounts, including investments
     """
     from datetime import datetime, timedelta
     
@@ -964,12 +1178,16 @@ def calculate_asset_debt_trends(current_user):
     # Get all accounts for the user
     accounts = Account.query.filter_by(user_id=current_user.id).all()
     
+    # Get all portfolios for the user
+    portfolios = Portfolio.query.filter_by(user_id=current_user.id).all()
+    
     # Get user's preferred currency code
     user_currency_code = current_user.default_currency_code or 'USD'
     
     # Calculate true total assets and debts directly from accounts (for accurate current total)
     direct_total_assets = 0
     direct_total_debts = 0
+    investment_total = 0
     
     for account in accounts:
         # Get account's currency code, default to user's preferred currency
@@ -986,6 +1204,27 @@ def calculate_asset_debt_trends(current_user):
         elif account.type in ['credit'] or converted_balance < 0:
             # For credit cards with negative balances (standard convention)
             direct_total_debts += abs(converted_balance)
+    
+    # Add investment values to assets - calculate once to avoid duplication
+    account_linked_portfolios = []
+    
+    # Calculate investment total
+    for portfolio in portfolios:
+        portfolio_value = portfolio.calculate_total_value()
+        
+        # Check if this portfolio is linked to an account
+        if portfolio.account_id:
+            # If linked to an account, keep track but don't add to assets yet
+            account_linked_portfolios.append({
+                'account_id': portfolio.account_id,
+                'value': portfolio_value
+            })
+        else:
+            # If not linked to an account, add directly to assets
+            investment_total += portfolio_value
+    
+    # Add investment total to assets - only those not linked to accounts
+    direct_total_assets += investment_total
     
     # Process each account for historical trends
     for account in accounts:
@@ -1046,6 +1285,12 @@ def calculate_asset_debt_trends(current_user):
                 # For debt accounts or negative balances, add the absolute value to the debt total
                 monthly_debts[month] = monthly_debts.get(month, 0) + abs(balance)
     
+    # Add investment values to monthly trends
+    # This is a simplification - we don't have historical investment data
+    # so we'll just use the current value for all months
+    for month in monthly_assets.keys():
+        monthly_assets[month] += investment_total
+    
     # Ensure consistent months across both series
     all_months = sorted(set(list(monthly_assets.keys()) + list(monthly_debts.keys())))
     
@@ -1068,7 +1313,8 @@ def calculate_asset_debt_trends(current_user):
         'debts': debts_trend,
         'total_assets': total_assets,
         'total_debts': total_debts,
-        'net_worth': net_worth
+        'net_worth': net_worth,
+        'investment_total': investment_total  # Add this to expose investment value
     }
 
 
@@ -3311,7 +3557,7 @@ def login():
             login_user(user)
             # Update last login time
             user.last_login = datetime.utcnow()
-
+            sync_investments_with_accounts(user.id)
             if app.config.get('SIMPLEFIN_ENABLED', False):
                 try:
                     # Check if user has SimpleFin connection
@@ -3337,7 +3583,19 @@ def login():
                 except Exception as e:
                     app.logger.error(f"Error checking SimpleFin sync status: {str(e)}")
                     # Don't show error to user to keep login smooth
-
+            # Investment price sync
+            if app.config.get('INVESTMENT_TRACKING_ENABLED', False):
+                try:
+                    # Start investment price sync in background thread
+                    investment_sync_thread = threading.Thread(
+                        target=sync_investment_prices,
+                        args=(user.id,)
+                    )
+                    investment_sync_thread.daemon = True
+                    investment_sync_thread.start()
+                except Exception as e:
+                    app.logger.error(f"Error starting investment price sync: {str(e)}")
+            
             import threading
             detection_thread = threading.Thread(
                 target=detect_recurring_transactions,
@@ -3419,7 +3677,8 @@ def dashboard():
     
     users = User.query.all()
     groups = Group.query.join(group_users).filter(group_users.c.user_id == current_user.id).all()
-    
+    # Synchronize investment portfolios with linked accounts
+    sync_investments_with_accounts(current_user.id)
     # Pre-calculate expense splits to avoid repeated calculations in template
     expense_splits = {}
     for expense in expenses:
@@ -3774,12 +4033,10 @@ def timezone_processor():
 #--------------------
 # ROUTES: EXPENSES MANAGEMENT
 #--------------------
-# In app.py, modify the add_expense route to properly handle empty category_id:
-
 @app.route('/add_expense', methods=['POST'])
 @login_required_dev
 def add_expense():
-    """Add a new transaction (expense, income, or transfer)"""
+    """Add a new transaction (expense, income, or transfer) and update account balances"""
     if request.method == 'POST':
         try:
             # Get transaction type
@@ -3913,6 +4170,27 @@ def add_expense():
             )
             
             db.session.add(expense)
+            
+            # NEW CODE: Update account balances
+            if account_id:
+                source_account = Account.query.get(account_id)
+                if source_account:
+                    # Update source account balance based on transaction type
+                    if transaction_type == 'expense':
+                        # Deduct the amount from the account
+                        source_account.balance -= original_amount
+                    elif transaction_type == 'income':
+                        # Add the amount to the account
+                        source_account.balance += original_amount
+                    elif transaction_type == 'transfer' and destination_account_id:
+                        # For transfers, deduct from source account
+                        source_account.balance -= original_amount
+                        
+                        # Add to destination account
+                        destination_account = Account.query.get(destination_account_id)
+                        if destination_account:
+                            destination_account.balance += original_amount
+            
             db.session.commit()
             
             # Determine success message based on transaction type
@@ -3935,7 +4213,7 @@ def add_expense():
 @app.route('/delete_expense/<int:expense_id>', methods=['POST'])
 @login_required_dev
 def delete_expense(expense_id):
-    """Delete an expense by ID"""
+    """Delete an expense by ID and update account balances"""
     try:
         # Find the expense
         expense = Expense.query.get_or_404(expense_id)
@@ -3950,6 +4228,26 @@ def delete_expense(expense_id):
             else:
                 flash('You do not have permission to delete this expense')
                 return redirect(url_for('transactions'))
+        
+        # NEW CODE: Update account balances before deleting the expense
+        if expense.account_id:
+            account = Account.query.get(expense.account_id)
+            if account:
+                # Reverse the effect of this transaction
+                if expense.transaction_type == 'expense':
+                    # Add the amount back to the account
+                    account.balance += expense.amount
+                elif expense.transaction_type == 'income':
+                    # Remove the income from the account
+                    account.balance -= expense.amount
+                elif expense.transaction_type == 'transfer' and expense.destination_account_id:
+                    # Add back to source account
+                    account.balance += expense.amount
+                    
+                    # Remove from destination account
+                    destination_account = Account.query.get(expense.destination_account_id)
+                    if destination_account:
+                        destination_account.balance -= expense.amount
         
         # Delete the expense
         db.session.delete(expense)
@@ -4029,11 +4327,10 @@ def get_expense(expense_id):
             'message': f'Error: {str(e)}'
         }), 500
 
-
 @app.route('/update_expense/<int:expense_id>', methods=['POST'])
 @login_required_dev
 def update_expense(expense_id):
-    """Update an existing expense with improved category split handling"""
+    """Update an existing expense with improved category split handling and account balance updates"""
     try:
         # Find the expense
         expense = Expense.query.get_or_404(expense_id)
@@ -4046,6 +4343,12 @@ def update_expense(expense_id):
         # Log incoming data for debugging
         app.logger.info(f"Update expense request data: {request.form}")
         
+        # Store original values to calculate balance adjustments
+        original_amount = expense.amount
+        original_transaction_type = expense.transaction_type
+        original_account_id = expense.account_id
+        original_destination_account_id = expense.destination_account_id
+        
         # Get the transaction type with safer fallback
         transaction_type = request.form.get('transaction_type', 'expense')
         
@@ -4054,10 +4357,12 @@ def update_expense(expense_id):
         
         # Handle amount safely
         try:
-            expense.amount = float(request.form.get('amount', expense.amount))
+            new_amount = float(request.form.get('amount', expense.amount))
+            amount_difference = new_amount - expense.amount
+            expense.amount = new_amount
         except (ValueError, TypeError):
             # Keep existing amount if conversion fails
-            pass
+            amount_difference = 0
         
         # Handle date safely
         try:
@@ -4132,81 +4437,69 @@ def update_expense(expense_id):
             CategorySplit.query.filter_by(expense_id=expense.id).delete()
         
         # Handle account_id safely
+        new_account_id = None
         account_id = request.form.get('account_id')
         if account_id and account_id != 'null' and account_id != '':
             try:
-                expense.account_id = int(account_id)
+                new_account_id = int(account_id)
+                expense.account_id = new_account_id
             except ValueError:
                 app.logger.warning(f"Invalid account_id value: {account_id}")
         
         # Set transaction type
         expense.transaction_type = transaction_type
         
-        # Type-specific processing
-        if transaction_type == 'expense':
-            # Handle personal expense flag
-            is_personal_expense = request.form.get('personal_expense') == 'on'
-            
-            # Split with handling
-            if is_personal_expense:
-                expense.split_with = None
-                expense.split_details = None
-            else:
-                # Get split_with as a list, then join to string
-                split_with_list = request.form.getlist('split_with')
-                expense.split_with = ','.join(split_with_list) if split_with_list else None
-                
-                # Process split details
-                expense.split_details = request.form.get('split_details')
-            
-            # Other expense-specific fields
-            expense.split_method = request.form.get('split_method', 'equal')
-            expense.paid_by = request.form.get('paid_by', current_user.id)
-            
-            # Group ID handling (allow empty string to be converted to None)
-            group_id = request.form.get('group_id')
-            if group_id and group_id.strip():
-                try:
-                    expense.group_id = int(group_id)
-                except ValueError:
-                    expense.group_id = None
-            else:
-                expense.group_id = None
-            
-            # Clear transfer-specific fields
-            expense.destination_account_id = None
-            
-        elif transaction_type == 'income':
-            # Income has no split details
-            expense.split_with = None
-            expense.split_details = None
-            expense.split_method = 'equal'
-            expense.paid_by = current_user.id
-            expense.group_id = None
-            
-            # Clear transfer-specific fields
-            expense.destination_account_id = None
-            
-        elif transaction_type == 'transfer':
-            # Transfer has no split details
-            expense.split_with = None
-            expense.split_details = None
-            expense.split_method = 'equal'
-            expense.paid_by = current_user.id
-            expense.group_id = None
-            expense.has_category_splits = False
-            
-            # Set transfer-specific fields - with proper handling for empty values
+        # Handle transfer destination
+        new_destination_account_id = None
+        if transaction_type == 'transfer':
             destination_id = request.form.get('destination_account_id')
             if destination_id and destination_id != 'null' and destination_id.strip():
                 try:
-                    expense.destination_account_id = int(destination_id)
+                    new_destination_account_id = int(destination_id)
+                    expense.destination_account_id = new_destination_account_id
                 except ValueError:
-                    # If not a valid integer, set to None
-                    expense.destination_account_id = None
-            else:
-                # If empty, set to None
-                expense.destination_account_id = None
+                    pass
+        
+        # NEW CODE: Update account balances
+        # 1. Reverse the original transaction effects
+        if original_account_id:
+            original_account = Account.query.get(original_account_id)
+            if original_account:
+                if original_transaction_type == 'expense':
+                    # Refund the amount to the account
+                    original_account.balance += original_amount
+                elif original_transaction_type == 'income':
+                    # Remove the income from the account
+                    original_account.balance -= original_amount
+                elif original_transaction_type == 'transfer':
+                    # Refund source account
+                    original_account.balance += original_amount
+                    
+                    # Reverse destination account effect
+                    if original_destination_account_id:
+                        original_dest_account = Account.query.get(original_destination_account_id)
+                        if original_dest_account:
+                            original_dest_account.balance -= original_amount
+        
+        # 2. Apply the new transaction effects
+        if new_account_id:
+            new_account = Account.query.get(new_account_id)
+            if new_account:
+                if transaction_type == 'expense':
+                    # Deduct the new amount
+                    new_account.balance -= expense.amount
+                elif transaction_type == 'income':
+                    # Add the new amount
+                    new_account.balance += expense.amount
+                elif transaction_type == 'transfer':
+                    # Deduct from source account
+                    new_account.balance -= expense.amount
+                    
+                    # Add to destination account
+                    if new_destination_account_id:
+                        new_dest_account = Account.query.get(new_destination_account_id)
+                        if new_dest_account:
+                            new_dest_account.balance += expense.amount
         
         # Save changes
         db.session.commit()
@@ -4670,7 +4963,8 @@ def get_recurring_transactions():
         lookback_days = int(request.args.get('lookback_days', 60))
         min_occurrences = int(request.args.get('min_occurrences', 2))
         
-        # Detect recurring transactions
+        # Detect recurring transactions - no extra context needed
+        # since we're already in a request context
         candidates = detect_recurring_transactions(
             current_user.id, 
             lookback_days=lookback_days,
@@ -4759,6 +5053,8 @@ def get_recurring_transactions():
             'success': False,
             'message': f'Error detecting recurring transactions: {str(e)}'
         }), 500
+    
+
 @app.route('/recurring_candidate_history/<candidate_id>')
 @login_required_dev
 def recurring_candidate_history(candidate_id):
@@ -6029,7 +6325,6 @@ def get_expense_edit_form(expense_id):
 #--------------------
 
 # This function should be added to the route that handles the accounts page
-# Update the accounts route in app.py
 
 @app.route('/accounts')
 @login_required_dev
@@ -9314,11 +9609,19 @@ def profile():
     # Check if OIDC is enabled
     oidc_enabled = app.config.get('OIDC_ENABLED', False)
     
+    # Get investment API settings if investment tracking is enabled
+    user_api_settings = None
+    if app.config.get('INVESTMENT_TRACKING_ENABLED', False):
+        user_api_settings = UserApiSettings.query.filter_by(user_id=current_user.id).first()
+    
     return render_template('profile.html', 
                           user_color=user_color,
                           account_created=account_created,
                           currencies=currencies,
-                          oidc_enabled=oidc_enabled)
+                          oidc_enabled=oidc_enabled,
+                          user_api_settings=user_api_settings,
+                          investment_tracking_enabled=app.config.get('INVESTMENT_TRACKING_ENABLED', False))
+
 
 @app.route('/profile/change_password', methods=['POST'])
 @login_required_dev
@@ -9670,6 +9973,1104 @@ def send_automatic_monthly_reports():
         
         app.logger.info(f"Sent {success_count}/{len(users)} monthly reports")
 
+
+#--------------------
+# ROUTES: investments
+#--------------------
+
+@app.route('/setup_investment_api', methods=['GET', 'POST'])
+@login_required_dev
+def setup_investment_api():
+    """Setup page for Financial Modeling Prep API key"""
+    if request.method == 'POST':
+        api_key = request.form.get('api_key')
+        
+        # Validate the API key
+        test_url = f"{app.config['FMP_API_URL']}/stock/list?apikey={api_key}"
+        try:
+            response = requests.get(test_url)
+            if response.status_code != 200:
+                flash('Invalid API key. Please check and try again.', 'error')
+                return redirect(url_for('setup_investment_api'))
+                
+            # Save API key
+            api_settings = UserApiSettings.query.filter_by(user_id=current_user.id).first()
+            if not api_settings:
+                api_settings = UserApiSettings(user_id=current_user.id)
+                db.session.add(api_settings)
+                
+            api_settings.set_api_key(api_key)
+            api_settings.last_used = datetime.utcnow()
+            db.session.commit()
+            
+            flash('API key saved successfully!', 'success')
+            return redirect(url_for('investments'))
+            
+        except Exception as e:
+            app.logger.error(f"Error testing API key: {str(e)}")
+            flash('Error connecting to Financial Modeling Prep API. Please try again.', 'error')
+            
+    return render_template('setup_investment_api.html')
+
+
+@app.route('/update_investment_api', methods=['POST'])
+@login_required_dev
+def update_investment_api():
+    """Update user's Financial Modeling Prep API key"""
+    # Check if investment tracking is enabled
+    if not app.config.get('INVESTMENT_TRACKING_ENABLED', False):
+        flash('Investment tracking is not enabled on this server.', 'warning')
+        return redirect(url_for('profile'))
+    
+    api_key = request.form.get('api_key')
+    
+    # Validate the API key with proper error handling
+    if not api_key or api_key.strip() == '':
+        # If the key is empty, clear it
+        api_settings = UserApiSettings.query.filter_by(user_id=current_user.id).first()
+        if api_settings:
+            api_settings.set_api_key(None)
+            db.session.commit()
+            flash('API key has been cleared. Investment tracking features will be limited.', 'warning')
+        return redirect(url_for('profile'))
+    
+    # Test API key with the FMP service
+    test_url = f"{app.config['FMP_API_URL']}/stock/list?apikey={api_key}"
+    try:
+        response = requests.get(test_url, timeout=5)  # 5 second timeout
+        if response.status_code != 200:
+            flash(f'Invalid API key. FMP API returned status {response.status_code}', 'danger')
+            return redirect(url_for('profile'))
+        
+        # Check if the response is valid JSON
+        try:
+            test_data = response.json()
+            if not test_data or len(test_data) == 0:
+                flash('API key may be valid but returned no data. Please check your FMP subscription.', 'warning')
+                return redirect(url_for('profile'))
+        except:
+            flash('API key returned invalid data. Please check your FMP subscription.', 'warning')
+            return redirect(url_for('profile'))
+            
+        # Save API key
+        api_settings = UserApiSettings.query.filter_by(user_id=current_user.id).first()
+        if not api_settings:
+            api_settings = UserApiSettings(user_id=current_user.id)
+            db.session.add(api_settings)
+            
+        api_settings.set_api_key(api_key)
+        api_settings.last_used = datetime.utcnow()
+        db.session.commit()
+        
+        flash('Financial Modeling Prep API key updated successfully!', 'success')
+        
+    except requests.exceptions.Timeout:
+        flash('Connection to Financial Modeling Prep API timed out. Please try again later.', 'danger')
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Error testing API key: {str(e)}")
+        flash('Error connecting to Financial Modeling Prep API. Please check your internet connection.', 'danger')
+    except Exception as e:
+        app.logger.error(f"Unexpected error testing API key: {str(e)}")
+        flash('An unexpected error occurred. Please try again later.', 'danger')
+        
+    return redirect(url_for('profile'))
+
+
+@app.route('/test_investment_api', methods=['POST'])
+@login_required_dev
+def test_investment_api():
+    """Test an FMP API key without saving it - for AJAX requests"""
+    # Check if investment tracking is enabled
+    if not app.config.get('INVESTMENT_TRACKING_ENABLED', False):
+        return jsonify({
+            'success': False, 
+            'message': 'Investment tracking is not enabled on this server.'
+        })
+    
+    api_key = request.form.get('api_key')
+    if not api_key or api_key.strip() == '':
+        return jsonify({
+            'success': False,
+            'message': 'API key cannot be empty'
+        })
+    
+    # Test API key
+    test_url = f"{app.config['FMP_API_URL']}/stock/list?apikey={api_key}"
+    try:
+        response = requests.get(test_url, timeout=5)
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'message': f'Invalid API key (Status: {response.status_code})'
+            })
+        
+        # Check if the response is valid
+        try:
+            test_data = response.json()
+            if not test_data or len(test_data) == 0:
+                return jsonify({
+                    'success': False,
+                    'message': 'API key may be valid but returned no data'
+                })
+        except:
+            return jsonify({
+                'success': False,
+                'message': 'API key returned invalid data format'
+            })
+            
+        return jsonify({
+            'success': True,
+            'message': 'API key is valid!'
+        })
+        
+    except requests.exceptions.Timeout:
+        return jsonify({
+            'success': False,
+            'message': 'Connection to API timed out'
+        })
+    except Exception as e:
+        app.logger.error(f"Error testing API key: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Error connecting to API service'
+        })
+
+
+
+@app.context_processor
+def inject_now():
+    return {'now': datetime.utcnow()}
+
+
+@app.context_processor
+def financial_utility_processor():
+    """
+    Add financial utility functions for the templates.
+    These will be available in all templates.
+    """
+    def get_total_financial_picture(user_id=None):
+        """
+        Get complete financial data including investments
+        Returns assets, debts, and net worth with investments included
+        """
+        # Use current_user if no user_id provided
+        user_id = user_id or current_user.id
+        
+        # Skip if not authenticated
+        if not current_user.is_authenticated:
+            return {
+                'total_assets': 0,
+                'total_debts': 0,
+                'net_worth': 0,
+                'account_assets': 0,
+                'investment_assets': 0
+            }
+        
+        # Get user's currency
+        user_currency_code = current_user.default_currency_code or 'USD'
+        
+        # Initialize totals
+        account_assets = 0
+        total_debts = 0
+        investment_assets = 0
+        
+        # Get regular account balances
+        accounts = Account.query.filter_by(user_id=user_id).all()
+        for account in accounts:
+            balance = account.balance or 0
+            
+            # Convert to user currency if needed
+            if account.currency_code and account.currency_code != user_currency_code:
+                converted_balance = convert_currency(balance, account.currency_code, user_currency_code)
+            else:
+                converted_balance = balance
+            
+            # Add to appropriate total
+            if account.type in ['checking', 'savings', 'investment'] and converted_balance > 0:
+                account_assets += converted_balance
+            elif account.type in ['credit'] or converted_balance < 0:
+                total_debts += abs(converted_balance)
+                
+        # Get investment values - focus on those NOT linked to accounts
+        portfolios = Portfolio.query.filter_by(user_id=user_id).all()
+        for portfolio in portfolios:
+            portfolio_value = portfolio.calculate_total_value()
+            
+            # Only count investments not linked to accounts to avoid double counting
+            if not portfolio.account_id:
+                investment_assets += portfolio_value
+        
+        # Calculate total assets and net worth
+        total_assets = account_assets + investment_assets
+        net_worth = total_assets - total_debts
+        
+        return {
+            'total_assets': total_assets,
+            'total_debts': total_debts, 
+            'net_worth': net_worth,
+            'account_assets': account_assets,
+            'investment_assets': investment_assets
+        }
+    
+    def get_monthly_investment_trends(months_back=12):
+        """
+        Get historical investment trend data
+        Note: For perfect historical data, you would need to track values over time
+        This is a simplified version that doesn't require database changes
+        """
+        if not current_user.is_authenticated:
+            return {
+                'labels': [],
+                'values': []
+            }
+        
+        # Get all portfolios
+        portfolios = Portfolio.query.filter_by(user_id=current_user.id).all()
+        
+        # Get current total value 
+        current_value = sum(portfolio.calculate_total_value() for portfolio in portfolios)
+        
+        # Generate time series
+        today = datetime.now()
+        labels = []
+        values = []
+        
+        # Use investment transactions to estimate past values
+        # For simplicity in this example, we'll just use the current value for all months
+        for i in range(months_back, -1, -1):
+            month_date = today - timedelta(days=30*i)
+            month_label = month_date.strftime('%b %Y')
+            
+            # Add to arrays
+            labels.append(month_label)
+            values.append(current_value)  # Use current value as placeholder
+            
+        return {
+            'labels': labels,
+            'values': values
+        }
+    
+    return {
+        'get_total_financial_picture': get_total_financial_picture,
+        'get_monthly_investment_trends': get_monthly_investment_trends
+    }
+
+
+
+
+@app.route('/investments')
+@login_required_dev
+def investments():
+    """Investment dashboard page"""
+    # Check if investment tracking is enabled
+    if not app.config['INVESTMENT_TRACKING_ENABLED']:
+        flash('Investment tracking is not enabled.', 'warning')
+        return redirect(url_for('dashboard'))
+    
+    # Check if user has API key set up
+    has_api_key = check_fmp_api_key(current_user.id)
+    if not has_api_key:
+        flash('You need to set up your Financial Modeling Prep API key to use investment tracking.', 'warning')
+        return redirect(url_for('setup_investment_api'))
+    
+    # Get user's portfolios
+    portfolios = Portfolio.query.filter_by(user_id=current_user.id).all()
+    
+    # Calculate total investment value
+    total_value = sum(portfolio.calculate_total_value() for portfolio in portfolios)
+    total_cost = sum(portfolio.calculate_total_cost() for portfolio in portfolios)
+    total_gain_loss = total_value - total_cost
+    gain_loss_percentage = (total_gain_loss / total_cost * 100) if total_cost > 0 else 0
+    
+    # Get all investments for chart data
+    all_investments = []
+    for portfolio in portfolios:
+        all_investments.extend(portfolio.investments)
+    
+    # Prepare data for charts
+    portfolio_data = []
+    for portfolio in portfolios:
+        portfolio_data.append({
+            'id': portfolio.id,
+            'name': portfolio.name,
+            'value': portfolio.calculate_total_value(),
+            'gain_loss': portfolio.calculate_gain_loss(),
+            'gain_loss_percentage': portfolio.calculate_gain_loss_percentage()
+        })
+    
+    # Group investments by sector
+    sectors = {}
+    for investment in all_investments:
+        if investment.sector:
+            if investment.sector not in sectors:
+                sectors[investment.sector] = 0
+            sectors[investment.sector] += investment.current_value
+    
+    sector_labels = list(sectors.keys())
+    sector_values = list(sectors.values())
+    
+    return render_template('investments/dashboard.html',
+                          portfolios=portfolios,
+                          portfolio_data=portfolio_data,
+                          total_value=total_value,
+                          total_cost=total_cost,
+                          total_gain_loss=total_gain_loss,
+                          gain_loss_percentage=gain_loss_percentage,
+                          sector_labels=sector_labels,
+                          sector_values=sector_values)
+
+@app.route('/portfolios')
+@login_required_dev
+def portfolios():
+    """List all user portfolios"""
+    # Check for API key
+    has_api_key = check_fmp_api_key(current_user.id)
+    if not has_api_key:
+        flash('You need to set up your Financial Modeling Prep API key to use investment tracking.', 'warning')
+        return redirect(url_for('setup_investment_api'))
+    
+    # Get all portfolios
+    portfolios = Portfolio.query.filter_by(user_id=current_user.id).all()
+    
+    # Get accounts for dropdown
+    accounts = Account.query.filter_by(user_id=current_user.id).all()
+    
+    # Add current date for form defaults
+    now = datetime.utcnow()
+    
+    return render_template('investments/portfolios.html',
+                          portfolios=portfolios,
+                          accounts=accounts,
+                          now=now)  # Pass the current date
+
+@app.route('/portfolio/<int:portfolio_id>')
+@login_required_dev
+def portfolio_details(portfolio_id):
+    """View details of a specific portfolio"""
+    # Get the portfolio
+    portfolio = Portfolio.query.get_or_404(portfolio_id)
+    
+    # Security check
+    if portfolio.user_id != current_user.id:
+        flash('You do not have permission to view this portfolio.', 'error')
+        return redirect(url_for('portfolios'))
+    
+    # Check for API key
+    has_api_key = check_fmp_api_key(current_user.id)
+    if not has_api_key:
+        flash('You need to set up your Financial Modeling Prep API key to use investment tracking.', 'warning')
+        return redirect(url_for('setup_investment_api'))
+    
+    # Add current date for form defaults
+    now = datetime.utcnow()
+    
+    return render_template('investments/portfolio_details.html',
+                          portfolio=portfolio,
+                          now=now)  # Pass the current date
+
+@app.route('/add_portfolio', methods=['POST'])
+@login_required_dev
+def add_portfolio():
+    """Add a new portfolio with proper account linking"""
+    name = request.form.get('name')
+    description = request.form.get('description')
+    account_id = request.form.get('account_id')
+    
+    if not name:
+        flash('Portfolio name is required', 'error')
+        return redirect(url_for('portfolios'))
+    
+    # Create new portfolio
+    portfolio = Portfolio(
+        name=name,
+        description=description,
+        user_id=current_user.id,
+        account_id=account_id if account_id else None
+    )
+    
+    db.session.add(portfolio)
+    db.session.commit()
+    
+    # If there's an associated account, ensure it's flagged as an investment account
+    if account_id:
+        account = Account.query.get(account_id)
+        if account:
+            account.type = 'investment'  # Ensure it's marked as an investment account
+            db.session.commit()
+            flash(f'Portfolio created and linked to {account.name}', 'success')
+    else:
+        flash('Portfolio created successfully!', 'success')
+        
+    return redirect(url_for('portfolios'))
+
+@app.route('/add_investment/<int:portfolio_id>', methods=['POST'])
+@login_required_dev
+def add_investment(portfolio_id):
+    """Add a new investment to a portfolio"""
+    # Get the portfolio
+    portfolio = Portfolio.query.get_or_404(portfolio_id)
+    
+    # Security check
+    if portfolio.user_id != current_user.id:
+        flash('You do not have permission to modify this portfolio.', 'error')
+        return redirect(url_for('portfolios'))
+    
+    symbol = request.form.get('symbol', '').strip().upper()
+    shares = float(request.form.get('shares', 0))
+    purchase_price = float(request.form.get('purchase_price', 0))
+    purchase_date_str = request.form.get('purchase_date')
+    notes = request.form.get('notes')
+    
+    if not symbol or shares <= 0 or purchase_price <= 0:
+        flash('Symbol, shares, and purchase price are required', 'error')
+        return redirect(url_for('portfolio_details', portfolio_id=portfolio_id))
+    
+    # Parse purchase date
+    try:
+        purchase_date = datetime.strptime(purchase_date_str, '%Y-%m-%d')
+    except:
+        purchase_date = datetime.utcnow()
+    
+    # Get stock details from FMP API
+    api_settings = UserApiSettings.query.filter_by(user_id=current_user.id).first()
+    api_key = api_settings.get_api_key()
+    
+    stock_data = get_stock_data(symbol, api_key)
+    
+    if not stock_data:
+        flash(f'Could not find stock data for symbol: {symbol}', 'error')
+        return redirect(url_for('portfolio_details', portfolio_id=portfolio_id))
+    
+    # Create new investment
+    investment = Investment(
+        portfolio_id=portfolio_id,
+        symbol=symbol,
+        name=stock_data.get('name', symbol),
+        shares=shares,
+        purchase_price=purchase_price,
+        current_price=stock_data.get('price', purchase_price),
+        purchase_date=purchase_date,
+        last_update=datetime.utcnow(),
+        notes=notes,
+        sector=stock_data.get('sector'),
+        industry=stock_data.get('industry')
+    )
+    
+    db.session.add(investment)
+    
+    # Create transaction record
+    transaction = InvestmentTransaction(
+        investment=investment,
+        transaction_type='buy',
+        shares=shares,
+        price=purchase_price,
+        date=purchase_date,
+        notes=f"Initial purchase of {shares} shares at ${purchase_price:.2f} per share"
+    )
+    
+    db.session.add(transaction)
+    db.session.commit()
+    
+    flash(f'Added {shares} shares of {symbol} to your portfolio!', 'success')
+    return redirect(url_for('portfolio_details', portfolio_id=portfolio_id))
+
+@app.route('/update_prices', methods=['POST'])
+@login_required_dev
+def update_prices():
+    """Update current prices for all investments and sync with linked accounts"""
+    # Check for API key
+    api_settings = UserApiSettings.query.filter_by(user_id=current_user.id).first()
+    if not api_settings or not api_settings.fmp_api_key:
+        flash('You need to set up your Financial Modeling Prep API key to update prices.', 'warning')
+        return redirect(url_for('setup_investment_api'))
+    
+    api_key = api_settings.get_api_key()
+    
+    # Get all investments for the user
+    portfolios = Portfolio.query.filter_by(user_id=current_user.id).all()
+    all_investments = []
+    for portfolio in portfolios:
+        all_investments.extend(portfolio.investments)
+    
+    if not all_investments:
+        flash('You have no investments to update.', 'info')
+        return redirect(url_for('investments'))
+    
+    # --------- STORE INITIAL PORTFOLIO VALUES -----------
+    # This is where we save the portfolio values BEFORE price updates
+    portfolio_values_before = {}
+    for portfolio in portfolios:
+        # Calculate and store the initial value of each portfolio
+        initial_value = portfolio.calculate_total_value()
+        portfolio_values_before[portfolio.id] = initial_value
+        # Log the initial values for debugging
+        app.logger.info(f"Portfolio {portfolio.id} ({portfolio.name}) initial value: {initial_value}")
+    
+    # --------- UPDATE INVESTMENT PRICES -----------
+    # Track unique symbols to avoid redundant API calls
+    processed_symbols = set()
+    updated_count = 0
+    
+    # Update prices for each unique symbol
+    for investment in all_investments:
+        # Skip if we've already processed this symbol
+        if investment.symbol in processed_symbols:
+            continue
+            
+        processed_symbols.add(investment.symbol)
+        
+        # Get stock data using cached function
+        stock_data = get_stock_data(investment.symbol, api_key)
+        
+        if stock_data and 'price' in stock_data:
+            # Find all investments with this symbol and update them
+            for inv in all_investments:
+                if inv.symbol == investment.symbol:
+                    # Store old price for logging
+                    old_price = inv.current_price
+                    old_value = inv.current_value
+                    
+                    # Update to new price
+                    inv.current_price = stock_data['price']
+                    inv.last_update = datetime.utcnow()
+                    
+                    # Calculate new value after price update
+                    new_value = inv.current_value
+                    value_change = new_value - old_value
+                    
+                    # Log the individual investment updates
+                    app.logger.info(f"Updated {inv.symbol}: Price {old_price} → {inv.current_price}, " +
+                                   f"Value {old_value} → {new_value} (change: {value_change})")
+                    
+                    # Update sector and industry if available
+                    if 'sector' in stock_data and stock_data['sector']:
+                        inv.sector = stock_data['sector']
+                    if 'industry' in stock_data and stock_data['industry']:
+                        inv.industry = stock_data['industry']
+                        
+                    updated_count += 1
+    
+    # --------- CALCULATE NEW PORTFOLIO VALUES -----------
+    # After updating all prices, calculate each portfolio's new value
+    portfolio_values_after = {}
+    for portfolio in portfolios:
+        # Calculate and store the new value of each portfolio
+        new_value = portfolio.calculate_total_value()
+        portfolio_values_after[portfolio.id] = new_value
+        
+        # Log the new values for debugging
+        value_before = portfolio_values_before.get(portfolio.id, 0)
+        app.logger.info(f"Portfolio {portfolio.id} ({portfolio.name}) new value: {new_value} " +
+                       f"(change: {new_value - value_before})")
+    
+    # --------- UPDATE LINKED ACCOUNT BALANCES -----------
+    # Now update account balances based on the change in portfolio values
+    accounts_updated = 0
+    
+    for portfolio_id, value_before in portfolio_values_before.items():
+        # Get the new value and calculate the change
+        value_after = portfolio_values_after.get(portfolio_id, 0)
+        value_change = value_after - value_before
+        
+        # Only update if there's a significant change (to avoid floating point issues)
+        if abs(value_change) > 0.01:
+            portfolio = Portfolio.query.get(portfolio_id)
+            
+            # Skip if portfolio doesn't exist or has no linked account
+            if not portfolio or not portfolio.account_id:
+                continue
+                
+            # Get the linked account
+            account = Account.query.get(portfolio.account_id)
+            if account and account.import_source != 'simplefin':
+                # Store old balance for logging
+                old_balance = account.balance
+                
+                # Update account balance by adding the change in portfolio value
+                account.balance += value_change
+                accounts_updated += 1
+                
+                # Log the account update
+                app.logger.info(f"Updated account {account.name} (ID: {account.id}) balance: " +
+                               f"{old_balance} → {account.balance} (change: {value_change})")
+    
+    # Save all changes to the database
+    db.session.commit()
+    
+    # Log and display cache stats
+    cache_stats = fmp_cache.get_stats()
+    app.logger.info(f"Price update stats: {cache_stats}")
+    
+    # Show a success message with details about what was updated
+    if accounts_updated > 0:
+        flash(f'Updated prices for {updated_count} investments and synced {accounts_updated} account balances!', 'success')
+    else:
+        flash(f'Updated prices for {updated_count} investments!', 'success')
+    
+    # Redirect back to the referring page
+    referrer = request.referrer
+    if 'portfolio_details' in referrer:
+        portfolio_id = int(referrer.split('/')[-1])
+        return redirect(url_for('portfolio_details', portfolio_id=portfolio_id))
+    else:
+        return redirect(url_for('investments'))
+
+@app.route('/investment_transactions')
+@login_required_dev
+def investment_transactions():
+    """View all investment transactions"""
+    # Check for API key
+    has_api_key = check_fmp_api_key(current_user.id)
+    if not has_api_key:
+        flash('You need to set up your Financial Modeling Prep API key to use investment tracking.', 'warning')
+        return redirect(url_for('setup_investment_api'))
+    
+    # Get all portfolios and investments
+    portfolios = Portfolio.query.filter_by(user_id=current_user.id).all()
+    
+    # Collect all transactions
+    all_transactions = []
+    for portfolio in portfolios:
+        for investment in portfolio.investments:
+            for transaction in investment.transactions:
+                all_transactions.append({
+                    'id': transaction.id,
+                    'portfolio_name': portfolio.name,
+                    'investment_symbol': investment.symbol,
+                    'investment_name': investment.name,
+                    'transaction_type': transaction.transaction_type,
+                    'shares': transaction.shares,
+                    'price': transaction.price,
+                    'value': transaction.transaction_value,
+                    'date': transaction.date,
+                    'notes': transaction.notes
+                })
+    
+    # Sort by date, newest first
+    all_transactions.sort(key=lambda x: x['date'], reverse=True)
+    
+    return render_template('investments/transactions.html',
+                          transactions=all_transactions)
+
+# Helper function to get stock data from FMP API
+def get_stock_data(symbol, api_key):
+    """
+    Get stock data from Financial Modeling Prep API with caching
+    Reduces API calls by caching responses for 24 hours
+    """
+    try:
+        # Get base API URL from app config
+        api_url = app.config['FMP_API_URL']
+        
+        # Get quote data with caching
+        quote_endpoint = f"quote/{symbol}"
+        quote_data = fmp_cache.get(api_url, quote_endpoint, api_key)
+        
+        if not quote_data or len(quote_data) == 0:
+            return None
+            
+        stock_data = {
+            'symbol': quote_data[0]['symbol'],
+            'name': quote_data[0]['name'],
+            'price': quote_data[0]['price'],
+            'change': quote_data[0]['change'],
+            'percent_change': quote_data[0]['changesPercentage'],
+            'market_cap': quote_data[0].get('marketCap')
+        }
+        
+        # Get profile data for sector and industry (also cached)
+        profile_endpoint = f"profile/{symbol}"
+        profile_data = fmp_cache.get(api_url, profile_endpoint, api_key)
+        
+        if profile_data and len(profile_data) > 0:
+            stock_data['sector'] = profile_data[0].get('sector')
+            stock_data['industry'] = profile_data[0].get('industry')
+            stock_data['description'] = profile_data[0].get('description')
+            stock_data['website'] = profile_data[0].get('website')
+        
+        return stock_data
+        
+    except Exception as e:
+        app.logger.error(f"Error fetching stock data for {symbol}: {str(e)}")
+        return None
+    
+
+
+@app.route('/edit_portfolio/<int:portfolio_id>', methods=['POST'])
+@login_required_dev
+def edit_portfolio(portfolio_id):
+    """Edit an existing portfolio"""
+    portfolio = Portfolio.query.get_or_404(portfolio_id)
+    
+    # Security check
+    if portfolio.user_id != current_user.id:
+        flash('You do not have permission to edit this portfolio.', 'error')
+        return redirect(url_for('portfolios'))
+    
+    # Update portfolio details
+    portfolio.name = request.form.get('name')
+    portfolio.description = request.form.get('description')
+    
+    # Update account link if provided
+    account_id = request.form.get('account_id')
+    if account_id and account_id.strip():
+        portfolio.account_id = int(account_id)
+    else:
+        portfolio.account_id = None
+    
+    db.session.commit()
+    flash('Portfolio updated successfully!', 'success')
+    return redirect(url_for('portfolios'))
+
+@app.route('/delete_portfolio/<int:portfolio_id>', methods=['POST'])
+@login_required_dev
+def delete_portfolio(portfolio_id):
+    """Delete a portfolio and all its investments"""
+    portfolio = Portfolio.query.get_or_404(portfolio_id)
+    
+    # Security check
+    if portfolio.user_id != current_user.id:
+        flash('You do not have permission to delete this portfolio.', 'error')
+        return redirect(url_for('portfolios'))
+    
+    # Delete the portfolio (cascade will handle investments and transactions)
+    db.session.delete(portfolio)
+    db.session.commit()
+    
+    flash('Portfolio and all associated investments have been deleted.', 'success')
+    return redirect(url_for('portfolios'))
+
+@app.route('/investment_details/<int:investment_id>')
+@login_required_dev
+def investment_details(investment_id):
+    """Get detailed information about an investment via AJAX"""
+    investment = Investment.query.get_or_404(investment_id)
+    
+    # Security check
+    portfolio = Portfolio.query.get(investment.portfolio_id)
+    if not portfolio or portfolio.user_id != current_user.id:
+        return jsonify({
+            'success': False,
+            'message': 'You do not have permission to view this investment.'
+        }), 403
+    
+    # Get transactions for this investment
+    transactions = InvestmentTransaction.query.filter_by(investment_id=investment_id).order_by(InvestmentTransaction.date.desc()).all()
+    
+    # Get stock details from FMP API
+    api_settings = UserApiSettings.query.filter_by(user_id=current_user.id).first()
+    if not api_settings:
+        return jsonify({
+            'success': False,
+            'message': 'API settings not found. Please set up your API key.'
+        }), 400
+    
+    api_key = api_settings.get_api_key()
+    stock_data = get_stock_data(investment.symbol, api_key)
+    
+    # Render details partial template
+    html = render_template('investments/partials/investment_details.html',
+                          investment=investment,
+                          transactions=transactions,
+                          stock_data=stock_data)
+    
+    return jsonify({
+        'success': True,
+        'html': html
+    })
+
+@app.route('/delete_investment/<int:portfolio_id>/<int:investment_id>', methods=['POST'])
+@login_required_dev
+def delete_investment(portfolio_id, investment_id):
+    """Delete an investment and all its transactions"""
+    investment = Investment.query.get_or_404(investment_id)
+    
+    # Security check
+    portfolio = Portfolio.query.get(investment.portfolio_id)
+    if not portfolio or portfolio.user_id != current_user.id:
+        flash('You do not have permission to delete this investment.', 'error')
+        return redirect(url_for('portfolio_details', portfolio_id=portfolio_id))
+    
+    # Delete the investment (cascade will handle transactions)
+    db.session.delete(investment)
+    db.session.commit()
+    
+    flash(f'Investment {investment.symbol} and all its transactions have been deleted.', 'success')
+    return redirect(url_for('portfolio_details', portfolio_id=portfolio_id))
+
+
+
+@app.route('/add_investment_transaction/<int:portfolio_id>/<int:investment_id>', methods=['POST'])
+@login_required_dev
+def add_investment_transaction(portfolio_id, investment_id):
+    """Add a new transaction for an existing investment with account balance updates"""
+    investment = Investment.query.get_or_404(investment_id)
+    
+    # Security check
+    portfolio = Portfolio.query.get(investment.portfolio_id)
+    if not portfolio or portfolio.user_id != current_user.id:
+        flash('You do not have permission to modify this investment.', 'error')
+        return redirect(url_for('portfolio_details', portfolio_id=portfolio_id))
+    
+    # Process form data
+    transaction_type = request.form.get('transaction_type')
+    shares = float(request.form.get('shares', 0))
+    price = float(request.form.get('price', 0))
+    fees = float(request.form.get('fees', 0))
+    notes = request.form.get('notes')
+    
+    # Parse date
+    try:
+        transaction_date = datetime.strptime(request.form.get('date'), '%Y-%m-%d')
+    except:
+        transaction_date = datetime.utcnow()
+    
+    # Calculate transaction value and previous investment value
+    transaction_value = shares * price
+    previous_value = investment.current_value
+    
+    # Create transaction
+    transaction = InvestmentTransaction(
+        investment_id=investment_id,
+        transaction_type=transaction_type,
+        shares=shares,
+        price=price,
+        date=transaction_date,
+        fees=fees,
+        notes=notes
+    )
+    
+    db.session.add(transaction)
+    
+    # Update investment based on transaction type
+    if transaction_type == 'buy':
+        # Add shares
+        old_shares = investment.shares
+        investment.shares += shares
+        # Update average purchase price
+        total_cost = (old_shares * investment.purchase_price) + (shares * price)
+        if investment.shares > 0:
+            investment.purchase_price = total_cost / investment.shares
+        
+    elif transaction_type == 'sell':
+        # Remove shares
+        if shares > investment.shares:
+            flash(f'Cannot sell more shares than you own. You currently have {investment.shares} shares.', 'error')
+            return redirect(url_for('portfolio_details', portfolio_id=portfolio_id))
+        
+        investment.shares -= shares
+        
+    elif transaction_type == 'dividend':
+        # No change to shares
+        pass
+        
+    elif transaction_type == 'split':
+        # Handle stock split
+        old_shares = investment.shares
+        investment.shares = shares
+        
+        # Adjust purchase price proportionally
+        if shares > 0:
+            investment.purchase_price = investment.purchase_price * (old_shares / shares)
+    
+    # Update current price with latest transaction price if it's a buy/sell
+    if transaction_type in ['buy', 'sell']:
+        investment.current_price = price
+    investment.last_update = datetime.utcnow()
+    
+    # Update associated account balance if this portfolio has one
+    if portfolio.account_id:
+        account = Account.query.get(portfolio.account_id)
+        if account:
+            new_value = investment.current_value
+            value_change = new_value - previous_value
+            
+            # For buys, we need to subtract the transaction value from the account
+            # (since money was spent to buy the investment)
+            if transaction_type == 'buy':
+                account.balance -= (transaction_value + fees)
+                app.logger.info(f"Decreased account {account.name} balance by {transaction_value + fees} for share purchase")
+            # For sells, add the transaction value to the account
+            elif transaction_type == 'sell':
+                account.balance += (transaction_value - fees)
+                app.logger.info(f"Increased account {account.name} balance by {transaction_value - fees} from share sale")
+            # For dividends, add the dividend amount to the account
+            elif transaction_type == 'dividend':
+                account.balance += (transaction_value - fees)
+                app.logger.info(f"Added dividend of {transaction_value - fees} to account {account.name}")
+    
+    db.session.commit()
+    
+    flash(f'Transaction added successfully!', 'success')
+    return redirect(url_for('portfolio_details', portfolio_id=portfolio_id))
+
+def sync_investment_prices(user_id):
+    """
+    Sync investment prices for a user with caching to reduce API calls
+    """
+    with app.app_context():
+        app.logger.info(f"Starting investment price sync for user {user_id} on login")
+        
+        try:
+            # Check if investment tracking is enabled
+            if not app.config['INVESTMENT_TRACKING_ENABLED']:
+                return
+            
+            # Check if user has API key
+            api_settings = UserApiSettings.query.filter_by(user_id=user_id).first()
+            if not api_settings or not api_settings.fmp_api_key:
+                return
+            
+            # Get API key
+            api_key = api_settings.get_api_key()
+            
+            # Get last sync time
+            last_sync = api_settings.last_used
+            
+            # Only sync if last sync was more than 6 hours ago (or never)
+            if last_sync and (datetime.utcnow() - last_sync).total_seconds() < 21600:  # 6 hours
+                return
+            
+            # Get all user's investments
+            portfolios = Portfolio.query.filter_by(user_id=user_id).all()
+            all_investments = []
+            for portfolio in portfolios:
+                all_investments.extend(portfolio.investments)
+            
+            if not all_investments:
+                return
+            
+            # Update prices for each investment (using cache)
+            updated_count = 0
+            
+            # Track unique symbols to avoid redundant API calls for the same symbol
+            processed_symbols = set()
+            
+            for investment in all_investments:
+                # Skip if we've already processed this symbol
+                if investment.symbol in processed_symbols:
+                    continue
+                
+                processed_symbols.add(investment.symbol)
+                
+                # Get stock data using cached function
+                stock_data = get_stock_data(investment.symbol, api_key)
+                
+                if stock_data and 'price' in stock_data:
+                    # Find all investments with this symbol and update them
+                    for inv in all_investments:
+                        if inv.symbol == investment.symbol:
+                            inv.current_price = stock_data['price']
+                            inv.last_update = datetime.utcnow()
+                            
+                            # Update sector and industry if available
+                            if 'sector' in stock_data and stock_data['sector']:
+                                inv.sector = stock_data['sector']
+                            if 'industry' in stock_data and stock_data['industry']:
+                                inv.industry = stock_data['industry']
+                                
+                            updated_count += 1
+            
+            # Update last sync time
+            api_settings.last_used = datetime.utcnow()
+            db.session.commit()
+            
+            # Log cache stats
+            cache_stats = fmp_cache.get_stats()
+            app.logger.info(f"Investment price sync stats: {cache_stats}")
+            app.logger.info(f"Investment price sync on login for user {user_id}: {updated_count} investments updated")
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error in investment price sync on login: {str(e)}")
+
+
+
+#--------------------
+# # cache management
+#--------------------
+
+@app.route('/api_cache')
+@login_required_dev
+def api_cache():
+    """View and manage API cache"""
+    # Check if investment tracking is enabled
+    if not app.config['INVESTMENT_TRACKING_ENABLED']:
+        flash('Investment tracking is not enabled.', 'warning')
+        return redirect(url_for('dashboard'))
+    
+    # Check if user has API key
+    has_api_key = check_fmp_api_key(current_user.id)
+    if not has_api_key:
+        flash('You need to set up your Financial Modeling Prep API key first.', 'warning')
+        return redirect(url_for('setup_investment_api'))
+    
+    # Get cache statistics
+    stats = fmp_cache.get_stats()
+    
+    # Get cache expiry time
+    cache_expiry = f"{fmp_cache.expire_seconds // 3600} hours"
+    
+    # Get cache files
+    cache_files = []
+    if os.path.exists(fmp_cache.cache_dir):
+        for filename in os.listdir(fmp_cache.cache_dir):
+            if filename.endswith('.json'):
+                filepath = os.path.join(fmp_cache.cache_dir, filename)
+                
+                # Get file size
+                size_bytes = os.path.getsize(filepath)
+                if size_bytes < 1024:
+                    size = f"{size_bytes} B"
+                elif size_bytes < 1024 * 1024:
+                    size = f"{size_bytes / 1024:.1f} KB"
+                else:
+                    size = f"{size_bytes / (1024 * 1024):.1f} MB"
+                
+                # Get last modified time
+                modified = datetime.fromtimestamp(os.path.getmtime(filepath))
+                
+                # Check if expired
+                is_expired = False
+                try:
+                    with open(filepath, 'r') as f:
+                        data = json.load(f)
+                    timestamp = data.get('timestamp', 0)
+                    is_expired = (time.time() - timestamp) >= fmp_cache.expire_seconds
+                except Exception:
+                    is_expired = True
+                
+                # Add to list
+                cache_files.append({
+                    'key': filename.replace('.json', ''),
+                    'size': size,
+                    'modified': modified.strftime('%Y-%m-%d %H:%M:%S'),
+                    'expired': is_expired
+                })
+    
+    # Sort by modification time (newest first)
+    cache_files.sort(key=lambda x: x['modified'], reverse=True)
+    
+    return render_template('cache_management.html',
+                          stats=stats,
+                          cache_expiry=cache_expiry,
+                          cache_files=cache_files)
+
+@app.route('/clear_expired_cache', methods=['POST'])
+@login_required_dev
+def clear_expired_cache():
+    """Clear expired cache files"""
+    count = fmp_cache.clear_expired()
+    flash(f'Cleared {count} expired cache files.', 'success')
+    return redirect(url_for('api_cache'))
+
+@app.route('/clear_all_cache', methods=['POST'])
+@login_required_dev
+def clear_all_cache():
+    """Clear all cache files"""
+    count = fmp_cache.clear_all()
+    flash(f'Cleared {count} cache files.', 'success')
+    return redirect(url_for('api_cache'))
 #--------------------
 # # statss
 #--------------------
@@ -10200,6 +11601,48 @@ def stats():
     account_growth = 7.8  # Example value
 
     user_accounts = Account.query.filter_by(user_id=current_user.id).all()
+    # Add these lines to get investment data
+    portfolios = Portfolio.query.filter_by(user_id=current_user.id).all()
+    total_value = sum(portfolio.calculate_total_value() for portfolio in portfolios)
+    total_cost = sum(portfolio.calculate_total_cost() for portfolio in portfolios)
+    total_gain_loss = total_value - total_cost
+    gain_loss_percentage = (total_gain_loss / total_cost * 100) if total_cost > 0 else 0
+    
+    # Create portfolio data for charts
+    portfolio_data = []
+    for portfolio in portfolios:
+        portfolio_data.append({
+            'id': portfolio.id,
+            'name': portfolio.name,
+            'value': portfolio.calculate_total_value(),
+            'gain_loss': portfolio.calculate_gain_loss(),
+            'gain_loss_percentage': portfolio.calculate_gain_loss_percentage()
+        })
+
+    # Get sector data
+    all_investments = []
+    for portfolio in portfolios:
+        all_investments.extend(portfolio.investments)
+        
+    sectors = {}
+    for investment in all_investments:
+        if investment.sector:
+            if investment.sector not in sectors:
+                sectors[investment.sector] = 0
+            sectors[investment.sector] += investment.current_value
+            
+    sector_labels = list(sectors.keys())
+    sector_values = list(sectors.values())
+    top_investments = []
+    for portfolio in portfolios:
+        for investment in portfolio.investments:
+            top_investments.append(investment)
+
+    # Sort investments by gain/loss percentage (descending)
+    if top_investments:
+        top_investments.sort(key=lambda x: x.gain_loss_percentage or 0, reverse=True)
+        # Take only the top 5
+        top_investments = top_investments[:5]
 
     return render_template('stats.html',
                            user_accounts=user_accounts,
@@ -10233,13 +11676,22 @@ def stats():
                           expense_income_ratio=expense_income_ratio,
                           liquidity_ratio=liquidity_ratio,
                           account_growth=account_growth,
-                          # New data for enhanced charts
+                         
                           category_names=category_names,
                           category_totals=category_totals,
                           category_trend_data=category_trend_data,
                           tag_names=tag_names,
                           tag_totals=tag_totals,
-                          tag_colors=tag_colors)
+                          tag_colors=tag_colors,
+                          portfolios=portfolios,
+                          top_investments=top_investments,
+                         portfolio_data=portfolio_data,
+                         total_value=total_value,
+                         total_cost=total_cost,
+                         total_gain_loss=total_gain_loss,
+                         gain_loss_percentage=gain_loss_percentage,
+                         sector_labels=sector_labels,
+                         sector_values=sector_values)
 
 def handle_comparison_request():
     """Handle time frame comparison requests within the stats route"""

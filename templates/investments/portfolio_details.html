@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>{{ portfolio.name }}</h1>
+            {% if portfolio.description %}
+            <div class="text-muted">{{ portfolio.description }}</div>
+            {% endif %}
+        </div>
+        <div>
+            <form method="POST" action="{{ url_for('update_prices') }}" class="d-inline">
+                <button type="submit" class="btn btn-outline-light me-2">
+                    <i class="fas fa-sync-alt me-1"></i>Update Prices
+                </button>
+            </form>
+            <button type="button" class="btn btn-primary" onclick="window.openAddInvestmentSlidePanel()">
+                <i class="fas fa-plus me-1"></i>Add Investment
+            </button>
+        </div>
+    </div>
+    
+    <!-- Portfolio Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Current Value</h6>
+                    <h3>${{ "%.2f"|format(portfolio.calculate_total_value()) }}</h3>
+                    <div class="mt-2 text-muted">
+                        <small>{{ portfolio.investments|length }} investments</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Cost Basis</h6>
+                    <h3>${{ "%.2f"|format(portfolio.calculate_total_cost()) }}</h3>
+                    <div class="mt-2 text-muted">
+                        <small>Total invested amount</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Total Gain/Loss</h6>
+                    {% set gain_loss = portfolio.calculate_gain_loss() %}
+                    <h3 class="{% if gain_loss >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        ${{ "%.2f"|format(gain_loss) }}
+                    </h3>
+                    <div class="mt-2 {% if gain_loss >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        <small>{{ "%.2f"|format(portfolio.calculate_gain_loss_percentage()) }}%</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Last Updated</h6>
+                    {% set latest_update = None %}
+                    {% for investment in portfolio.investments %}
+                        {% if investment.last_update and (not latest_update or investment.last_update > latest_update) %}
+                            {% set latest_update = investment.last_update %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if latest_update %}
+                    <h3>{{ latest_update.strftime('%b %d, %Y') }}</h3>
+                    <div class="mt-2 text-muted">
+                        <small>{{ latest_update.strftime('%I:%M %p') }}</small>
+                    </div>
+                    {% else %}
+                    <h3>Never</h3>
+                    <div class="mt-2 text-muted">
+                        <small>Update prices to refresh</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Investments Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Investment Holdings</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Name</th>
+                            <th>Shares</th>
+                            <th>Purchase Price</th>
+                            <th>Current Price</th>
+                            <th>Current Value</th>
+                            <th>Gain/Loss</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for investment in portfolio.investments %}
+                        <tr>
+                            <td>
+                                <strong>{{ investment.symbol }}</strong>
+                            </td>
+                            <td>{{ investment.name }}</td>
+                            <td>{{ "%.2f"|format(investment.shares) }}</td>
+                            <td>${{ "%.2f"|format(investment.purchase_price) }}</td>
+                            <td>${{ "%.2f"|format(investment.current_price) }}</td>
+                            <td>${{ "%.2f"|format(investment.current_value) }}</td>
+                            <td>
+                                {% set gain_loss = investment.gain_loss %}
+                                {% set gain_loss_pct = investment.gain_loss_percentage %}
+                                <span class="{% if gain_loss >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    ${{ "%.2f"|format(gain_loss) }} ({{ "%.2f"|format(gain_loss_pct) }}%)
+                                </span>
+                            </td>
+                            <td>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-link text-light p-0" type="button" data-bs-toggle="dropdown">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="#" onclick="window.openInvestmentDetailsSlidePanel('{{ investment.id }}', '{{ investment.symbol }}', '{{ investment.name }}')">
+                                                <i class="fas fa-info-circle me-2"></i>Details
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="#" onclick="window.openAddTransactionSlidePanel('{{ investment.id }}', '{{ investment.symbol }}', '{{ investment.name }}')">
+                                                <i class="fas fa-exchange-alt me-2"></i>Add Transaction
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item text-danger" href="#" onclick="window.openDeleteInvestmentSlidePanel('{{ investment.id }}', '{{ investment.symbol }}')">
+                                                <i class="fas fa-trash-alt me-2"></i>Delete
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <div class="mb-3">
+                                    <i class="fas fa-chart-line fa-3x text-muted"></i>
+                                </div>
+                                <p>No investments in this portfolio yet. Add your first investment to get started.</p>
+                                <button type="button" class="btn btn-primary" onclick="window.openAddInvestmentSlidePanel()">
+                                    <i class="fas fa-plus me-1"></i>Add Investment
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide panel overlay -->
+<div id="slide-panel-overlay" class="slide-panel-overlay"></div>
+
+<!-- Add Investment Slide Panel -->
+<div id="addInvestmentPanel" class="slide-panel">
+    <div class="slide-panel-header">
+        <h4 class="mb-0">
+            <i class="fas fa-plus-circle me-2" style="color: #0ea5e9"></i>
+            Add New Investment
+        </h4>
+        <button type="button" class="btn-close btn-close-white" onclick="window.closeSlidePanel('addInvestmentPanel')"></button>
+    </div>
+    <div class="slide-panel-content">
+        <form method="POST" action="{{ url_for('add_investment', portfolio_id=portfolio.id) }}" class="py-3">
+            <div class="mb-4">
+                <label for="symbol" class="form-label">Stock Symbol</label>
+                <input type="text" class="form-control" id="symbol" name="symbol" required placeholder="e.g., AAPL">
+                <div class="form-text">Enter the stock symbol as it appears on stock exchanges (e.g., AAPL for Apple)</div>
+            </div>
+            <div class="mb-4">
+                <label for="shares" class="form-label">Number of Shares</label>
+                <input type="number" class="form-control" id="shares" name="shares" required step="0.01" min="0.01">
+            </div>
+            <div class="mb-4">
+                <label for="purchase_price" class="form-label">Purchase Price Per Share</label>
+                <div class="input-group">
+                    <span class="input-group-text">$</span>
+                    <input type="number" class="form-control" id="purchase_price" name="purchase_price" required step="0.01" min="0.01">
+                </div>
+            </div>
+            <div class="mb-4">
+                <label for="purchase_date" class="form-label">Purchase Date</label>
+                <input type="date" class="form-control" id="purchase_date" name="purchase_date" 
+                       value="{{ now.strftime('%Y-%m-%d') }}">
+            </div>
+            <div class="mb-4">
+                <label for="notes" class="form-label">Notes (Optional)</label>
+                <textarea class="form-control" id="notes" name="notes" rows="3"></textarea>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>Add Investment
+                </button>
+                <button type="button" class="btn btn-outline-secondary" onclick="window.closeSlidePanel('addInvestmentPanel')">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Investment Details Slide Panel -->
+<div id="investmentDetailsPanel" class="slide-panel">
+    <div class="slide-panel-header">
+        <h4 class="mb-0">
+            <i class="fas fa-info-circle me-2" style="color: #0ea5e9"></i>
+            <span id="investment-details-title">Investment Details</span>
+        </h4>
+        <button type="button" class="btn-close btn-close-white" onclick="window.closeSlidePanel('investmentDetailsPanel')"></button>
+    </div>
+    <div class="slide-panel-content">
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading investment details...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Add Transaction Slide Panel -->
+<div id="addTransactionPanel" class="slide-panel">
+    <div class="slide-panel-header">
+        <h4 class="mb-0">
+            <i class="fas fa-exchange-alt me-2" style="color: #0ea5e9"></i>
+            Add Transaction
+        </h4>
+        <button type="button" class="btn-close btn-close-white" onclick="window.closeSlidePanel('addTransactionPanel')"></button>
+    </div>
+    <div class="slide-panel-content">
+        <form method="POST" action="{{ url_for('add_investment_transaction', portfolio_id=portfolio.id, investment_id=0) }}" id="addTransactionForm" class="py-3">
+            <div id="transaction-symbol-display" class="mb-4">
+                <strong>Symbol:</strong> <span id="transaction-symbol"></span>
+            </div>
+            
+            <div class="mb-4">
+                <label for="transaction_type" class="form-label">Transaction Type</label>
+                <select class="form-select" id="transaction_type" name="transaction_type" required>
+                    <option value="buy">Buy</option>
+                    <option value="sell">Sell</option>
+                    <option value="dividend">Dividend</option>
+                    <option value="split">Stock Split</option>
+                </select>
+            </div>
+            
+            <div class="mb-4">
+                <label for="transaction_shares" class="form-label">Number of Shares</label>
+                <input type="number" class="form-control" id="transaction_shares" name="shares" required step="0.01" min="0.01">
+            </div>
+            
+            <div class="mb-4">
+                <label for="transaction_price" class="form-label">Price Per Share</label>
+                <div class="input-group">
+                    <span class="input-group-text">$</span>
+                    <input type="number" class="form-control" id="transaction_price" name="price" required step="0.01" min="0.01">
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <label for="transaction_date" class="form-label">Transaction Date</label>
+                <input type="date" class="form-control" id="transaction_date" name="date" 
+                       value="{{ now.strftime('%Y-%m-%d') }}">
+            </div>
+            
+            <div class="mb-4">
+                <label for="transaction_fees" class="form-label">Fees/Commissions (Optional)</label>
+                <div class="input-group">
+                    <span class="input-group-text">$</span>
+                    <input type="number" class="form-control" id="transaction_fees" name="fees" step="0.01" min="0" value="0">
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <label for="transaction_notes" class="form-label">Notes (Optional)</label>
+                <textarea class="form-control" id="transaction_notes" name="notes" rows="3"></textarea>
+            </div>
+            
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>Add Transaction
+                </button>
+                <button type="button" class="btn btn-outline-secondary" onclick="window.closeSlidePanel('addTransactionPanel')">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Investment Slide Panel -->
+<div id="deleteInvestmentPanel" class="slide-panel">
+    <div class="slide-panel-header">
+        <h4 class="mb-0">
+            <i class="fas fa-trash-alt me-2" style="color: #ef4444"></i>
+            Delete Investment
+        </h4>
+        <button type="button" class="btn-close btn-close-white" onclick="window.closeSlidePanel('deleteInvestmentPanel')"></button>
+    </div>
+    <div class="slide-panel-content">
+        <div class="py-4">
+            <p>Are you sure you want to delete <strong id="delete-investment-symbol"></strong> from your portfolio?</p>
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                This will permanently delete the investment and all transaction history associated with it.
+            </div>
+            <form method="POST" action="{{ url_for('delete_investment', portfolio_id=portfolio.id, investment_id=0) }}" id="deleteInvestmentForm">
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash-alt me-1"></i>Delete Investment
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="window.closeSlidePanel('deleteInvestmentPanel')">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Slide panel functions
+        window.openAddInvestmentSlidePanel = function() {
+            // Get the panel and overlay
+            const panel = document.getElementById('addInvestmentPanel');
+            const overlay = document.getElementById('slide-panel-overlay');
+            
+            // Show the panel and overlay
+            if (panel) panel.classList.add('active');
+            if (overlay) overlay.classList.add('active');
+            
+            // Prevent body scrolling
+            document.body.style.overflow = 'hidden';
+        };
+        
+        window.openInvestmentDetailsSlidePanel = function(investmentId, symbol, name) {
+            // Update panel title
+            document.getElementById('investment-details-title').textContent = `${symbol} - ${name}`;
+            
+            // Show the panel
+            const panel = document.getElementById('investmentDetailsPanel');
+            const overlay = document.getElementById('slide-panel-overlay');
+            
+            if (panel) panel.classList.add('active');
+            if (overlay) overlay.classList.add('active');
+            
+            // Prevent body scrolling
+            document.body.style.overflow = 'hidden';
+            
+            // Load investment details via AJAX
+            fetch(`/investment_details/${investmentId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        panel.querySelector('.slide-panel-content').innerHTML = data.html;
+                    } else {
+                        panel.querySelector('.slide-panel-content').innerHTML = `
+                            <div class="alert alert-danger m-3">
+                                <i class="fas fa-exclamation-circle me-2"></i>
+                                ${data.message || 'Failed to load investment details.'}
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    panel.querySelector('.slide-panel-content').innerHTML = `
+                        <div class="alert alert-danger m-3">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            An error occurred while loading investment details.
+                        </div>
+                    `;
+                });
+        };
+        
+        window.openAddTransactionSlidePanel = function(investmentId, symbol, name) {
+            // Update symbol display
+            document.getElementById('transaction-symbol').textContent = symbol;
+            
+            // Update form action URL
+            const form = document.getElementById('addTransactionForm');
+            form.action = form.action.replace(/\/\d+$/, `/${investmentId}`);
+            
+            // Show the panel
+            const panel = document.getElementById('addTransactionPanel');
+            const overlay = document.getElementById('slide-panel-overlay');
+            
+            if (panel) panel.classList.add('active');
+            if (overlay) overlay.classList.add('active');
+            
+            // Prevent body scrolling
+            document.body.style.overflow = 'hidden';
+        };
+        
+        window.openDeleteInvestmentSlidePanel = function(investmentId, symbol) {
+            // Update confirmation text
+            document.getElementById('delete-investment-symbol').textContent = symbol;
+            
+            // Update form action URL
+            const form = document.getElementById('deleteInvestmentForm');
+            form.action = form.action.replace(/\/\d+$/, `/${investmentId}`);
+            
+            // Show the panel
+            const panel = document.getElementById('deleteInvestmentPanel');
+            const overlay = document.getElementById('slide-panel-overlay');
+            
+            if (panel) panel.classList.add('active');
+            if (overlay) overlay.classList.add('active');
+            
+            // Prevent body scrolling
+            document.body.style.overflow = 'hidden';
+        };
+        
+        window.closeSlidePanel = function(panelId) {
+            // Get the panel
+            const panel = document.getElementById(panelId);
+            const overlay = document.getElementById('slide-panel-overlay');
+            
+            // Hide the panel and overlay
+            if (panel) panel.classList.remove('active');
+            if (overlay) overlay.classList.remove('active');
+            
+            // Re-enable body scrolling
+            document.body.style.overflow = '';
+        };
+        
+        // Add event listener to close panels when clicking on overlay
+        const overlay = document.getElementById('slide-panel-overlay');
+        if (overlay) {
+            overlay.addEventListener('click', function() {
+                // Close all active panels
+                document.querySelectorAll('.slide-panel.active').forEach(function(panel) {
+                    panel.classList.remove('active');
+                });
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            });
+        }
+    });
+</script>
+{% endblock %}

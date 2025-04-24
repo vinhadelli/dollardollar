@@ -1,0 +1,166 @@
+<!-- investments/partials/investment_details.html -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0">Investment Summary</h6>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-borderless">
+                    <tr>
+                        <th>Shares Owned:</th>
+                        <td>{{ "%.2f"|format(investment.shares) }}</td>
+                    </tr>
+                    <tr>
+                        <th>Average Cost:</th>
+                        <td>${{ "%.2f"|format(investment.purchase_price) }}</td>
+                    </tr>
+                    <tr>
+                        <th>Current Price:</th>
+                        <td>${{ "%.2f"|format(investment.current_price) }}</td>
+                    </tr>
+                    <tr>
+                        <th>Total Cost:</th>
+                        <td>${{ "%.2f"|format(investment.cost_basis) }}</td>
+                    </tr>
+                    <tr>
+                        <th>Current Value:</th>
+                        <td>${{ "%.2f"|format(investment.current_value) }}</td>
+                    </tr>
+                    <tr>
+                        <th>Gain/Loss:</th>
+                        <td class="{% if investment.gain_loss >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            ${{ "%.2f"|format(investment.gain_loss) }} ({{ "%.2f"|format(investment.gain_loss_percentage) }}%)
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Purchase Date:</th>
+                        <td>{{ investment.purchase_date.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                    <tr>
+                        <th>Last Updated:</th>
+                        <td>{{ investment.last_update.strftime('%Y-%m-%d %H:%M') if investment.last_update else 'Never' }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0">Market Data</h6>
+            </div>
+            <div class="card-body">
+                {% if stock_data %}
+                <table class="table table-sm table-borderless">
+                    <tr>
+                        <th>Company:</th>
+                        <td>{{ stock_data.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Current Price:</th>
+                        <td>${{ "%.2f"|format(stock_data.price) }}</td>
+                    </tr>
+                    <tr>
+                        <th>Daily Change:</th>
+                        <td class="{% if stock_data.change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            ${{ "%.2f"|format(stock_data.change) }} ({{ "%.2f"|format(stock_data.percent_change) }}%)
+                        </td>
+                    </tr>
+                    {% if stock_data.sector %}
+                    <tr>
+                        <th>Sector:</th>
+                        <td>{{ stock_data.sector }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if stock_data.industry %}
+                    <tr>
+                        <th>Industry:</th>
+                        <td>{{ stock_data.industry }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if stock_data.market_cap %}
+                    <tr>
+                        <th>Market Cap:</th>
+                        <td>${{ '{:,.2f}'.format(stock_data.market_cap / 1000000000) }} B</td>
+                    </tr>
+                    {% endif %}
+                    {% if stock_data.website %}
+                    <tr>
+                        <th>Website:</th>
+                        <td><a href="{{ stock_data.website }}" target="_blank" class="text-info">{{ stock_data.website }}</a></td>
+                    </tr>
+                    {% endif %}
+                </table>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Could not fetch current market data.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if investment.description %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h6 class="mb-0">Notes</h6>
+    </div>
+    <div class="card-body">
+        <p>{{ investment.notes }}</p>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Transaction History</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Shares</th>
+                        <th>Price</th>
+                        <th>Total Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr>
+                        <td>{{ transaction.date.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            {% if transaction.transaction_type == 'buy' %}
+                            <span class="badge bg-success">Buy</span>
+                            {% elif transaction.transaction_type == 'sell' %}
+                            <span class="badge bg-danger">Sell</span>
+                            {% elif transaction.transaction_type == 'dividend' %}
+                            <span class="badge bg-info">Dividend</span>
+                            {% elif transaction.transaction_type == 'split' %}
+                            <span class="badge bg-warning text-dark">Split</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ transaction.transaction_type|capitalize }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ "%.2f"|format(transaction.shares) }}</td>
+                        <td>${{ "%.2f"|format(transaction.price) }}</td>
+                        <td>${{ "%.2f"|format(transaction.transaction_value) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center">
+                            <p class="my-3">No transaction history found.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

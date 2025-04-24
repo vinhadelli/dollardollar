@@ -1303,15 +1303,15 @@ tr.bg-dark .collapse .p-3 {
 /* Slide Panel Global Styles */
 .slide-panel {
     position: fixed;
-    top: 0;
+    top: var(--header-height) !important; 
     right: -500px;
     width: 500px;
     max-width: 100%;
-    height: 100vh;
+    height: calc(100vh - var(--header-height)) !important;
     background-color: var(--slide-panel-bg, #1e1e1e);
     box-shadow: -5px 0 15px rgba(0, 0, 0, 0.3);
     transition: right 0.3s ease-in-out;
-    z-index: 1060;
+    z-index: 1080 !important;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -1469,7 +1469,44 @@ tr.bg-dark .collapse .p-3 {
                 </ul>
             </li>
             
-            <!-- Groups & Social -->
+
+            <!-- Investments-->
+            {% if config.INVESTMENT_TRACKING_ENABLED %}
+            <li class="nav-item nav-section">
+                <a href="#investmentsSubmenu" data-bs-toggle="collapse" class="nav-link {% if 'investments' in request.path %}{% else %}collapsed{% endif %}">
+                    <span class="nav-icon"><i class="fas fa-chart-line"></i></span>
+                    <span class="nav-text">Investments</span>
+                    <span class="nav-caret"><i class="fas fa-angle-down ms-auto"></i></span>
+                </a>
+                <ul class="collapse nav-submenu {% if 'investments' in request.path %}show{% endif %}" id="investmentsSubmenu">
+                    <li class="nav-item">
+                        <a href="{{ url_for('investments') }}" class="nav-link {% if request.path == url_for('investments') %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-tachometer-alt"></i></span>
+                            <span class="nav-text">Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('portfolios') }}" class="nav-link {% if request.path == url_for('portfolios') %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-briefcase"></i></span>
+                            <span class="nav-text">Portfolios</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('investment_transactions') }}" class="nav-link {% if request.path == url_for('investment_transactions') %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-exchange-alt"></i></span>
+                            <span class="nav-text">Transactions</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('api_cache') }}" class="nav-link {% if request.path == url_for('api_cache') %}active{% endif %}">
+                            <span class="nav-icon"><i class="fas fa-database"></i></span>
+                            <span class="nav-text">API Cache</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            {% endif %}
+                        <!-- Groups & Social -->
             <li class="nav-item nav-section">
                 <a href="#socialSubmenu" data-bs-toggle="collapse" class="nav-link {% if 'groups' in request.path or 'settlements' in request.path %}{% else %}collapsed{% endif %}">
                     <span class="nav-icon"><i class="fas fa-users"></i></span>

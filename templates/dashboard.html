@@ -344,51 +344,57 @@
 
 <div class="row mb-4">
     <!-- Assets vs Debts Chart Card -->
-    <div class="col-md-7">
-        <div class="modern-card">
-            <div class="card-header">
-                <h5 class="card-title"><i class="fas fa-chart-line me-2"></i>Assets vs Debts</h5>
-                <p class="text-muted mb-0">Financial Trend Overview</p>
+    <!-- Updated Assets vs Debts Chart Card -->
+<div class="col-md-7">
+    <div class="modern-card">
+        <div class="card-header">
+            <h5 class="card-title"><i class="fas fa-chart-line me-2"></i>Assets vs Debts</h5>
+            <p class="text-muted mb-0">Financial Trend Overview</p>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="assetDebtChart" height="230"></canvas>
             </div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="assetDebtChart" height="230"></canvas>
+            <div class="chart-stats">
+                <div class="stat-item">
+                    <div class="stat-name">
+                        <i class="fas fa-piggy-bank text-success me-1"></i>
+                        Total Assets
+                    </div>
+                    <div class="stat-value text-success">
+                        {{ base_currency.symbol }}{{ "%.2f"|format(total_assets|default(0)) }}
+                        {% if investment_total|default(0) > 0 %}
+                        <small class="d-block opacity-75">
+                            Includes {{ base_currency.symbol }}{{ "%.2f"|format(investment_total|default(0)) }} in investments
+                        </small>
+                        {% endif %}
+                    </div>
                 </div>
-                <div class="chart-stats">
-                    <div class="stat-item">
-                        <div class="stat-name">
-                            <i class="fas fa-piggy-bank text-success me-1"></i>
-                            Total Assets
-                        </div>
-                        <div class="stat-value text-success">
-                            {{ base_currency.symbol }}{{ "%.2f"|format(total_assets|default(0)) }}
-                        </div>
+                <div class="stat-item">
+                    <div class="stat-name">
+                        <i class="fas fa-credit-card text-danger me-1"></i>
+                        Total Debts
                     </div>
-                    <div class="stat-item">
-                        <div class="stat-name">
-                            <i class="fas fa-credit-card text-danger me-1"></i>
-                            Total Debts
-                        </div>
-                        <div class="stat-value text-danger">
-                            {{ base_currency.symbol }}{{ "%.2f"|format(total_debts|default(0)) }}
-                        </div>
+                    <div class="stat-value text-danger">
+                        {{ base_currency.symbol }}{{ "%.2f"|format(total_debts|default(0)) }}
                     </div>
-                    <div class="stat-item">
-                        <div class="stat-name">
-                            <i class="fas fa-wallet text-info me-1"></i>
-                            Net Worth
-                        </div>
-                        <div class="stat-value {{ 'text-success' if net_worth|default(0) >= 0 else 'text-danger' }}">
-                            {{ base_currency.symbol }}{{ "%.2f"|format(net_worth|default(0)|abs) }}
-                            <small>
-                                {{ 'Surplus' if net_worth|default(0) >= 0 else 'Deficit' }}
-                            </small>
-                        </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-name">
+                        <i class="fas fa-wallet text-info me-1"></i>
+                        Net Worth
+                    </div>
+                    <div class="stat-value {{ 'text-success' if net_worth|default(0) >= 0 else 'text-danger' }}">
+                        {{ base_currency.symbol }}{{ "%.2f"|format(net_worth|default(0)|abs) }}
+                        <small>
+                            {{ 'Surplus' if net_worth|default(0) >= 0 else 'Deficit' }}
+                        </small>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
     
     <!-- Top Spending Categories Donut Chart -->
     <div class="col-md-5">
@@ -994,7 +1000,7 @@ function createCategoryLegend(categories) {
     legendContainer.appendChild(scrollContainer);
 }
 
-// Asset vs Debt Chart
+// Asset vs Debt Chart with Investment Data
 function setupAssetDebtChart() {
     const ctx = document.getElementById('assetDebtChart');
     if (!ctx) return;
@@ -1003,6 +1009,10 @@ function setupAssetDebtChart() {
     let months = {{ asset_trends_months|tojson|safe }};
     let assetData = {{ asset_trends|tojson|safe }};
     let debtData = {{ debt_trends|tojson|safe }};
+    
+    // Check if we have investment data - this assumes you use the financial_utility_processor
+    // and pass investment_assets to the template
+    const hasInvestments = {{ 'true' if investment_total|default(0) > 0 else 'false' }};
     
     // Check if we have actual data
     if (!months || months.length === 0 || assetData.length === 0) {
@@ -1016,29 +1026,32 @@ function setupAssetDebtChart() {
         return;
     }
     
+    // Prepare datasets
+    const datasets = [
+        {
+            label: 'Assets',
+            data: assetData,
+            borderColor: 'rgba(46, 213, 115, 0.8)',  // Green for assets
+            backgroundColor: 'rgba(46, 213, 115, 0.2)',
+            fill: true,
+            tension: 0.4
+        },
+        {
+            label: 'Debts',
+            data: debtData,
+            borderColor: 'rgba(255, 71, 87, 0.8)',  // Red for debts
+            backgroundColor: 'rgba(255, 71, 87, 0.2)',
+            fill: true,
+            tension: 0.4
+        }
+    ];
+    
     // Create the chart with actual data
-    new Chart(ctx, {
+    const chart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: months,
-            datasets: [
-                {
-                    label: 'Assets',
-                    data: assetData,
-                    borderColor: 'rgba(46, 213, 115, 0.8)',  // Green for assets
-                    backgroundColor: 'rgba(46, 213, 115, 0.2)',
-                    fill: true,
-                    tension: 0.4
-                },
-                {
-                    label: 'Debts',
-                    data: debtData,
-                    borderColor: 'rgba(255, 71, 87, 0.8)',  // Red for debts
-                    backgroundColor: 'rgba(255, 71, 87, 0.2)',
-                    fill: true,
-                    tension: 0.4
-                }
-            ]
+            datasets: datasets
         },
         options: {
             responsive: true,
@@ -1060,6 +1073,16 @@ function setupAssetDebtChart() {
                                 label += '{{ base_currency.symbol }}' + context.parsed.y.toFixed(2);
                             }
                             return label;
+                        },
+                        // Add a footer to the tooltip for investment information
+                        footer: function(tooltipItems) {
+                            if (hasInvestments) {
+                                const total = tooltipItems[0].parsed.y;
+                                const investmentTotal = {{ investment_total|default(0) }};
+                                const investmentPercent = (investmentTotal / total * 100).toFixed(1);
+                                return `Investments: {{ base_currency.symbol }}${investmentTotal.toFixed(2)} (${investmentPercent}%)`;
+                            }
+                            return '';
                         }
                     }
                 }

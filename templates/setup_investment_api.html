@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-key me-2 text-warning"></i>
+                        Setup Financial Modeling Prep API Key
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h5 class="alert-heading">
+                            <i class="fas fa-info-circle me-2"></i>
+                            About Financial Modeling Prep
+                        </h5>
+                        <p>To track investments, you need a Financial Modeling Prep API key. This allows us to fetch real-time stock data and keep your portfolio up to date.</p>
+                        <hr>
+                        <p class="mb-0">Follow these steps to get your API key:</p>
+                        <ol class="mt-2">
+                            <li>Visit <a href="https://financialmodelingprep.com/developer/docs/pricing" target="_blank" class="text-decoration-underline">Financial Modeling Prep</a></li>
+                            <li>Sign up for an account (they offer a free tier with limited API calls)</li>
+                            <li>Once registered, go to your dashboard to find your API key</li>
+                            <li>Copy the key and paste it below</li>
+                        </ol>
+                    </div>
+                    
+                    <form method="POST" action="{{ url_for('setup_investment_api') }}">
+                        <div class="mb-3">
+                            <label for="api_key" class="form-label">FMP API Key</label>
+                            <input type="text" class="form-control" id="api_key" name="api_key" required placeholder="Enter your Financial Modeling Prep API key">
+                            <div class="form-text text-muted">Your API key will be securely stored and only used for fetching investment data.</div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i> Save API Key
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

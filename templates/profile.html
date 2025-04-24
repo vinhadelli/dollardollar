@@ -1,193 +1,286 @@
 {% extends "base.html" %}
 
-    <!-- dev-signature: 29a41de6a866d56c36aba5159f45257c -->
 {% block content %}
 <div class="container">
+    <!-- Profile Header with User Avatar and Quick Info -->
     <div class="row mb-4">
-        <div class="col-md-12">
-            <h2>My Profile</h2>
-        </div>
-    </div>
-
-    <div class="row">
-        <!-- User Information Card -->
-        <div class="col-md-4 mb-4">
-            <div class="card h-100">
-                <div class="card-header text-center">
-                    <h5 class="mb-0">User Information</h5>
-                </div>
-                <div class="card-body">
-                    <div class="text-center mb-4">
-                        <div class="user-avatar mx-auto mb-3" style="width: 80px; height: 80px; font-size: 2rem; background-color: {{ user_color }};">
-                            {{ current_user.name[0] | upper }}
+        <div class="col-12">
+            <div class="card" style="border-radius: 16px; overflow: hidden; background: linear-gradient(135deg, rgba(21, 128, 61, 0.5), rgba(17, 24, 39, 0.8));">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div class="user-avatar" style="width: 90px; height: 90px; font-size: 2.5rem; background-color: {{ user_color }}; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
+                                {{ current_user.name[0] | upper }}
+                            </div>
                         </div>
-                        <h4>{{ current_user.name }}</h4>
-                        <p class="text-muted">{{ current_user.id }}</p>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label text-muted">Account Created</label>
-                        <p>{{ account_created }}</p>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label text-muted">Role</label>
-                        <p>{% if current_user.is_admin %}<span class="badge bg-warning">Administrator</span>{% else %}<span class="badge bg-secondary">User</span>{% endif %}</p>
-                    </div>
-                    
-                    <div class="d-grid">
-                        <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
-                            <i class="fas fa-sign-out-alt me-2"></i>Logout
-                        </a>
+                        <div class="col">
+                            <h2 class="mb-1">{{ current_user.name }}</h2>
+                            <p class="text-muted mb-2">{{ current_user.id }}</p>
+                            <div class="d-flex align-items-center">
+                                <div class="badge me-2 px-3 py-2" style="background: rgba(255,255,255,0.1);">
+                                    <i class="far fa-calendar-alt me-1"></i> Joined {{ account_created }}
+                                </div>
+                                <div class="badge px-3 py-2" style="background: rgba(255,255,255,0.1);">
+                                    {% if current_user.is_admin %}
+                                        <i class="fas fa-crown text-warning me-1"></i> Administrator
+                                    {% else %}
+                                        <i class="fas fa-user me-1"></i> User
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <a href="{{ url_for('logout') }}" class="btn btn-outline-light">
+                                <i class="fas fa-sign-out-alt me-2"></i>Logout
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-        
-        <!-- Profile Settings Column -->
-        <div class="col-md-8">
-            <!-- Change Color Card -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">My Color</h5>
+    </div>
+
+    <!-- Tabs Navigation for Profile Sections -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <ul class="nav nav-pills nav-fill" id="profileTabs" role="tablist" style="background: rgba(17, 24, 39, 0.5); border-radius: 12px; padding: 8px;">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="appearance-tab" data-bs-toggle="tab" data-bs-target="#appearance" type="button" role="tab" aria-controls="appearance" aria-selected="true">
+                        <i class="fas fa-palette me-2"></i>Appearance
+                    </button>
+                </li>
+                
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab" aria-controls="security" aria-selected="false">
+                        <i class="fas fa-shield-alt me-2"></i>Security
+                    </button>
+                </li>
+                
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="preferences-tab" data-bs-toggle="tab" data-bs-target="#preferences" type="button" role="tab" aria-controls="preferences" aria-selected="false">
+                        <i class="fas fa-sliders-h me-2"></i>Preferences
+                    </button>
+                </li>
+                
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="integrations-tab" data-bs-toggle="tab" data-bs-target="#integrations" type="button" role="tab" aria-controls="integrations" aria-selected="false">
+                        <i class="fas fa-plug me-2"></i>Integrations
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="profileTabContent">
+        <!-- Appearance Tab -->
+        <div class="tab-pane fade show active" id="appearance" role="tabpanel" aria-labelledby="appearance-tab">
+            <div class="card mb-4" style="border-radius: 16px; background: rgba(17, 24, 39, 0.8);">
+                <div class="card-header border-bottom" style="background: rgba(21, 128, 61, 0.2);">
+                    <h5 class="mb-0"><i class="fas fa-palette me-2" style="color: #10b981;"></i>Personal Color</h5>
                 </div>
                 <div class="card-body">
                     <form action="{{ url_for('update_color') }}" method="POST">
                         <div class="mb-3">
-                            <label for="user_color" class="form-label">Personal Color</label>
-                            <div class="input-group">
-                                <input type="color" class="form-control form-control-color bg-dark" id="user_color" name="user_color" value="{{ user_color }}">
-                                <input type="text" class="form-control bg-dark text-light" id="colorHex" value="{{ user_color }}" readonly>
-                                <button type="submit" class="btn btn-primary">Save Color</button>
+                            <label for="user_color" class="form-label">Choose your personal color</label>
+                            <div class="row align-items-center">
+                                <div class="col-auto">
+                                    <input type="color" class="form-control form-control-color bg-dark" id="user_color" name="user_color" value="{{ user_color }}" style="width: 60px; height: 60px;">
+                                </div>
+                                <div class="col">
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-dark text-light">#</span>
+                                        <input type="text" class="form-control bg-dark text-light" id="colorHex" value="{{ user_color|replace('#', '') }}" readonly>
+                                    </div>
+                                    <div class="form-text text-muted mt-2">
+                                        This color will be used to identify you in splits, groups, and throughout the app.
+                                    </div>
+                                </div>
+                                <div class="col-auto">
+                                    <button type="submit" class="btn btn-primary">Save Color</button>
+                                </div>
                             </div>
-                            <div class="form-text text-muted mt-2">
-                                This color will be used to identify you in splits and group activities.
+                        </div>
+
+                        <div class="mt-4">
+                            <h6 class="mb-3">Preview</h6>
+                            <div class="d-flex align-items-center">
+                                <div class="preview-avatar me-3" style="width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; background-color: {{ user_color }};">
+                                    {{ current_user.name[0] | upper }}
+                                </div>
+                                <div class="preview-badge me-3 px-3 py-2" style="background-color: {{ user_color }}; border-radius: 8px; color: white;">
+                                    {{ current_user.name }}
+                                </div>
+                                <div class="preview-pill px-3 py-2 me-3" style="background: rgba(0,0,0,0.2); border: 2px solid {{ user_color }}; border-radius: 20px; color: white;">
+                                    <i class="fas fa-user-circle" style="color: {{ user_color }};"></i>
+                                    <span class="ms-1">{{ current_user.name }}</span>
+                                </div>
                             </div>
                         </div>
                     </form>
                 </div>
             </div>
-            
+        </div>
+
+        <!-- Security Tab -->
+        <div class="tab-pane fade" id="security" role="tabpanel" aria-labelledby="security-tab">
             <!-- Change Password Card - Only show for non-OIDC users -->
             {% if not (current_user.oidc_id and oidc_enabled) %}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Change Password</h5>
+            <div class="card mb-4" style="border-radius: 16px; background: rgba(17, 24, 39, 0.8);">
+                <div class="card-header border-bottom" style="background: rgba(21, 128, 61, 0.2);">
+                    <h5 class="mb-0"><i class="fas fa-key me-2" style="color: #10b981;"></i>Change Password</h5>
                 </div>
                 <div class="card-body">
                     <form action="{{ url_for('change_password') }}" method="POST">
                         <div class="mb-3">
                             <label for="current_password" class="form-label">Current Password</label>
-                            <input type="password" class="form-control bg-dark text-light" id="current_password" name="current_password" required>
+                            <div class="input-group">
+                                <span class="input-group-text bg-dark border-secondary"><i class="fas fa-lock"></i></span>
+                                <input type="password" class="form-control bg-dark text-light" id="current_password" name="current_password" required>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label for="new_password" class="form-label">New Password</label>
-                            <input type="password" class="form-control bg-dark text-light" id="new_password" name="new_password" required>
+                            <div class="input-group">
+                                <span class="input-group-text bg-dark border-secondary"><i class="fas fa-key"></i></span>
+                                <input type="password" class="form-control bg-dark text-light" id="new_password" name="new_password" required>
+                            </div>
+                            <div class="password-strength mt-2" id="password-strength-meter" style="display:none;">
+                                <div class="progress" style="height: 6px;">
+                                    <div id="password-strength-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <small id="password-strength-text" class="mt-1" style="display:none;"></small>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label for="confirm_password" class="form-label">Confirm New Password</label>
-                            <input type="password" class="form-control bg-dark text-light" id="confirm_password" name="confirm_password" required>
+                            <div class="input-group">
+                                <span class="input-group-text bg-dark border-secondary"><i class="fas fa-check"></i></span>
+                                <input type="password" class="form-control bg-dark text-light" id="confirm_password" name="confirm_password" required>
+                            </div>
                             <div id="password-match-feedback" class="form-text" style="display: none;"></div>
                         </div>
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-primary" id="password-submit-btn">Change Password</button>
+                            <button type="submit" class="btn btn-primary" id="password-submit-btn">
+                                <i class="fas fa-save me-2"></i>Update Password
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
             {% elif current_user.oidc_id and oidc_enabled %}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Authentication Information</h5>
+            <div class="card mb-4" style="border-radius: 16px; background: rgba(17, 24, 39, 0.8);">
+                <div class="card-header border-bottom" style="background: rgba(21, 128, 61, 0.2);">
+                    <h5 class="mb-0"><i class="fas fa-id-badge me-2" style="color: #10b981;"></i>SSO Authentication</h5>
                 </div>
                 <div class="card-body">
                     <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        Your account uses SSO authentication. To change your password, please update your credentials on the identify provider end.
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="fas fa-info-circle fa-2x"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Single Sign-On Account</h6>
+                                <p class="mb-0">Your account uses SSO authentication. To change your password, please update your credentials on the identity provider end.</p>
+                            </div>
+                        </div>
                     </div>
                     {% if current_user.oidc_provider %}
-                    <p class="text-muted mt-3">
-                        <strong>Identity Provider:</strong> {{ current_user.oidc_provider }}
-                    </p>
+                    <div class="mt-4">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="fas fa-building text-info me-2"></i>
+                            <strong>Identity Provider:</strong>
+                            <span class="badge bg-info ms-2">{{ current_user.oidc_provider }}</span>
+                        </div>
+                    </div>
                     {% endif %}
                     {% if current_user.last_login %}
-                    <p class="text-muted">
-                        <strong>Last Login:</strong> {{ current_user.last_login.strftime('%Y-%m-%d %H:%M:%S') }}
-                    </p>
+                    <div class="d-flex align-items-center mt-3">
+                        <i class="fas fa-calendar-check text-success me-2"></i>
+                        <strong>Last Login:</strong>
+                        <span class="badge bg-dark ms-2">{{ current_user.last_login.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                    </div>
                     {% endif %}
                 </div>
             </div>
             {% endif %}
+        </div>
+
+        <!-- Preferences Tab -->
+        <div class="tab-pane fade" id="preferences" role="tabpanel" aria-labelledby="preferences-tab">
             <!-- Timezone Preferences Card -->
-<div class="card mt-4">
-    <div class="card-header">
-        <h5 class="mb-0">Timezone Preferences</h5>
-    </div>
-    <div class="card-body">
-        <form action="{{ url_for('update_timezone') }}" method="POST">
-            <div class="mb-3">
-                <label for="timezone" class="form-label">Select Your Timezone</label>
-                <select class="form-select bg-dark text-light" name="timezone" id="timezone" required>
-                    {% set current_timezone = current_user.timezone or 'UTC' %}
-                    {% set timezone_groups = {
-                        'North America': [
-                            'America/New_York', 'America/Chicago', 
-                            'America/Denver', 'America/Los_Angeles', 
-                            'America/Anchorage', 'Pacific/Honolulu'
-                        ],
-                        'South America': [
-                            'America/Sao_Paulo', 'America/Buenos_Aires', 
-                            'America/Lima', 'America/Bogota'
-                        ],
-                        'Europe': [
-                            'Europe/London', 'Europe/Paris', 
-                            'Europe/Berlin', 'Europe/Moscow', 
-                            'Europe/Rome', 'Europe/Madrid'
-                        ],
-                        'Asia': [
-                            'Asia/Tokyo', 'Asia/Shanghai', 
-                            'Asia/Dubai', 'Asia/Singapore', 
-                            'Asia/Seoul', 'Asia/Kolkata', 
-                            'Asia/Jerusalem'
-                        ],
-                        'Australia/Oceania': [
-                            'Australia/Sydney', 'Australia/Melbourne', 
-                            'Pacific/Auckland', 'Pacific/Fiji'
-                        ],
-                        'Africa': [
-                            'Africa/Cairo', 'Africa/Johannesburg', 
-                            'Africa/Lagos', 'Africa/Nairobi'
-                        ]
-                    } %}
-                    
-                    <option value="UTC" {% if current_timezone == 'UTC' %}selected{% endif %}>
-                        UTC - Universal Coordinated Time
-                    </option>
-                    
-                    {% for region, timezones in timezone_groups.items() %}
-                    <optgroup label="{{ region }}">
-                        {% for tz in timezones %}
-                        <option value="{{ tz }}" {% if current_timezone == tz %}selected{% endif %}>
-                            {{ tz.replace('_', ' ') }}
-                        </option>
-                        {% endfor %}
-                    </optgroup>
-                    {% endfor %}
-                </select>
-                <div class="form-text text-muted mt-2">
-                    Your local timezone helps us display dates and times accurately for you.
+            <div class="card mb-4" style="border-radius: 16px; background: rgba(17, 24, 39, 0.8);">
+                <div class="card-header border-bottom" style="background: rgba(21, 128, 61, 0.2);">
+                    <h5 class="mb-0"><i class="fas fa-globe me-2" style="color: #10b981;"></i>Timezone</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('update_timezone') }}" method="POST">
+                        <div class="mb-3">
+                            <label for="timezone" class="form-label">Select Your Timezone</label>
+                            <select class="form-select bg-dark text-light" name="timezone" id="timezone" required>
+                                {% set current_timezone = current_user.timezone or 'UTC' %}
+                                {% set timezone_groups = {
+                                    'North America': [
+                                        'America/New_York', 'America/Chicago', 
+                                        'America/Denver', 'America/Los_Angeles', 
+                                        'America/Anchorage', 'Pacific/Honolulu'
+                                    ],
+                                    'South America': [
+                                        'America/Sao_Paulo', 'America/Buenos_Aires', 
+                                        'America/Lima', 'America/Bogota'
+                                    ],
+                                    'Europe': [
+                                        'Europe/London', 'Europe/Paris', 
+                                        'Europe/Berlin', 'Europe/Moscow', 
+                                        'Europe/Rome', 'Europe/Madrid'
+                                    ],
+                                    'Asia': [
+                                        'Asia/Tokyo', 'Asia/Shanghai', 
+                                        'Asia/Dubai', 'Asia/Singapore', 
+                                        'Asia/Seoul', 'Asia/Kolkata', 
+                                        'Asia/Jerusalem'
+                                    ],
+                                    'Australia/Oceania': [
+                                        'Australia/Sydney', 'Australia/Melbourne', 
+                                        'Pacific/Auckland', 'Pacific/Fiji'
+                                    ],
+                                    'Africa': [
+                                        'Africa/Cairo', 'Africa/Johannesburg', 
+                                        'Africa/Lagos', 'Africa/Nairobi'
+                                    ]
+                                } %}
+                                
+                                <option value="UTC" {% if current_timezone == 'UTC' %}selected{% endif %}>
+                                    UTC - Universal Coordinated Time
+                                </option>
+                                
+                                {% for region, timezones in timezone_groups.items() %}
+                                <optgroup label="{{ region }}">
+                                    {% for tz in timezones %}
+                                    <option value="{{ tz }}" {% if current_timezone == tz %}selected{% endif %}>
+                                        {{ tz.replace('_', ' ') }}
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted mt-2">
+                                Selecting the right timezone ensures that dates and times are displayed correctly for your location.
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Timezone
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
-            <div class="d-grid">
-                <button type="submit" class="btn btn-primary">Save Timezone</button>
-            </div>
-        </form>
-    </div>
-</div>
+
             <!-- Default Currency Card -->
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Default Currency</h5>
+            <div class="card mb-4" style="border-radius: 16px; background: rgba(17, 24, 39, 0.8);">
+                <div class="card-header border-bottom" style="background: rgba(21, 128, 61, 0.2);">
+                    <h5 class="mb-0"><i class="fas fa-dollar-sign me-2" style="color: #10b981;"></i>Default Currency</h5>
                 </div>
                 <div class="card-body">
                     <form action="{{ url_for('set_default_currency') }}" method="POST">
@@ -201,38 +294,160 @@
                                 {% endfor %}
                             </select>
                             <div class="form-text text-muted mt-2">
-                                This currency will be pre-selected when creating new expenses.
+                                This currency will be pre-selected when creating new expenses and used for displaying financial summaries.
                             </div>
                         </div>
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-primary">Save Default Currency</button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Default Currency
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
+
             <!-- Email Notification Preferences Card -->
-            <div class="card mt-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Email Notifications</h5>
+            <div class="card mb-4" style="border-radius: 16px; background: rgba(17, 24, 39, 0.8);">
+                <div class="card-header border-bottom" style="background: rgba(21, 128, 61, 0.2);">
+                    <h5 class="mb-0"><i class="fas fa-envelope me-2" style="color: #10b981;"></i>Email Notifications</h5>
                 </div>
                 <div class="card-body">
                     <form action="{{ url_for('update_notification_preferences') }}" method="POST">
-                        <div class="form-check mb-3">
+                        <div class="form-check form-switch mb-3">
                             <input type="checkbox" class="form-check-input" id="monthly_report_enabled" name="monthly_report_enabled" 
                                 {% if current_user.monthly_report_enabled %}checked{% endif %}>
                             <label class="form-check-label" for="monthly_report_enabled">
-                                Send monthly expense reports
+                                Monthly Expense Reports
                             </label>
                             <div class="form-text text-muted mt-1">
                                 Receive an email at the beginning of each month with a summary of your expenses, budget status, and balances.
                             </div>
                         </div>
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-primary">Save Notification Preferences</button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Notification Preferences
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
+        </div>
+
+        <!-- Integrations Tab -->
+        <div class="tab-pane fade" id="integrations" role="tabpanel" aria-labelledby="integrations-tab">
+            <!-- Investment API Settings Card -->
+            {% if investment_tracking_enabled %}
+            <div class="card mb-4" style="border-radius: 16px; background: rgba(17, 24, 39, 0.8);">
+                <div class="card-header border-bottom" style="background: rgba(21, 128, 61, 0.2);">
+                    <h5 class="mb-0"><i class="fas fa-chart-line me-2" style="color: #10b981;"></i>Investment API Settings</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="me-3">
+                            <div style="width: 60px; height: 60px; background: rgba(16, 185, 129, 0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-chart-line" style="font-size: 24px; color: #10b981;"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <h6 class="mb-1">Financial Modeling Prep API</h6>
+                            <p class="text-muted mb-0">Connect with FMP to enable automatic stock price updates and investment tracking.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Current API Status -->
+                    <div class="alert {% if user_api_settings and user_api_settings.fmp_api_key %}alert-success{% else %}alert-warning{% endif %} mb-4">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="fas {% if user_api_settings and user_api_settings.fmp_api_key %}fa-check-circle{% else %}fa-exclamation-triangle{% endif %} fa-lg"></i>
+                            </div>
+                            <div>
+                                {% if user_api_settings and user_api_settings.fmp_api_key %}
+                                    <h6 class="mb-1">API Connected</h6>
+                                    <p class="mb-0 small">Last used: {{ user_api_settings.last_used.strftime('%Y-%m-%d %H:%M') if user_api_settings.last_used else 'Never' }}</p>
+                                {% else %}
+                                    <h6 class="mb-1">API Not Connected</h6>
+                                    <p class="mb-0 small">Investment tracking features will have limited functionality until connected.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- API Key Form -->
+                    <form method="POST" action="{{ url_for('update_investment_api') }}" id="apiKeyForm" class="mt-4">
+                        <div class="mb-4">
+                            <label for="api_key" class="form-label">Financial Modeling Prep API Key</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-dark border-secondary"><i class="fas fa-key"></i></span>
+                                <input type="password" class="form-control bg-dark text-light" id="api_key" name="api_key" 
+                                       placeholder="Enter your FMP API key" required>
+                                <button class="btn btn-outline-secondary" type="button" id="toggleApiKey">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-outline-info" type="button" id="testApiKey">
+                                    <i class="fas fa-vial"></i> Test
+                                </button>
+                            </div>
+                            <div id="apiKeyHelp" class="form-text text-muted mt-2">
+                                Your API key will be encrypted before storage. <a href="https://financialmodelingprep.com/developer" target="_blank" class="text-info">Get a key</a>
+                            </div>
+                            <div id="apiKeyStatus" class="mt-2" style="display: none;"></div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="confirmApiKey" required>
+                                <label class="form-check-label text-muted" for="confirmApiKey">
+                                    I understand that using the Financial Modeling Prep API may incur costs depending on my subscription plan
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            {% if user_api_settings and user_api_settings.fmp_api_key %}
+                            <button type="button" class="btn btn-outline-danger" id="clearApiKey">
+                                <i class="fas fa-trash me-2"></i>Clear API Key
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-sync-alt me-2"></i>Update API Key
+                            </button>
+                            {% else %}
+                            <div></div> <!-- Empty div for spacing -->
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-plus-circle me-2"></i>Save API Key
+                            </button>
+                            {% endif %}
+                        </div>
+                    </form>
+                    
+                    {% if not user_api_settings or not user_api_settings.fmp_api_key %}
+                    <div class="card bg-dark mt-4">
+                        <div class="card-body">
+                            <h6 class="d-flex align-items-center mb-3">
+                                <i class="fas fa-lightbulb text-warning me-2"></i>
+                                What can I do with an API key?
+                            </h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <ul class="list-unstyled mb-0">
+                                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i> Create investment portfolios</li>
+                                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i> Track stocks and funds</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <ul class="list-unstyled mb-0">
+                                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i> Automatic price updates</li>
+                                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i> View performance metrics</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Here you can add other integration cards as needed -->
         </div>
     </div>
 </div>
@@ -247,12 +462,22 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (colorPicker && colorHex) {
         colorPicker.addEventListener('input', function() {
-            colorHex.value = this.value;
+            // Remove # from the hex value for the input field
+            colorHex.value = this.value.replace('#', '');
             
             // Update user avatar preview color in real-time
             const userAvatar = document.querySelector('.user-avatar');
-            if (userAvatar) {
-                userAvatar.style.backgroundColor = this.value;
+            const previewAvatar = document.querySelector('.preview-avatar');
+            const previewBadge = document.querySelector('.preview-badge');
+            const previewPill = document.querySelector('.preview-pill');
+            
+            if (userAvatar) userAvatar.style.backgroundColor = this.value;
+            if (previewAvatar) previewAvatar.style.backgroundColor = this.value;
+            if (previewBadge) previewBadge.style.backgroundColor = this.value;
+            if (previewPill) {
+                previewPill.style.borderColor = this.value;
+                const icon = previewPill.querySelector('i');
+                if (icon) icon.style.color = this.value;
             }
         });
     }
@@ -286,6 +511,145 @@ document.addEventListener('DOMContentLoaded', function() {
     if (newPassword && confirmPassword) {
         newPassword.addEventListener('input', validatePasswords);
         confirmPassword.addEventListener('input', validatePasswords);
+    }
+    
+    // Password strength meter
+    if (newPassword) {
+        const strengthMeter = document.getElementById('password-strength-meter');
+        const strengthBar = document.getElementById('password-strength-bar');
+        const strengthText = document.getElementById('password-strength-text');
+        
+        newPassword.addEventListener('input', function() {
+            if (this.value.length > 0) {
+                strengthMeter.style.display = 'block';
+                strengthText.style.display = 'block';
+                
+                // Simple password strength calculation
+                let strength = 0;
+                if (this.value.length > 6) strength += 20;
+                if (this.value.length > 10) strength += 20;
+                if (/[A-Z]/.test(this.value)) strength += 20;
+                if (/[0-9]/.test(this.value)) strength += 20;
+                if (/[^A-Za-z0-9]/.test(this.value)) strength += 20;
+                
+                // Update strength meter
+                strengthBar.style.width = strength + '%';
+                
+                if (strength < 40) {
+                    strengthBar.className = 'progress-bar bg-danger';
+                    strengthText.textContent = 'Weak password';
+                    strengthText.className = 'mt-1 text-danger small';
+                } else if (strength < 80) {
+                    strengthBar.className = 'progress-bar bg-warning';
+                    strengthText.textContent = 'Moderate password';
+                    strengthText.className = 'mt-1 text-warning small';
+                } else {
+                    strengthBar.className = 'progress-bar bg-success';
+                    strengthText.textContent = 'Strong password';
+                    strengthText.className = 'mt-1 text-success small';
+                }
+            } else {
+                strengthMeter.style.display = 'none';
+                strengthText.style.display = 'none';
+            }
+        });
+    }
+    
+    // Investment API Key Management
+    const toggleApiBtn = document.getElementById('toggleApiKey');
+    const apiKeyInput = document.getElementById('api_key');
+    const testApiBtn = document.getElementById('testApiKey');
+    const statusDiv = document.getElementById('apiKeyStatus');
+    const clearApiBtn = document.getElementById('clearApiKey');
+    
+    if (toggleApiBtn && apiKeyInput) {
+        toggleApiBtn.addEventListener('click', function() {
+            if (apiKeyInput.type === 'password') {
+                apiKeyInput.type = 'text';
+                toggleApiBtn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+            } else {
+                apiKeyInput.type = 'password';
+                toggleApiBtn.innerHTML = '<i class="fas fa-eye"></i>';
+            }
+        });
+    }
+    
+    if (testApiBtn && apiKeyInput && statusDiv) {
+        testApiBtn.addEventListener('click', function() {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                showStatus('Please enter an API key to test', 'warning');
+                return;
+            }
+            
+            // Update button to show loading state
+            testApiBtn.disabled = true;
+            testApiBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+            
+            // Send AJAX request to test the API key
+            const formData = new FormData();
+            formData.append('api_key', apiKey);
+            
+            fetch('/test_investment_api', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus(data.message, 'success');
+                } else {
+                    showStatus(data.message, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showStatus('Network error when testing API key', 'danger');
+            })
+            .finally(() => {
+                // Reset button state
+                testApiBtn.disabled = false;
+                testApiBtn.innerHTML = '<i class="fas fa-vial"></i> Test';
+            });
+        });
+    }
+    
+    if (clearApiBtn) {
+        clearApiBtn.addEventListener('click', function() {
+            if (confirm('Are you sure you want to clear your API key? This will disable investment tracking features.')) {
+                if (apiKeyInput) apiKeyInput.value = '';
+                const confirmCheck = document.getElementById('confirmApiKey');
+                if (confirmCheck) confirmCheck.checked = true;
+                const apiForm = document.getElementById('apiKeyForm');
+                if (apiForm) apiForm.submit();
+            }
+        });
+    }
+    
+    // Helper function to show status message
+    function showStatus(message, type) {
+        if (!statusDiv) return;
+        
+        statusDiv.className = `alert alert-${type}`;
+        statusDiv.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'times-circle'} me-2"></i>${message}`;
+        statusDiv.style.display = 'block';
+        
+        // Auto-hide success messages after 5 seconds
+        if (type === 'success') {
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+    }
+    
+    // Auto-activate tab based on hash in URL if present
+    const hash = window.location.hash;
+    if (hash) {
+        const tabId = hash.replace('#', '');
+        const tab = document.querySelector(`#profileTabs button[data-bs-target="#${tabId}"]`);
+        if (tab) {
+            new bootstrap.Tab(tab).show();
+        }
     }
 });
 </script>

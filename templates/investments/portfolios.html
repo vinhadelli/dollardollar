@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Manage Portfolios</h1>
+        <button type="button" class="btn btn-primary" onclick="window.openAddPortfolioSlidePanel()">
+            <i class="fas fa-plus me-1"></i>New Portfolio
+        </button>
+    </div>
+    
+    <!-- Portfolios List -->
+    <div class="row">
+        {% for portfolio in portfolios %}
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{{ portfolio.name }}</h5>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-link text-light p-0" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('portfolio_details', portfolio_id=portfolio.id) }}">
+                                    <i class="fas fa-eye me-2"></i>View Details
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="openEditPortfolioSlidePanel('{{ portfolio.id }}', '{{ portfolio.name }}', '{{ portfolio.description }}', '{{ portfolio.account_id or '' }}')">
+                                    <i class="fas fa-edit me-2"></i>Edit Portfolio
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item text-danger" href="#" onclick="openDeletePortfolioSlidePanel('{{ portfolio.id }}', '{{ portfolio.name }}')">
+                                    <i class="fas fa-trash-alt me-2"></i>Delete Portfolio
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if portfolio.description %}
+                    <p class="text-muted mb-3">{{ portfolio.description }}</p>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Holdings:</span>
+                        <span>{{ portfolio.investments|length }}</span>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Total Value:</span>
+                        <span>${{ "%.2f"|format(portfolio.calculate_total_value()) }}</span>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Cost Basis:</span>
+                        <span>${{ "%.2f"|format(portfolio.calculate_total_cost()) }}</span>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">Gain/Loss:</span>
+                        {% set gain_loss = portfolio.calculate_gain_loss() %}
+                        {% set gain_loss_pct = portfolio.calculate_gain_loss_percentage() %}
+                        <span class="{% if gain_loss >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            ${{ "%.2f"|format(gain_loss) }} ({{ "%.2f"|format(gain_loss_pct) }}%)
+                        </span>
+                    </div>
+                    
+                    {% if portfolio.account %}
+                    <div class="mt-3 small text-muted">
+                        <i class="fas fa-university me-1"></i>Linked to {{ portfolio.account.name }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-transparent border-top">
+                    <a href="{{ url_for('portfolio_details', portfolio_id=portfolio.id) }}" class="btn btn-outline-light w-100">
+                        <i class="fas fa-chart-line me-1"></i>View Portfolio
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <div class="mb-3">
+                        <i class="fas fa-briefcase fa-4x text-muted"></i>
+                    </div>
+                    <h4 class="mb-3">No Portfolios Yet</h4>
+                    <p class="text-muted mb-4">Create your first portfolio to start tracking your investments.</p>
+                    <button type="button" class="btn btn-primary" onclick="openAddPortfolioSlidePanel()">
+                        <i class="fas fa-plus me-1"></i>Create Portfolio
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Slide panel overlay -->
+<div id="slide-panel-overlay" class="slide-panel-overlay"></div>
+
+<!-- Add Portfolio Slide Panel -->
+<div id="addPortfolioPanel" class="slide-panel">
+    <div class="slide-panel-header">
+        <h4 class="mb-0">
+            <i class="fas fa-plus-circle me-2" style="color: #0ea5e9"></i>
+            Add New Portfolio
+        </h4>
+        <button type="button" class="btn-close btn-close-white" onclick="closeSlidePanel('addPortfolioPanel')"></button>
+    </div>
+    <div class="slide-panel-content">
+        <form method="POST" action="{{ url_for('add_portfolio') }}" class="py-3">
+            <div class="mb-4">
+                <label for="name" class="form-label">Portfolio Name</label>
+                <input type="text" class="form-control" id="name" name="name" required>
+            </div>
+            <div class="mb-4">
+                <label for="description" class="form-label">Description (Optional)</label>
+                <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+            </div>
+            <div class="mb-4">
+                <label for="account_id" class="form-label">Link to Account (Optional)</label>
+                <select class="form-select" id="account_id" name="account_id">
+                    <option value="">None</option>
+                    {% for account in accounts %}
+                    <option value="{{ account.id }}">{{ account.name }} ({{ account.type }})</option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">Linking to an account helps track investments against your account balance.</div>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>Create Portfolio
+                </button>
+                <button type="button" class="btn btn-outline-secondary" onclick="closeSlidePanel('addPortfolioPanel')">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Portfolio Slide Panel -->
+<div id="editPortfolioPanel" class="slide-panel">
+    <div class="slide-panel-header">
+        <h4 class="mb-0">
+            <i class="fas fa-edit me-2" style="color: #0ea5e9"></i>
+            Edit Portfolio
+        </h4>
+        <button type="button" class="btn-close btn-close-white" onclick="closeSlidePanel('editPortfolioPanel')"></button>
+    </div>
+    <div class="slide-panel-content">
+        <form method="POST" action="{{ url_for('edit_portfolio', portfolio_id=0) }}" id="editPortfolioForm" class="py-3">
+            <div class="mb-4">
+                <label for="edit_name" class="form-label">Portfolio Name</label>
+                <input type="text" class="form-control" id="edit_name" name="name" required>
+            </div>
+            <div class="mb-4">
+                <label for="edit_description" class="form-label">Description (Optional)</label>
+                <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
+            </div>
+            <div class="mb-4">
+                <label for="edit_account_id" class="form-label">Link to Account (Optional)</label>
+                <select class="form-select" id="edit_account_id" name="account_id">
+                    <option value="">None</option>
+                    {% for account in accounts %}
+                    <option value="{{ account.id }}">{{ account.name }} ({{ account.type }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>Save Changes
+                </button>
+                <button type="button" class="btn btn-outline-secondary" onclick="closeSlidePanel('editPortfolioPanel')">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Portfolio Slide Panel -->
+<div id="deletePortfolioPanel" class="slide-panel">
+    <div class="slide-panel-header">
+        <h4 class="mb-0">
+            <i class="fas fa-trash-alt me-2" style="color: #ef4444"></i>
+            Delete Portfolio
+        </h4>
+        <button type="button" class="btn-close btn-close-white" onclick="closeSlidePanel('deletePortfolioPanel')"></button>
+    </div>
+    <div class="slide-panel-content">
+        <div class="py-4">
+            <p>Are you sure you want to delete the portfolio <strong id="delete-portfolio-name"></strong>?</p>
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                This will permanently delete all investments and transaction history associated with this portfolio.
+            </div>
+            <form method="POST" action="{{ url_for('delete_portfolio', portfolio_id=0) }}" id="deletePortfolioForm">
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash-alt me-1"></i>Delete Portfolio
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="closeSlidePanel('deletePortfolioPanel')">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Function to open slide panels
+        window.openAddPortfolioSlidePanel = function() {
+            // Get the panel and overlay
+            const panel = document.getElementById('addPortfolioPanel');
+            const overlay = document.getElementById('slide-panel-overlay');
+            
+            // Show the panel and overlay
+            if (panel) panel.classList.add('active');
+            if (overlay) overlay.classList.add('active');
+            
+            // Prevent body scrolling
+            document.body.style.overflow = 'hidden';
+        };
+        
+        window.openEditPortfolioSlidePanel = function(portfolioId, name, description, accountId) {
+            // Update form fields
+            document.getElementById('edit_name').value = name;
+            document.getElementById('edit_description').value = description || '';
+            
+            // Update account selection
+            const accountSelect = document.getElementById('edit_account_id');
+            accountSelect.value = accountId || '';
+            
+            // Update form action URL
+            const form = document.getElementById('editPortfolioForm');
+            form.action = form.action.replace(/\/\d+$/, `/${portfolioId}`);
+            
+            // Show the panel
+            const panel = document.getElementById('editPortfolioPanel');
+            const overlay = document.getElementById('slide-panel-overlay');
+            
+            if (panel) panel.classList.add('active');
+            if (overlay) overlay.classList.add('active');
+            
+            // Prevent body scrolling
+            document.body.style.overflow = 'hidden';
+        };
+        
+        window.openDeletePortfolioSlidePanel = function(portfolioId, name) {
+            // Update confirmation text
+            document.getElementById('delete-portfolio-name').textContent = name;
+            
+            // Update form action URL
+            const form = document.getElementById('deletePortfolioForm');
+            form.action = form.action.replace(/\/\d+$/, `/${portfolioId}`);
+            
+            // Show the panel
+            const panel = document.getElementById('deletePortfolioPanel');
+            const overlay = document.getElementById('slide-panel-overlay');
+            
+            if (panel) panel.classList.add('active');
+            if (overlay) overlay.classList.add('active');
+            
+            // Prevent body scrolling
+            document.body.style.overflow = 'hidden';
+        };
+        
+        window.closeSlidePanel = function(panelId) {
+            // Get the panel
+            const panel = document.getElementById(panelId);
+            const overlay = document.getElementById('slide-panel-overlay');
+            
+            // Hide the panel and overlay
+            if (panel) panel.classList.remove('active');
+            if (overlay) overlay.classList.remove('active');
+            
+            // Re-enable body scrolling
+            document.body.style.overflow = '';
+        };
+        
+        // Add event listener to close panels when clicking on overlay
+        const overlay = document.getElementById('slide-panel-overlay');
+        if (overlay) {
+            overlay.addEventListener('click', function() {
+                // Close all active panels
+                document.querySelectorAll('.slide-panel.active').forEach(function(panel) {
+                    panel.classList.remove('active');
+                });
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            });
+        }
+    });
+</script>
+{% endblock %}

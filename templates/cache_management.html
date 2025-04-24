@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>API Cache Management</h1>
+        <a href="{{ url_for('investments') }}" class="btn btn-outline-light">
+            <i class="fas fa-chart-line me-1"></i>Back to Investments
+        </a>
+    </div>
+    
+    <!-- Cache Overview Card -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">FMP API Cache Statistics</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <div class="border rounded p-3 text-center h-100">
+                        <div class="mb-2"><i class="fas fa-bolt fa-2x text-primary"></i></div>
+                        <h3 id="hit-count">{{ stats.hits }}</h3>
+                        <p class="text-muted mb-0">Cache Hits</p>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="border rounded p-3 text-center h-100">
+                        <div class="mb-2"><i class="fas fa-times fa-2x text-warning"></i></div>
+                        <h3 id="miss-count">{{ stats.misses }}</h3>
+                        <p class="text-muted mb-0">Cache Misses</p>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="border rounded p-3 text-center h-100">
+                        <div class="mb-2"><i class="fas fa-server fa-2x text-info"></i></div>
+                        <h3 id="api-calls">{{ stats.api_calls }}</h3>
+                        <p class="text-muted mb-0">API Calls Made</p>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="border rounded p-3 text-center h-100">
+                        <div class="mb-2"><i class="fas fa-tachometer-alt fa-2x text-success"></i></div>
+                        <h3 id="hit-rate">{{ stats.hit_rate }}</h3>
+                        <p class="text-muted mb-0">Cache Hit Rate</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-md-6 mb-3">
+                    <div class="border rounded p-3 text-center h-100">
+                        <div class="mb-2"><i class="fas fa-coins fa-2x text-warning"></i></div>
+                        <h3 id="saved-calls">{{ stats.api_calls_saved }}</h3>
+                        <p class="text-muted mb-0">API Calls Saved</p>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="border rounded p-3 text-center h-100">
+                        <div class="mb-2"><i class="fas fa-clock fa-2x text-primary"></i></div>
+                        <h3 id="cache-expiry">{{ cache_expiry }}</h3>
+                        <p class="text-muted mb-0">Cache Expiry Time</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="alert alert-info mt-4">
+                <i class="fas fa-info-circle me-2"></i>
+                The FMP API has a limit of <strong>250 calls per day</strong>. Using the cache has saved you <strong>{{ stats.api_calls_saved }}</strong> API calls so far.
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cache Management Card -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Cache Management</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Clear Expired Cache</h5>
+                            <p class="card-text">Remove cache entries that have passed their expiry time.</p>
+                            <form method="POST" action="{{ url_for('clear_expired_cache') }}">
+                                <button type="submit" class="btn btn-warning">
+                                    <i class="fas fa-broom me-1"></i>Clear Expired
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Clear All Cache</h5>
+                            <p class="card-text">Remove all cached data. Use this if you need fresh data from the API.</p>
+                            <form method="POST" action="{{ url_for('clear_all_cache') }}">
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="fas fa-trash me-1"></i>Clear All
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <h5>Cached Files</h5>
+                {% if cache_files %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Cache Key</th>
+                                <th>Size</th>
+                                <th>Last Modified</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for file in cache_files %}
+                            <tr>
+                                <td>{{ file.key }}</td>
+                                <td>{{ file.size }}</td>
+                                <td>{{ file.modified }}</td>
+                                <td>
+                                    {% if file.expired %}
+                                    <span class="badge bg-danger">Expired</span>
+                                    {% else %}
+                                    <span class="badge bg-success">Valid</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    No cache files found.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

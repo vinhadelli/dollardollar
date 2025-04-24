@@ -1,0 +1,219 @@
+/* Investment Tab Specific Styles */
+.chart-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    border-radius: 0.375rem;
+}
+
+/* Investment period button styles */
+.investment-period-btn {
+    font-size: 0.85rem;
+    padding: 0.25rem 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.investment-period-btn.btn-primary {
+    background: linear-gradient(135deg, #10b981, #34d399);
+    border: none;
+    box-shadow: 0 2px 5px rgba(16, 185, 129, 0.3);
+}
+
+/* Card styling for investment tab */
+#investment .card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-radius: 12px;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));
+}
+
+#investment .card-header {
+    background: rgba(15, 23, 42, 0.7);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    padding: 1rem;
+}
+
+#investment .card-body {
+    padding: 1.25rem;
+}
+
+#investment .card-footer {
+    background: rgba(15, 23, 42, 0.7);
+    border-top: 1px solid rgba(148, 163, 184, 0.2);
+    padding: 1rem;
+}
+
+/* Investment metrics */
+#investment .metric-card {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: rgba(15, 23, 42, 0.3);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    transition: transform 0.3s ease;
+}
+
+#investment .metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+}
+
+.gauge-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+}
+
+.gauge-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: white;
+}
+
+.gauge-info {
+    margin-top: 0.5rem;
+    text-align: center;
+    font-size: 0.75rem;
+}
+
+/* Table styles */
+#investment .table {
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 0;
+}
+
+#investment .table thead th {
+    color: rgba(255, 255, 255, 0.6);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+#investment .table tbody tr {
+    transition: background-color 0.2s;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#investment .table tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+#investment .table td, 
+#investment .table th {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+}
+
+/* Legend styles */
+.legend-container {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 1rem;
+    padding-right: 0.5rem;
+}
+
+.legend-container::-webkit-scrollbar {
+    width: 5px;
+}
+
+.legend-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.legend-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+}
+
+/* No data message */
+.no-data-message {
+    text-align: center;
+    padding: 1.5rem;
+    background-color: rgba(15, 23, 42, 0.5);
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+}
+
+/* Insights card styles */
+#investmentInsightsCard .card-body {
+    padding: 1.25rem;
+}
+
+#investmentInsightsCard .card {
+    background-color: rgba(15, 23, 42, 0.5);
+    transition: transform 0.2s ease;
+}
+
+#investmentInsightsCard .card:hover {
+    transform: translateY(-2px);
+}
+
+/* Progress bar styling */
+.progress {
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    transition: width 0.6s ease;
+}
+
+/* Toast styling */
+.toast-container {
+    z-index: 1070;
+}
+
+.toast {
+    background-color: rgba(15, 23, 42, 0.9);
+    backdrop-filter: blur(5px);
+}
+
+/* Refresh button */
+#refreshInvestmentsBtn {
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+#refreshInvestmentsBtn:hover {
+    background-color: rgba(16, 185, 129, 0.3) !important;
+    transform: translateY(-2px);
+}
+
+#refreshInvestmentsBtn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 767.98px) {
+    #investment .row > div {
+        margin-bottom: 1rem;
+    }
+    
+    #investment .card-header {
+        padding: 0.75rem;
+    }
+    
+    #investment .card-body {
+        padding: 1rem;
+    }
+    
+    .gauge-value {
+        font-size: 1.25rem;
+    }
+    
+    .chart-container {
+        height: 250px !important;
+    }
+}
