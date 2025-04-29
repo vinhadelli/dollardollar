@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
-    <meta name="dev-signature" content="29a41de6a866d56c36aba5159f45257c">
+<meta name="dev-signature" content="29a41de6a866d56c36aba5159f45257c">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,19 +22,23 @@
             --header-height: 60px;
             --transition-speed: 0.3s;
         }
+
         .header-logo {
             margin-right: 10px;
             vertical-align: middle;
         }
+
         body {
             background: linear-gradient(to bottom right, var(--primary-green), var(--bg-dark), var(--bg-darker));
             color: white;
             min-height: 100vh;
             overflow-x: hidden;
         }
+
         *:hover {
-                transition: color 0.2s ease, background-color 0.2s ease;
-            }
+            transition: color 0.2s ease, background-color 0.2s ease;
+        }
+
         /* Money Symbol Background Grid */
         .money-grid {
             position: fixed;
@@ -50,7 +55,7 @@
             z-index: 0;
             font-size: 2rem;
         }
-        
+
         /* Header Styling */
         .app-header {
             position: fixed;
@@ -66,7 +71,7 @@
             padding: 0 1rem;
             z-index: 1030;
         }
-        
+
         .header-brand {
             background: linear-gradient(to right, #86efac, #fbbf24);
             -webkit-background-clip: text;
@@ -77,18 +82,18 @@
             margin: 0 auto;
             text-align: center;
         }
-        
+
         /* Auth pages have centered branding */
         .auth-page .header-brand {
             margin: 0 auto;
         }
-        
+
         /* App pages have left-aligned branding with space for menu */
         .app-page .header-brand {
             margin-left: 1rem;
             margin-right: auto;
         }
-        
+
         /* Sidebar Styling */
         .sidebar {
             position: fixed;
@@ -103,86 +108,87 @@
             overflow-x: hidden;
             box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
             transform: translateX(-100%);
-            
+
             /* Add these flex properties */
             display: flex;
             flex-direction: column;
-            
+
             /* Ensure it takes full height */
             height: calc(100vh - var(--header-height));
         }
-        
+
         .sidebar.show {
             transform: translateX(0);
         }
-        
+
         /* Mini Sidebar Styles */
         .sidebar.mini {
             width: var(--sidebar-mini-width);
             overflow: hidden;
         }
-        
+
         .sidebar.mini .sidebar-user {
             padding: 1rem 0;
             justify-content: center;
         }
-        
+
         .sidebar.mini .user-details {
             display: none;
         }
-        
+
         .sidebar.mini .sidebar-collapse-btn {
             display: none;
         }
-        
+
         .sidebar-mini-toggle {
             display: none;
             text-align: center;
             padding: 10px 0;
         }
-        
+
         .sidebar.mini .sidebar-mini-toggle {
             display: block;
         }
-        
+
         /* Navigation items in mini mode */
         .sidebar.mini .nav-text,
         .sidebar.mini .nav-caret {
             display: none;
         }
-        
+
         .sidebar.mini .nav-icon {
             margin-right: 0;
             width: 100%;
             text-align: center;
             font-size: 1.25rem;
         }
-        
+
         .sidebar.mini .nav-link {
             padding: 0.75rem 0;
             justify-content: center;
         }
-        
+
         /* Main navigation */
         .sidebar-nav {
             list-style: none;
             padding: 0;
             margin: 1rem 0;
-            
+
             /* Change these properties */
             flex: 1;
             overflow-y: auto;
-            min-height: 0; /* Important for Firefox */
-            
+            min-height: 0;
+            /* Important for Firefox */
+
             /* Keep these */
             display: flex;
             flex-direction: column;
         }
-        
+
         .sidebar-nav .nav-item {
             margin-bottom: 0;
         }
-        
+
         .sidebar-nav .nav-link {
             display: flex;
             align-items: center;
@@ -192,46 +198,46 @@
             transition: all 0.2s;
             border-left: 3px solid transparent;
         }
-        
+
         .sidebar-nav .nav-link:hover {
             background-color: rgba(255, 255, 255, 0.1);
             color: var(--accent-gold);
             border-left-color: var(--accent-gold);
         }
-        
+
         .sidebar-nav .nav-link.active {
             background-color: rgba(21, 128, 61, 0.3);
             color: var(--accent-gold);
             border-left-color: var(--accent-gold);
         }
-        
+
         .sidebar-nav .nav-icon {
             font-size: 1.1rem;
             width: 25px;
             text-align: center;
             margin-right: 1rem;
         }
-        
+
         .sidebar-nav .nav-text {
             opacity: 1;
             transition: opacity var(--transition-speed);
         }
-        
+
         /* Submenu styling */
-        .nav-section > a {
+        .nav-section>a {
             position: relative;
         }
-        
+
         .nav-caret {
             position: absolute;
             right: 15px;
             transition: transform 0.3s;
         }
-        
+
         .nav-link:not(.collapsed) .nav-caret i {
             transform: rotate(180deg);
         }
-        
+
         .nav-submenu {
             list-style: none;
             padding-left: 0;
@@ -239,21 +245,21 @@
             background-color: rgba(0, 0, 0, 0.15);
             border-left: 3px solid rgba(255, 255, 255, 0.1);
         }
-        
+
         .nav-submenu .nav-link {
             padding-left: 3.25rem;
             font-size: 0.95rem;
         }
-        
+
         .sidebar.mini .nav-submenu {
             display: none !important;
         }
-        
+
         /* Hover tooltips for mini sidebar */
         .sidebar.mini .nav-item {
             position: relative;
         }
-        
+
         .sidebar.mini .nav-item:hover::after {
             content: attr(data-title);
             position: absolute;
@@ -269,14 +275,14 @@
             font-size: 0.8rem;
             opacity: 0.9;
         }
-        
+
         /* More compact vertical spacing */
         .sidebar-section-divider {
             height: 1px;
             margin: 0.5rem 1rem;
             background-color: rgba(255, 255, 255, 0.1);
         }
-        
+
         /* User profile in sidebar */
         .sidebar-user {
             display: flex;
@@ -285,7 +291,7 @@
             margin-bottom: 0.5rem;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
+
         .user-avatar {
             width: 40px;
             height: 40px;
@@ -299,23 +305,27 @@
             margin-right: 12px;
             flex-shrink: 0;
         }
+
         .user-details:hover .user-name {
-            color: var(--accent-gold); /* Use accent color for hover state */
+            color: var(--accent-gold);
+            /* Use accent color for hover state */
         }
 
         .user-details:hover .user-email {
-            color: rgba(255, 215, 0, 0.7); /* Slightly transparent gold for email */
+            color: rgba(255, 215, 0, 0.7);
+            /* Slightly transparent gold for email */
         }
+
         .user-details {
             overflow: hidden;
         }
-        
+
         .user-name {
             font-weight: bold;
             margin-bottom: 2px;
             color: white;
         }
-        
+
         .user-email {
             font-size: 0.8rem;
             color: rgba(255, 255, 255, 0.7);
@@ -324,12 +334,12 @@
             text-overflow: ellipsis;
             max-width: 170px;
         }
-        
+
         /* Sidebar sections */
         .sidebar-section {
             margin-top: 1rem;
         }
-        
+
         .sidebar-section-title {
             padding: 0.5rem 1.5rem;
             font-size: 0.75rem;
@@ -337,10 +347,13 @@
             color: rgba(255, 255, 255, 0.5);
             letter-spacing: 1px;
         }
+
         .sidebar-nav .nav-link.active {
             background-color: rgba(21, 128, 61, 0.3);
-            color: var(--accent-gold); /* Ensure visibility of active link */
+            color: var(--accent-gold);
+            /* Ensure visibility of active link */
         }
+
         .slide-panel .slide-panel-header:hover {
             background-color: rgba(0, 0, 0, 0.3);
         }
@@ -348,14 +361,17 @@
         .slide-panel .slide-panel-header:hover h4 {
             color: var(--accent-gold);
         }
+
         .sidebar-logout {
             /* Remove margin-top: auto */
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             padding-top: 0.5rem;
-            
+
             /* Add these properties */
-            position: relative; /* Not using sticky to ensure it's always at the bottom */
-            margin-top: auto; /* Push it to the bottom of the flex container */
+            position: relative;
+            /* Not using sticky to ensure it's always at the bottom */
+            margin-top: auto;
+            /* Push it to the bottom of the flex container */
             background-color: rgba(17, 24, 39, 0.95);
             box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
             z-index: 5;
@@ -371,18 +387,21 @@
         }
 
         ::-webkit-scrollbar-track {
-            background: #111827;  /* Dark blue-black to match your UI background */
+            background: #111827;
+            /* Dark blue-black to match your UI background */
             border-radius: 4px;
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #1e293b;  /* Slightly lighter dark blue */
+            background: #1e293b;
+            /* Slightly lighter dark blue */
             border-radius: 4px;
             transition: background 0.3s ease;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: #2d3748;  /* Even lighter on hover, but still dark */
+            background: #2d3748;
+            /* Even lighter on hover, but still dark */
         }
 
         ::-webkit-scrollbar-corner {
@@ -397,8 +416,10 @@
 
         /* For Edge and IE */
         body {
-            -ms-overflow-style: none; /* IE and Edge */
-            scrollbar-width: thin; /* Firefox */
+            -ms-overflow-style: none;
+            /* IE and Edge */
+            scrollbar-width: thin;
+            /* Firefox */
         }
 
         /* Alternative styling for containers with scrollable content */
@@ -422,11 +443,13 @@
             border-radius: 4px;
         }
 
-        pre::-webkit-scrollbar, .modal-body::-webkit-scrollbar, .dropdown-menu::-webkit-scrollbar {
+        pre::-webkit-scrollbar,
+        .modal-body::-webkit-scrollbar,
+        .dropdown-menu::-webkit-scrollbar {
             width: 8px;
             height: 8px;
-        }        
-        
+        }
+
         /* Toggle button */
         .sidebar-toggle {
             background: none;
@@ -437,10 +460,11 @@
             padding: 0.5rem;
             transition: all 0.3s;
         }
-        
+
         .sidebar-toggle:hover {
             transform: scale(1.1);
         }
+
         .sidebar.mini .sidebar-logout {
             padding: 0.5rem 0;
             justify-content: center;
@@ -451,22 +475,23 @@
             padding: 0.5rem 0;
             margin-bottom: 0;
         }
+
         .sidebar-toggle .fa-bars {
             display: block;
         }
-        
+
         .sidebar-toggle .fa-times {
             display: none;
         }
-        
+
         .sidebar-toggle.active .fa-bars {
             display: none;
         }
-        
+
         .sidebar-toggle.active .fa-times {
             display: block;
         }
-        
+
         /* Main content area */
         .main-content {
             margin-top: var(--header-height);
@@ -475,18 +500,19 @@
             z-index: 1;
             transition: margin-left var(--transition-speed);
         }
-        
+
         .main-content.sidebar-open {
             margin-left: var(--sidebar-width);
         }
-        
+
         .main-content.sidebar-mini-open {
             margin-left: var(--sidebar-mini-width);
         }
-        
+
         /* Center content for auth pages */
         .auth-page .main-content {
-            display: block; /* Remove flexbox behavior */
+            display: block;
+            /* Remove flexbox behavior */
             min-height: calc(100vh - var(--header-height));
             padding-top: 5rem;
         }
@@ -499,7 +525,8 @@
             color: #adb5bd;
         }
 
-        .oidc-divider-text:before, .oidc-divider-text:after {
+        .oidc-divider-text:before,
+        .oidc-divider-text:after {
             content: '';
             position: absolute;
             top: 50%;
@@ -514,28 +541,30 @@
 
         .oidc-divider-text:after {
             left: 100%;
-        }            
+        }
 
-        
+
         /* Media queries for responsive behavior */
         @media (min-width: 992px) {
+
             /* Desktop behavior */
             .sidebar.show {
                 transform: translateX(0);
             }
-            
+
             /* Main content adjusts when sidebar is visible */
             .main-content.sidebar-open {
                 margin-left: var(--sidebar-width);
             }
         }
-        
+
         @media (max-width: 991.98px) {
+
             /* Mobile behavior */
             .main-content {
                 margin-left: 0;
             }
-            
+
             .sidebar-backdrop {
                 position: fixed;
                 top: 0;
@@ -546,12 +575,12 @@
                 z-index: 1010;
                 display: none;
             }
-            
+
             .sidebar-backdrop.show {
                 display: block;
             }
         }
-        
+
         /* Dark theme card and form styles */
         .card {
             background-color: rgba(17, 24, 39, 0.8);
@@ -559,28 +588,29 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             backdrop-filter: blur(8px);
         }
-        
+
         .card-header {
             background-color: rgba(21, 128, 61, 0.3);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             color: white;
         }
-        
+
         .btn-primary {
             background-color: var(--primary-green);
             border-color: var(--primary-green);
         }
-        
+
         .btn-primary:hover {
             background-color: var(--dark-green);
             border-color: var(--dark-green);
         }
-        
+
         .form-control {
             background-color: #2d2d2d !important;
             border: 1px solid #444;
             color: white !important;
         }
+
         .split-toggle {
             cursor: pointer;
             color: #0ea5e9;
@@ -601,8 +631,15 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         /* Style for the list group inside the split details */
@@ -668,33 +705,33 @@
         .category-split-indicator .badge {
             font-size: 0.7em;
             padding: 0.25em 0.4em;
-}
-        
+        }
+
         .form-control:focus {
             background-color: #333 !important;
             border-color: var(--accent-gold);
             box-shadow: 0 0 0 0.25rem rgba(255, 215, 0, 0.25);
         }
-        
+
         /* Add styling for form-select */
         .form-select {
             background-color: #2d2d2d !important;
             border: 1px solid #444;
             color: white !important;
         }
-        
+
         .form-select:focus {
             background-color: #333 !important;
             border-color: var(--accent-gold);
             box-shadow: 0 0 0 0.25rem rgba(255, 215, 0, 0.25);
         }
-        
+
         /* This ensures the dropdown options are visible */
         .form-select option {
             background-color: #2d2d2d;
             color: white;
         }
-        
+
         .form-label {
             color: #ddd;
         }
@@ -707,16 +744,16 @@
             margin-bottom: 20px;
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
+
         .table {
             color: white;
 
         }
-        
+
         .table-striped tbody tr:nth-of-type(odd) {
             background-color: rgba(255, 255, 255, 0.05);
         }
-        
+
         footer {
             width: 100%;
             text-align: center;
@@ -1205,206 +1242,221 @@
             .welcome-content {
                 margin-bottom: 2rem;
             }
+
             .toast-container {
-    position: fixed !important; 
-    bottom: 0 !important;
-    right: 0 !important;
-    padding: 1rem !important;
-    z-index: 9999 !important; /* Higher than any other elements */
-}
+                position: fixed !important;
+                bottom: 0 !important;
+                right: 0 !important;
+                padding: 1rem !important;
+                z-index: 9999 !important;
+                /* Higher than any other elements */
+            }
 
-/* Ensure toasts are visible */
-.toast {
-    background-color: rgba(40, 40, 40, 0.9) !important;
-    backdrop-filter: blur(5px) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-}
+            /* Ensure toasts are visible */
+            .toast {
+                background-color: rgba(40, 40, 40, 0.9) !important;
+                backdrop-filter: blur(5px) !important;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+                border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            }
 
-/* Adjust z-index of slide panel and overlay */
-.slide-panel-overlay {
-    z-index: 1050 !important;
-}
+            /* Adjust z-index of slide panel and overlay */
+            .slide-panel-overlay {
+                z-index: 1050 !important;
+            }
 
-.slide-panel {
-    z-index: 1060 !important;
-}
-}
-    /* Seamless Rounded Tables and Cards */
+            .slide-panel {
+                z-index: 1060 !important;
+            }
+        }
 
-/* Main cards - rounded corners */
-.card {
-    border-radius: 16px !important;
-    overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-}
+        /* Seamless Rounded Tables and Cards */
 
-/* Table containers inside cards - no borders or distinct separation */
-.card .table-responsive {
-    border: none;
-    background-color: transparent;
-    margin: 0;
-}
+        /* Main cards - rounded corners */
+        .card {
+            border-radius: 16px !important;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
 
-/* Tables inside cards - remove borders that create separation */
-.card .table {
-    margin-bottom: 0;
-    background-color: transparent;
-}
+        /* Table containers inside cards - no borders or distinct separation */
+        .card .table-responsive {
+            border: none;
+            background-color: transparent;
+            margin: 0;
+        }
 
-/* Remove borders between table rows and cells for a more seamless look */
-.card .table td, 
-.card .table th {
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    border-bottom: none;
-}
+        /* Tables inside cards - remove borders that create separation */
+        .card .table {
+            margin-bottom: 0;
+            background-color: transparent;
+        }
 
-/* Remove first row top border for seamless look */
-.card .table tr:first-child td,
-.card .table tr:first-child th {
-    border-top: none;
-}
+        /* Remove borders between table rows and cells for a more seamless look */
+        .card .table td,
+        .card .table th {
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: none;
+        }
 
-/* For nested cards (cards inside cards) - no distinct separation */
-.card .card {
-    border: none;
-    box-shadow: none;
-    background-color: rgba(0, 0, 0, 0.1);
-    margin: 10px;
-}
+        /* Remove first row top border for seamless look */
+        .card .table tr:first-child td,
+        .card .table tr:first-child th {
+            border-top: none;
+        }
 
-/* For collapsible content inside tables, keep seamless look */
-.collapse .card {
-    border: none;
-    border-radius: 0 !important;
-    background-color: rgba(0, 0, 0, 0.15);
-}
+        /* For nested cards (cards inside cards) - no distinct separation */
+        .card .card {
+            border: none;
+            box-shadow: none;
+            background-color: rgba(0, 0, 0, 0.1);
+            margin: 10px;
+        }
 
-/* For collapsible detail rows in tables, remove distinct separation */
-tr.bg-dark .collapse {
-    border-radius: 0;
-    border: none;
-}
+        /* For collapsible content inside tables, keep seamless look */
+        .collapse .card {
+            border: none;
+            border-radius: 0 !important;
+            background-color: rgba(0, 0, 0, 0.15);
+        }
 
-/* Ensure collapse sections blend seamlessly */
-tr.bg-dark .collapse .p-3 {
-    padding: 15px !important;
-}
+        /* For collapsible detail rows in tables, remove distinct separation */
+        tr.bg-dark .collapse {
+            border-radius: 0;
+            border: none;
+        }
 
-/* Remove distinct visual separation in nested tables */
-.table .table {
-    background-color: transparent;
-}
+        /* Ensure collapse sections blend seamlessly */
+        tr.bg-dark .collapse .p-3 {
+            padding: 15px !important;
+        }
 
-/* Adjustments for striped tables to maintain seamless look */
-.table-striped tbody tr:nth-of-type(odd) {
-    background-color: rgba(255, 255, 255, 0.03);
-}
-/* Slide Panel Global Styles */
-.slide-panel {
-    position: fixed;
-    top: var(--header-height) !important; 
-    right: -500px;
-    width: 500px;
-    max-width: 100%;
-    height: calc(100vh - var(--header-height)) !important;
-    background-color: var(--slide-panel-bg, #1e1e1e);
-    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.3);
-    transition: right 0.3s ease-in-out;
-    z-index: 1080 !important;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-}
+        /* Remove distinct visual separation in nested tables */
+        .table .table {
+            background-color: transparent;
+        }
 
-.slide-panel.active {
-    right: 0;
-    animation: slideInPanel 0.2s ease-out;
-}
+        /* Adjustments for striped tables to maintain seamless look */
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
 
-.slide-panel-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1050;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease;
-}
+        /* Slide Panel Global Styles */
+        .slide-panel {
+            position: fixed;
+            top: var(--header-height) !important;
+            right: -500px;
+            width: 500px;
+            max-width: 100%;
+            height: calc(100vh - var(--header-height)) !important;
+            background-color: var(--slide-panel-bg, #1e1e1e);
+            box-shadow: -5px 0 15px rgba(0, 0, 0, 0.3);
+            transition: right 0.3s ease-in-out;
+            z-index: 1080 !important;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
 
-.slide-panel-overlay.active {
-    opacity: 1;
-    visibility: visible;
-}
+        .slide-panel.active {
+            right: 0;
+            animation: slideInPanel 0.2s ease-out;
+        }
 
-.slide-panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem;
-    border-bottom: 1px solid #2d2d2d;
-    background-color: #1a2e22;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-}
+        .slide-panel-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1050;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease;
+        }
 
-.slide-panel-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1rem;
-}
+        .slide-panel-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
 
-/* Animation for sliding in the panel */
-@keyframes slideInPanel {
-    from { transform: translateX(20px); opacity: 0.8; }
-    to { transform: translateX(0); opacity: 1; }
-}
+        .slide-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #2d2d2d;
+            background-color: #1a2e22;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .slide-panel {
-        width: 100%;
-        right: -100%;
-    }
-}
-.toast-container {
-    position: fixed !important; 
-    bottom: 0 !important;
-    right: 0 !important;
-    padding: 1rem !important;
-    z-index: 9999 !important; /* Higher than any other elements */
-}
+        .slide-panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
 
-/* Ensure toasts are visible */
-.toast {
-    background-color: rgba(40, 40, 40, 0.9) !important;
-    backdrop-filter: blur(5px) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-}
+        /* Animation for sliding in the panel */
+        @keyframes slideInPanel {
+            from {
+                transform: translateX(20px);
+                opacity: 0.8;
+            }
 
-/* Adjust z-index of slide panel and overlay */
-.slide-panel-overlay {
-    z-index: 1050 !important;
-}
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
 
-.slide-panel {
-    z-index: 1060 !important;
-}
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .slide-panel {
+                width: 100%;
+                right: -100%;
+            }
+        }
+
+        .toast-container {
+            position: fixed !important;
+            bottom: 0 !important;
+            right: 0 !important;
+            padding: 1rem !important;
+            z-index: 9999 !important;
+            /* Higher than any other elements */
+        }
+
+        /* Ensure toasts are visible */
+        .toast {
+            background-color: rgba(40, 40, 40, 0.9) !important;
+            backdrop-filter: blur(5px) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+
+        /* Adjust z-index of slide panel and overlay */
+        .slide-panel-overlay {
+            z-index: 1050 !important;
+        }
+
+        .slide-panel {
+            z-index: 1060 !important;
+        }
     </style>
 </head>
-<body class="{% if request.endpoint in ['login', 'signup', 'reset_password_request', 'reset_password'] %}auth-page{% else %}app-page{% endif %}">
+
+<body
+    class="{% if request.endpoint in ['login', 'signup', 'reset_password_request', 'reset_password'] %}auth-page{% else %}app-page{% endif %}">
     <!-- Money Symbol Grid Background -->
     <div class="money-grid">
         {% for _ in range(100) %}
-            <span>💲</span>
+        <span>💲</span>
         {% endfor %}
     </div>
-    
+
     <!-- Header -->
     <header class="app-header">
         {% if current_user.is_authenticated %}
@@ -1418,87 +1470,99 @@ tr.bg-dark .collapse .p-3 {
             Dollar Dollar Bill Y'all
         </a>
     </header>
-    
+
     {% if current_user.is_authenticated %}
     <!-- Sidebar with Improved Navigation Structure -->
     <div class="sidebar" id="sidebar">
-        
+
         <!-- Toggle full/mini sidebar for mini mode -->
         <div class="sidebar-mini-toggle">
             <button id="expandSidebar" class="btn btn-outline-light btn-sm sidebar-expand-btn">
                 <i class="fas fa-angles-right"></i>
             </button>
         </div>
-        
+
         <ul class="sidebar-nav">
             <!-- Main Dashboard -->
             <li class="nav-item">
-                <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.path == url_for('dashboard') %}active{% endif %}">
+                <a href="{{ url_for('dashboard') }}"
+                    class="nav-link {% if request.path == url_for('dashboard') %}active{% endif %}">
                     <span class="nav-icon"><i class="fas fa-tachometer-alt"></i></span>
                     <span class="nav-text">Dashboard</span>
                 </a>
             </li>
-            
+
             <!-- Expenses Section (Collapsible) -->
             <li class="nav-item nav-section">
-                <a href="#expensesSubmenu" data-bs-toggle="collapse" class="nav-link {% if 'transactions' in request.path or 'recurring' in request.path %}{% else %}collapsed{% endif %}">
+                <a href="#expensesSubmenu" data-bs-toggle="collapse"
+                    class="nav-link {% if 'transactions' in request.path or 'recurring' in request.path %}{% else %}collapsed{% endif %}">
                     <span class="nav-icon"><i class="fas fa-file-invoice-dollar"></i></span>
                     <span class="nav-text">Ledger</span>
                     <span class="nav-caret"><i class="fas fa-angle-down ms-auto"></i></span>
                 </a>
-                <ul class="collapse nav-submenu {% if 'transactions' in request.path or 'recurring' in request.path %}show{% endif %}" id="expensesSubmenu">
+                <ul class="collapse nav-submenu {% if 'transactions' in request.path or 'recurring' in request.path %}show{% endif %}"
+                    id="expensesSubmenu">
                     <li class="nav-item">
-                        <a class="nav-link {% if request.path == '/accounts' %}active{% endif %}" href="{{ url_for('accounts') }}">
+                        <a class="nav-link {% if request.path == '/accounts' %}active{% endif %}"
+                            href="{{ url_for('accounts') }}">
                             <span class="nav-icon"><i class="fas fa-exchange-alt"></i></span>
                             <i class="fas fa-university me-2"></i>Accounts
                         </a>
                     </li>
-                    
+
                     <li class="nav-item">
-                        <a href="{{ url_for('transactions') }}" class="nav-link {% if request.path == url_for('transactions') %}active{% endif %}">
+                        <a href="{{ url_for('transactions') }}"
+                            class="nav-link {% if request.path == url_for('transactions') %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-exchange-alt"></i></span>
                             <span class="nav-text">Transactions</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('recurring') }}" class="nav-link {% if request.path == url_for('recurring') %}active{% endif %}">
+                        <a href="{{ url_for('recurring') }}"
+                            class="nav-link {% if request.path == url_for('recurring') %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-calendar-alt"></i></span>
                             <span class="nav-text">Recurring</span>
                         </a>
                     </li>
                 </ul>
             </li>
-            
+
 
             <!-- Investments-->
             {% if config.INVESTMENT_TRACKING_ENABLED %}
             <li class="nav-item nav-section">
-                <a href="#investmentsSubmenu" data-bs-toggle="collapse" class="nav-link {% if 'investments' in request.path %}{% else %}collapsed{% endif %}">
+                <a href="#investmentsSubmenu" data-bs-toggle="collapse"
+                    class="nav-link {% if 'investments' in request.path %}{% else %}collapsed{% endif %}">
                     <span class="nav-icon"><i class="fas fa-chart-line"></i></span>
                     <span class="nav-text">Investments</span>
                     <span class="nav-caret"><i class="fas fa-angle-down ms-auto"></i></span>
                 </a>
-                <ul class="collapse nav-submenu {% if 'investments' in request.path %}show{% endif %}" id="investmentsSubmenu">
+                <ul class="collapse nav-submenu {% if 'investments' in request.path %}show{% endif %}"
+                    id="investmentsSubmenu">
                     <li class="nav-item">
-                        <a href="{{ url_for('investments') }}" class="nav-link {% if request.path == url_for('investments') %}active{% endif %}">
+                        <a href="{{ url_for('investments') }}"
+                            class="nav-link {% if request.path == url_for('investments') %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-tachometer-alt"></i></span>
                             <span class="nav-text">Dashboard</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('portfolios') }}" class="nav-link {% if request.path == url_for('portfolios') %}active{% endif %}">
+                        <a href="{{ url_for('portfolios') }}"
+                            class="nav-link {% if request.path == url_for('portfolios') %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-briefcase"></i></span>
                             <span class="nav-text">Portfolios</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('investment_transactions') }}" class="nav-link {% if request.path == url_for('investment_transactions') %}active{% endif %}">
+                        <a href="{{ url_for('investment_transactions') }}"
+                            class="nav-link {% if request.path == url_for('investment_transactions') %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-exchange-alt"></i></span>
                             <span class="nav-text">Transactions</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('api_cache') }}" class="nav-link {% if request.path == url_for('api_cache') %}active{% endif %}">
+                        <a href="{{ url_for('api_cache') }}"
+                            class="nav-link {% if request.path == url_for('api_cache') %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-database"></i></span>
                             <span class="nav-text">API Cache</span>
                         </a>
@@ -1506,61 +1570,71 @@ tr.bg-dark .collapse .p-3 {
                 </ul>
             </li>
             {% endif %}
-                        <!-- Groups & Social -->
+            <!-- Groups & Social -->
             <li class="nav-item nav-section">
-                <a href="#socialSubmenu" data-bs-toggle="collapse" class="nav-link {% if 'groups' in request.path or 'settlements' in request.path %}{% else %}collapsed{% endif %}">
+                <a href="#socialSubmenu" data-bs-toggle="collapse"
+                    class="nav-link {% if 'groups' in request.path or 'settlements' in request.path %}{% else %}collapsed{% endif %}">
                     <span class="nav-icon"><i class="fas fa-users"></i></span>
                     <span class="nav-text">Social</span>
                     <span class="nav-caret"><i class="fas fa-angle-down ms-auto"></i></span>
                 </a>
-                <ul class="collapse nav-submenu {% if 'groups' in request.path or 'settlements' in request.path %}show{% endif %}" id="socialSubmenu">
+                <ul class="collapse nav-submenu {% if 'groups' in request.path or 'settlements' in request.path %}show{% endif %}"
+                    id="socialSubmenu">
                     <li class="nav-item">
-                        <a href="{{ url_for('groups') }}" class="nav-link {% if 'groups' in request.path %}active{% endif %}">
+                        <a href="{{ url_for('groups') }}"
+                            class="nav-link {% if 'groups' in request.path %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-user-friends"></i></span>
                             <span class="nav-text">Groups</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('settlements') }}" class="nav-link {% if request.path == url_for('settlements') %}active{% endif %}">
+                        <a href="{{ url_for('settlements') }}"
+                            class="nav-link {% if request.path == url_for('settlements') %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-money-bill-wave"></i></span>
                             <span class="nav-text">Settle Up</span>
                         </a>
                     </li>
                 </ul>
             </li>
-            
+
             <!-- Analysis -->
             <li class="nav-item">
-                <a href="{{ url_for('stats') }}" class="nav-link {% if request.path == url_for('stats') %}active{% endif %}">
+                <a href="{{ url_for('stats') }}"
+                    class="nav-link {% if request.path == url_for('stats') %}active{% endif %}">
                     <span class="nav-icon"><i class="fas fa-chart-bar"></i></span>
                     <span class="nav-text">Statistics</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a href="{{ url_for('budgets') }}" class="nav-link {% if request.path == url_for('budgets') %}active{% endif %}">
+                <a href="{{ url_for('budgets') }}"
+                    class="nav-link {% if request.path == url_for('budgets') %}active{% endif %}">
                     <span class="nav-icon"><i class="fas fa-chart-pie"></i></span>
                     <span class="nav-text">Budgets</span>
                 </a>
             </li>
-            
+
             <div class="sidebar-section-divider"></div>
-            
+
             <!-- Settings Section -->
             <li class="nav-item nav-section">
-                <a href="#settingsSubmenu" data-bs-toggle="collapse" class="nav-link {% if 'categories' in request.path or 'tags' in request.path or 'currencies' in request.path or 'profile' in request.path or 'admin' in request.path %}{% else %}collapsed{% endif %}">
+                <a href="#settingsSubmenu" data-bs-toggle="collapse"
+                    class="nav-link {% if 'categories' in request.path or 'tags' in request.path or 'currencies' in request.path or 'profile' in request.path or 'admin' in request.path %}{% else %}collapsed{% endif %}">
                     <span class="nav-icon"><i class="fas fa-cog"></i></span>
                     <span class="nav-text">Settings</span>
                     <span class="nav-caret"><i class="fas fa-angle-down ms-auto"></i></span>
                 </a>
-                <ul class="collapse nav-submenu {% if 'categories' in request.path or 'tags' in request.path or 'currencies' in request.path or 'profile' in request.path or 'admin' in request.path %}show{% endif %}" id="settingsSubmenu">
+                <ul class="collapse nav-submenu {% if 'categories' in request.path or 'tags' in request.path or 'currencies' in request.path or 'profile' in request.path or 'admin' in request.path %}show{% endif %}"
+                    id="settingsSubmenu">
                     <li class="nav-item">
-                        <a href="{{ url_for('manage_categories') }}" class="nav-link {% if 'categories' in request.path %}active{% endif %}">
+                        <a href="{{ url_for('manage_categories') }}"
+                            class="nav-link {% if 'categories' in request.path %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-sitemap"></i></span>
                             <span class="nav-text">Categories</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('manage_category_mappings') }}" class="nav-link {% if 'category_mappings' in request.path %}active{% endif %}">
+                        <a href="{{ url_for('manage_category_mappings') }}"
+                            class="nav-link {% if 'category_mappings' in request.path %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-magic"></i></span>
                             <span class="nav-text">Auto-Categories</span>
                         </a>
@@ -1572,7 +1646,8 @@ tr.bg-dark .collapse .p-3 {
                         </a>
                     </li> -->
                     <li class="nav-item">
-                        <a href="{{ url_for('manage_currencies') }}" class="nav-link {% if 'currencies' in request.path %}active{% endif %}">
+                        <a href="{{ url_for('manage_currencies') }}"
+                            class="nav-link {% if 'currencies' in request.path %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-dollar-sign"></i></span>
                             <span class="nav-text">Currencies</span>
                         </a>
@@ -1584,14 +1659,16 @@ tr.bg-dark .collapse .p-3 {
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('profile') }}" class="nav-link {% if request.path == url_for('profile') %}active{% endif %}">
+                        <a href="{{ url_for('profile') }}"
+                            class="nav-link {% if request.path == url_for('profile') %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-user-circle"></i></span>
                             <span class="nav-text">Profile</span>
                         </a>
                     </li>
                     {% if current_user.is_admin %}
                     <li class="nav-item">
-                        <a href="{{ url_for('admin') }}" class="nav-link {% if request.path == url_for('admin') %}active{% endif %}">
+                        <a href="{{ url_for('admin') }}"
+                            class="nav-link {% if request.path == url_for('admin') %}active{% endif %}">
                             <span class="nav-icon"><i class="fas fa-user-shield"></i></span>
                             <span class="nav-text">Admin</span>
                         </a>
@@ -1599,9 +1676,9 @@ tr.bg-dark .collapse .p-3 {
                     {% endif %}
                 </ul>
             </li>
-    
 
-            
+
+
             <!-- Logout option at the bottom of sidebar -->
             <div class="sidebar-logout">
                 <div class="sidebar-user mb-2">
@@ -1625,17 +1702,17 @@ tr.bg-dark .collapse .p-3 {
             </div>
         </ul>
     </div>
-    
+
     <!-- Backdrop for mobile -->
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
     {% endif %}
-    
+
     <!-- Main Content -->
     <main class="main-content">
         <div class="toast-container position-fixed bottom-0 end-0 p-3">
             <!-- Flash messages will be dynamically added here as toasts -->
         </div>
-        
+
         {% block content %}
         <!-- Page content will go here -->
         {% endblock %}
@@ -1645,45 +1722,47 @@ tr.bg-dark .collapse .p-3 {
             <div class="alert alert-warning d-flex align-items-center" role="alert">
                 <i class="fas fa-clock me-2"></i>
                 <div>
-                    <strong>Demo Mode:</strong> 
-                    <span id="timer-countdown">{{ get_remaining_time() // 60 }}:{{ '%02d' | format(get_remaining_time() % 60) }}</span> remaining
+                    <strong>Demo Mode:</strong>
+                    <span id="timer-countdown">{{ get_remaining_time() // 60 }}:{{ '%02d' | format(get_remaining_time()
+                        % 60) }}</span> remaining
                 </div>
             </div>
         </div>
         <script>
-            document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('DOMContentLoaded', function () {
                 // Get the initial remaining time from the server
-                let remainingSeconds = {{ get_remaining_time() }};
-                const timerElement = document.getElementById('timer-countdown');
-                
-                // Update timer every second
-                const timerInterval = setInterval(function() {
-                    remainingSeconds--;
-                    
-                    if (remainingSeconds <= 0) {
-                        clearInterval(timerInterval);
-                        // Redirect to logout or show expired message
-                        window.location.href = "{{ url_for('logout') }}?demo_expired=true";
-                        return;
-                    }
-                    
-                    // Calculate minutes and seconds
-                    const minutes = Math.floor(remainingSeconds / 60);
-                    const seconds = remainingSeconds % 60;
-                    
-                    // Update the timer display
-                    timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                    
-                    // Change color when time is running out
-                    if (remainingSeconds < 60) {
-                        document.getElementById('demo-timer').querySelector('.alert').classList.remove('alert-warning');
-                        document.getElementById('demo-timer').querySelector('.alert').classList.add('alert-danger');
-                    }
-                }, 1000);
+                let remainingSeconds = {{ get_remaining_time()
+            }};
+            const timerElement = document.getElementById('timer-countdown');
+
+            // Update timer every second
+            const timerInterval = setInterval(function () {
+                remainingSeconds--;
+
+                if (remainingSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    // Redirect to logout or show expired message
+                    window.location.href = "{{ url_for('logout') }}?demo_expired=true";
+                    return;
+                }
+
+                // Calculate minutes and seconds
+                const minutes = Math.floor(remainingSeconds / 60);
+                const seconds = remainingSeconds % 60;
+
+                // Update the timer display
+                timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+                // Change color when time is running out
+                if (remainingSeconds < 60) {
+                    document.getElementById('demo-timer').querySelector('.alert').classList.remove('alert-warning');
+                    document.getElementById('demo-timer').querySelector('.alert').classList.add('alert-danger');
+                }
+            }, 1000);
             });
         </script>
         {% endif %}
-                <!-- Footer -->
+        <!-- Footer -->
         <footer>
             Made with ❤️ and caffeine using Flask & Bootstrap | v{{ app_version }}
         </footer>
@@ -1691,63 +1770,63 @@ tr.bg-dark .collapse .p-3 {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-   document.addEventListener('DOMContentLoaded', function() {
-    // Only initialize sidebar functionality if user is authenticated
-    if (!document.querySelector('.sidebar')) return;
-    
-    // Get DOM elements
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    const sidebar = document.getElementById('sidebar');
-    const mainContent = document.querySelector('.main-content');
-    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-    const collapseSidebarBtn = document.getElementById('collapseSidebar');
-    const expandSidebarBtn = document.getElementById('expandSidebar');
-    
-    // Make the username/avatar clickable to go to profile
-    const userSection = document.querySelector('.sidebar-user');
-    const userDetails = document.querySelector('.sidebar-user .user-details');
-    const userAvatar = document.querySelector('.sidebar-user .user-avatar');
-    
-    // Set up submenu data-title attributes for mini-mode tooltips
-    const navItems = document.querySelectorAll('.sidebar-nav .nav-item');
-    navItems.forEach(item => {
-        const navLink = item.querySelector('.nav-link');
-        if (navLink) {
-            const navText = navLink.querySelector('.nav-text');
-            if (navText) {
-                item.setAttribute('data-title', navText.textContent.trim());
-            }
-        }
-    });
-    const messages = [
-            {% with messages = get_flashed_messages(with_categories=true) %}
+        document.addEventListener('DOMContentLoaded', function () {
+            // Only initialize sidebar functionality if user is authenticated
+            if (!document.querySelector('.sidebar')) return;
+
+            // Get DOM elements
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.querySelector('.main-content');
+            const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+            const collapseSidebarBtn = document.getElementById('collapseSidebar');
+            const expandSidebarBtn = document.getElementById('expandSidebar');
+
+            // Make the username/avatar clickable to go to profile
+            const userSection = document.querySelector('.sidebar-user');
+            const userDetails = document.querySelector('.sidebar-user .user-details');
+            const userAvatar = document.querySelector('.sidebar-user .user-avatar');
+
+            // Set up submenu data-title attributes for mini-mode tooltips
+            const navItems = document.querySelectorAll('.sidebar-nav .nav-item');
+            navItems.forEach(item => {
+                const navLink = item.querySelector('.nav-link');
+                if (navLink) {
+                    const navText = navLink.querySelector('.nav-text');
+                    if (navText) {
+                        item.setAttribute('data-title', navText.textContent.trim());
+                    }
+                }
+            });
+            const messages = [
+                {% with messages = get_flashed_messages(with_categories = true) %}
                 {% for category, message in messages %}
-                    {
-                        message: "{{ message|safe }}",
-                        category: "{{ category }}"
-                    },
-                {% endfor %}
-            {% endwith %}
+        {
+            message: "{{ message|safe }}",
+                category: "{{ category }}"
+        },
+        {% endfor %}
+        {% endwith %}
         ];
-        
+
         // Display flash messages as toasts
         if (messages.length > 0) {
             const toastContainer = document.querySelector('.toast-container');
-            
-            messages.forEach(function(msg) {
+
+            messages.forEach(function (msg) {
                 // Determine toast styling based on message category
-                const category = msg.category === 'error' ? 'error' : 
-                                msg.category === 'warning' ? 'warning' : 'success';
-                const bgColor = category === 'error' ? 'bg-danger' : 
-                                category === 'warning' ? 'bg-warning text-dark' : 'bg-success';
-                const iconClass = category === 'error' ? 'fa-exclamation-circle' : 
-                                category === 'warning' ? 'fa-exclamation-triangle' : 'fa-check-circle';
-                
+                const category = msg.category === 'error' ? 'error' :
+                    msg.category === 'warning' ? 'warning' : 'success';
+                const bgColor = category === 'error' ? 'bg-danger' :
+                    category === 'warning' ? 'bg-warning text-dark' : 'bg-success';
+                const iconClass = category === 'error' ? 'fa-exclamation-circle' :
+                    category === 'warning' ? 'fa-exclamation-triangle' : 'fa-check-circle';
+
                 // Clean up message (remove markdown-like formatting if present)
                 let cleanMessage = msg.message;
                 // Remove asterisks and other markdown-like formatting
                 cleanMessage = cleanMessage.replace(/\*/g, '').replace(/\*\*H\*\*/g, '').trim();
-                
+
                 // Create toast element
                 const toastId = `flash-toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
                 const toastHtml = `
@@ -1762,22 +1841,22 @@ tr.bg-dark .collapse .p-3 {
                         </div>
                     </div>
                 `;
-                
+
                 // Add toast to container
                 toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-                
+
                 // Initialize and show toast
                 const toastEl = document.getElementById(toastId);
                 const toast = new bootstrap.Toast(toastEl);
                 toast.show();
-                
+
                 // Remove toast from DOM after it's hidden
-                toastEl.addEventListener('hidden.bs.toast', function() {
+                toastEl.addEventListener('hidden.bs.toast', function () {
                     toastEl.remove();
                 });
             });
         }
-    // Add this inside your existing DOMContentLoaded event handler
+        // Add this inside your existing DOMContentLoaded event handler
         // Footer message rotation
         function initializeFooterRotation() {
             // Define the footer messages
@@ -1788,35 +1867,35 @@ tr.bg-dark .collapse .p-3 {
                 "Forged in the fires of midnight debugging sessions",
                 "Constructed while battling imposter syndrome"
             ];
-            
+
             // Get a random message
             const randomMessage = footerMessages[Math.floor(Math.random() * footerMessages.length)];
-            
+
             // Find the footer
             const footer = document.querySelector('footer');
             if (!footer) return;
-            
+
             // Store the original version text (if any)
             const originalContent = footer.innerHTML;
             const versionMatch = originalContent.match(/v\d+\.\d+\.\d+/);
             const versionText = versionMatch ? ` | ${versionMatch[0]}` : '';
-            
+
             // Update the footer with the random message
             footer.innerHTML = `${randomMessage}${versionText}`;
-            
+
             // Optional: Set up rotation every 30 seconds
-            setInterval(function() {
+            setInterval(function () {
                 // Get a new random message (different from current)
                 let newMessage;
                 do {
                     newMessage = footerMessages[Math.floor(Math.random() * footerMessages.length)];
                 } while (newMessage === footer.innerHTML.split('|')[0].trim());
-                
+
                 // Smoothly fade out and in
                 footer.style.transition = 'opacity 0.5s ease';
                 footer.style.opacity = '0';
-                
-                setTimeout(function() {
+
+                setTimeout(function () {
                     footer.innerHTML = `${newMessage}${versionText}`;
                     footer.style.opacity = '1';
                 }, 500);
@@ -1824,388 +1903,389 @@ tr.bg-dark .collapse .p-3 {
         }
 
         // Call the function to initialize the footer rotation
-    initializeFooterRotation();
-    // Universal Slide Panel Functions
-    function openSlidePanel(panelId, options = {}) {
-        // Create or get the slide panel
-        let slidePanel = document.getElementById(panelId);
-        
-        if (!slidePanel) {
-            slidePanel = createSlidePanel(panelId, options);
-        }
-        
-        // Show loading state if content is not provided
-        if (options.loadingContent) {
-            slidePanel.querySelector('.slide-panel-content').innerHTML = options.loadingContent;
-        }
-        
-        // Show the panel and overlay
-        const overlay = document.getElementById('slide-panel-overlay');
-        if (overlay) overlay.classList.add('active');
-        slidePanel.classList.add('active');
-        
-        // Prevent body scrolling
-        document.body.style.overflow = 'hidden';
-        
-        // Optional: fetch content if a URL is provided
-        if (options.fetchUrl) {
-            fetchPanelContent(options.fetchUrl, slidePanel, options);
-        } else if (options.content) {
-            // Set content directly if provided
-            slidePanel.querySelector('.slide-panel-content').innerHTML = options.content;
-        }
-        
-        return slidePanel;
-    }
+        initializeFooterRotation();
+        // Universal Slide Panel Functions
+        function openSlidePanel(panelId, options = {}) {
+            // Create or get the slide panel
+            let slidePanel = document.getElementById(panelId);
 
-    function createSlidePanel(panelId, options) {
-        // Create the panel
-        const slidePanel = document.createElement('div');
-        slidePanel.id = panelId;
-        slidePanel.className = 'slide-panel ' + (options.className || '');
-        
-        // Create header
-        const header = document.createElement('div');
-        header.className = 'slide-panel-header';
-        header.innerHTML = `
+            if (!slidePanel) {
+                slidePanel = createSlidePanel(panelId, options);
+            }
+
+            // Show loading state if content is not provided
+            if (options.loadingContent) {
+                slidePanel.querySelector('.slide-panel-content').innerHTML = options.loadingContent;
+            }
+
+            // Show the panel and overlay
+            const overlay = document.getElementById('slide-panel-overlay');
+            if (overlay) overlay.classList.add('active');
+            slidePanel.classList.add('active');
+
+            // Prevent body scrolling
+            document.body.style.overflow = 'hidden';
+
+            // Optional: fetch content if a URL is provided
+            if (options.fetchUrl) {
+                fetchPanelContent(options.fetchUrl, slidePanel, options);
+            } else if (options.content) {
+                // Set content directly if provided
+                slidePanel.querySelector('.slide-panel-content').innerHTML = options.content;
+            }
+
+            return slidePanel;
+        }
+
+        function createSlidePanel(panelId, options) {
+            // Create the panel
+            const slidePanel = document.createElement('div');
+            slidePanel.id = panelId;
+            slidePanel.className = 'slide-panel ' + (options.className || '');
+
+            // Create header
+            const header = document.createElement('div');
+            header.className = 'slide-panel-header';
+            header.innerHTML = `
             <h4 class="mb-0">
                 <i class="fas ${options.icon || 'fa-info-circle'} me-2" style="color: ${options.iconColor || '#0ea5e9'}"></i>
                 ${options.title || 'Panel'}
             </h4>
             <button type="button" class="btn-close btn-close-white" aria-label="Close" onclick="closeSlidePanel('${panelId}')"></button>
         `;
-        
-        // Create content area
-        const content = document.createElement('div');
-        content.className = 'slide-panel-content';
-        
-        // Assemble panel
-        slidePanel.appendChild(header);
-        slidePanel.appendChild(content);
-        
-        // Add to DOM if not already present
-        document.body.appendChild(slidePanel);
-        
-        // Create overlay if not exists
-        let overlay = document.getElementById('slide-panel-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'slide-panel-overlay';
-            overlay.className = 'slide-panel-overlay';
-            overlay.addEventListener('click', () => closeSlidePanel(panelId));
-            document.body.appendChild(overlay);
-        }
-        
-        return slidePanel;
-    }
 
-    function fetchPanelContent(url, slidePanel, options = {}) {
-        fetch(url)
-            .then(response => {
-                if (!response.ok) throw new Error('Failed to load content');
-                return response.json();
-            })
-            .then(data => {
-                // Populate content based on data
-                const contentDiv = slidePanel.querySelector('.slide-panel-content');
-                if (options.renderFunction) {
-                    contentDiv.innerHTML = options.renderFunction(data);
-                } else {
-                    contentDiv.innerHTML = JSON.stringify(data, null, 2);
-                }
-            })
-            .catch(error => {
-                const contentDiv = slidePanel.querySelector('.slide-panel-content');
-                contentDiv.innerHTML = `
+            // Create content area
+            const content = document.createElement('div');
+            content.className = 'slide-panel-content';
+
+            // Assemble panel
+            slidePanel.appendChild(header);
+            slidePanel.appendChild(content);
+
+            // Add to DOM if not already present
+            document.body.appendChild(slidePanel);
+
+            // Create overlay if not exists
+            let overlay = document.getElementById('slide-panel-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'slide-panel-overlay';
+                overlay.className = 'slide-panel-overlay';
+                overlay.addEventListener('click', () => closeSlidePanel(panelId));
+                document.body.appendChild(overlay);
+            }
+
+            return slidePanel;
+        }
+
+        function fetchPanelContent(url, slidePanel, options = {}) {
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to load content');
+                    return response.json();
+                })
+                .then(data => {
+                    // Populate content based on data
+                    const contentDiv = slidePanel.querySelector('.slide-panel-content');
+                    if (options.renderFunction) {
+                        contentDiv.innerHTML = options.renderFunction(data);
+                    } else {
+                        contentDiv.innerHTML = JSON.stringify(data, null, 2);
+                    }
+                })
+                .catch(error => {
+                    const contentDiv = slidePanel.querySelector('.slide-panel-content');
+                    contentDiv.innerHTML = `
                     <div class="alert alert-danger m-3">
                         <i class="fas fa-exclamation-triangle me-2"></i>
                         ${error.message}
                     </div>
                 `;
-            });
-    }
+                });
+        }
 
-    function closeSlidePanel(panelId = null) {
-        // Close specific panel or all panels
-        const panels = panelId 
-            ? [document.getElementById(panelId)] 
-            : document.querySelectorAll('.slide-panel');
-        
-        panels.forEach(panel => {
-            if (panel) panel.classList.remove('active');
-        });
-        
-        // Hide overlay
-        const overlay = document.getElementById('slide-panel-overlay');
-        if (overlay) overlay.classList.remove('active');
-        
-        // Re-enable body scrolling
-        document.body.style.overflow = '';
-}
-    // Toggle sidebar visibility (show/hide)
-    function toggleSidebar() {
-        // Toggle classes for visibility
-        sidebar.classList.toggle('show');
-        sidebarBackdrop.classList.toggle('show');
-        if (sidebarToggle) sidebarToggle.classList.toggle('active');
-        
-        // Toggle main content margin
-        mainContent.classList.toggle('sidebar-open', sidebar.classList.contains('show') && !sidebar.classList.contains('mini'));
-        mainContent.classList.toggle('sidebar-mini-open', sidebar.classList.contains('show') && sidebar.classList.contains('mini'));
-        
-        // Store sidebar state
-        sessionStorage.setItem('sidebarState', sidebar.classList.contains('show') ? 'open' : 'closed');
-    }
-    
-    // Toggle mini sidebar (full/collapsed)
-    function toggleMiniSidebar() {
-        sidebar.classList.toggle('mini');
-        
-        // Toggle main content margin
-        if (sidebar.classList.contains('show')) {
-            mainContent.classList.toggle('sidebar-mini-open', sidebar.classList.contains('mini'));
-            mainContent.classList.toggle('sidebar-open', !sidebar.classList.contains('mini'));
+        function closeSlidePanel(panelId = null) {
+            // Close specific panel or all panels
+            const panels = panelId
+                ? [document.getElementById(panelId)]
+                : document.querySelectorAll('.slide-panel');
+
+            panels.forEach(panel => {
+                if (panel) panel.classList.remove('active');
+            });
+
+            // Hide overlay
+            const overlay = document.getElementById('slide-panel-overlay');
+            if (overlay) overlay.classList.remove('active');
+
+            // Re-enable body scrolling
+            document.body.style.overflow = '';
         }
-        
-        // Store sidebar mode
-        sessionStorage.setItem('sidebarMode', sidebar.classList.contains('mini') ? 'mini' : 'full');
-    }
-    
-    // Close sidebar function
-    function closeSidebar() {
-        if (sidebar.classList.contains('show')) {
-            sidebar.classList.remove('show');
-            sidebarBackdrop.classList.remove('show');
-            if (sidebarToggle) sidebarToggle.classList.remove('active');
-            mainContent.classList.remove('sidebar-open');
-            mainContent.classList.remove('sidebar-mini-open');
-            
-            // Update stored state
-            sessionStorage.setItem('sidebarState', 'closed');
+        // Toggle sidebar visibility (show/hide)
+        function toggleSidebar() {
+            // Toggle classes for visibility
+            sidebar.classList.toggle('show');
+            sidebarBackdrop.classList.toggle('show');
+            if (sidebarToggle) sidebarToggle.classList.toggle('active');
+
+            // Toggle main content margin
+            mainContent.classList.toggle('sidebar-open', sidebar.classList.contains('show') && !sidebar.classList.contains('mini'));
+            mainContent.classList.toggle('sidebar-mini-open', sidebar.classList.contains('show') && sidebar.classList.contains('mini'));
+
+            // Store sidebar state
+            sessionStorage.setItem('sidebarState', sidebar.classList.contains('show') ? 'open' : 'closed');
         }
-    }
-    
-    // Collapse sidebar to mini mode
-    function collapseToMini() {
-        if (!sidebar.classList.contains('mini')) {
-            sidebar.classList.add('mini');
-            
-            // Update margin classes
+
+        // Toggle mini sidebar (full/collapsed)
+        function toggleMiniSidebar() {
+            sidebar.classList.toggle('mini');
+
+            // Toggle main content margin
             if (sidebar.classList.contains('show')) {
-                mainContent.classList.add('sidebar-mini-open');
+                mainContent.classList.toggle('sidebar-mini-open', sidebar.classList.contains('mini'));
+                mainContent.classList.toggle('sidebar-open', !sidebar.classList.contains('mini'));
+            }
+
+            // Store sidebar mode
+            sessionStorage.setItem('sidebarMode', sidebar.classList.contains('mini') ? 'mini' : 'full');
+        }
+
+        // Close sidebar function
+        function closeSidebar() {
+            if (sidebar.classList.contains('show')) {
+                sidebar.classList.remove('show');
+                sidebarBackdrop.classList.remove('show');
+                if (sidebarToggle) sidebarToggle.classList.remove('active');
                 mainContent.classList.remove('sidebar-open');
-            }
-            
-            // Store mode
-            sessionStorage.setItem('sidebarMode', 'mini');
-        }
-    }
-    
-    // Expand sidebar from mini mode
-    function expandFromMini() {
-        if (sidebar.classList.contains('mini')) {
-            sidebar.classList.remove('mini');
-            
-            // Update margin classes
-            if (sidebar.classList.contains('show')) {
                 mainContent.classList.remove('sidebar-mini-open');
-                mainContent.classList.add('sidebar-open');
+
+                // Update stored state
+                sessionStorage.setItem('sidebarState', 'closed');
             }
-            
-            // Store mode
-            sessionStorage.setItem('sidebarMode', 'full');
         }
-    }
-    
-    // Handle sidebar submenu toggles in mini mode
-    function setupMiniModeSubmenuHandlers() {
-        const submenuToggles = document.querySelectorAll('.sidebar .nav-section > a');
-        
-        submenuToggles.forEach(toggle => {
-            toggle.addEventListener('click', function(e) {
-                // If in mini mode and this is a submenu toggle link
-                if (sidebar.classList.contains('mini') && toggle.getAttribute('data-bs-toggle') === 'collapse') {
-                    e.preventDefault(); // Prevent default Bootstrap behavior
-                    e.stopPropagation(); // Stop event propagation
-                    expandFromMini(); // Expand sidebar
-                    
-                    // After expanding, trigger the submenu toggle
-                    setTimeout(() => {
-                        const targetId = toggle.getAttribute('href');
-                        const target = document.querySelector(targetId);
-                        if (target) {
-                            // Bootstrap 5 collapse functionality
-                            new bootstrap.Collapse(target, { toggle: true });
-                        }
-                    }, 300); // Wait for transition to complete
-                    
-                    return false;
-                }
-            });
-        });
-    }
-    
-    // Add click handler to main content area to collapse sidebar to mini mode
-    function setupContentClickHandler() {
-        mainContent.addEventListener('click', function(e) {
-            // Don't trigger if clicking within a form, dropdown or modal
-            if (e.target.closest('form') || e.target.closest('.dropdown-menu') || e.target.closest('.modal')) {
-                return;
-            }
-            
-            // Ensure sidebar is open and not already in mini mode
-            if (sidebar.classList.contains('show') && !sidebar.classList.contains('mini')) {
-                collapseToMini();
-            }
-        });
-    }
-    
-    // Add visual hover effect to user section
-    function setupUserSectionHoverEffects() {
-        if (!userDetails || !userAvatar) return;
-        
-        function addHoverEffect() {
-            userDetails.classList.add('user-hover');
-            // Apply subtle highlight effect
-            userDetails.style.transition = 'background-color 0.2s';
-            
-            userDetails.addEventListener('mouseenter', function() {
-                this.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                this.style.borderRadius = '4px';
-            });
-            
-            userDetails.addEventListener('mouseleave', function() {
-                this.style.backgroundColor = 'transparent';
-            });
-            
-            // Also add hover for avatar for consistency
-            userAvatar.style.transition = 'transform 0.2s';
-            
-            userAvatar.addEventListener('mouseenter', function() {
-                this.style.transform = 'scale(1.1)';
-            });
-            
-            userAvatar.addEventListener('mouseleave', function() {
-                this.style.transform = 'scale(1)';
-            });
-        }
-        
-        addHoverEffect();
-    }
-    
-    // Add event listeners
-    if (sidebarToggle && sidebar) {
-        sidebarToggle.addEventListener('click', toggleSidebar);
-    }
-    
-    // Collapse sidebar to mini mode
-    if (collapseSidebarBtn) {
-        collapseSidebarBtn.addEventListener('click', collapseToMini);
-    }
-    
-    // Expand sidebar from mini mode
-    if (expandSidebarBtn) {
-        expandSidebarBtn.addEventListener('click', expandFromMini);
-    }
-    
-    // Close sidebar when clicking backdrop
-    if (sidebarBackdrop) {
-        sidebarBackdrop.addEventListener('click', closeSidebar);
-    }
-    
-    // Set up mini mode menu behavior
-    setupMiniModeSubmenuHandlers();
-    
-    // Set up main content click handler
-    setupContentClickHandler();
-    
-    // Set up user section hover effects
-    setupUserSectionHoverEffects();
-    
-    // Make user details section clickable for profile
-    if (userDetails) {
-        userDetails.style.cursor = 'pointer';
-        userDetails.title = 'Go to Profile';
-        userDetails.addEventListener('click', function(e) {
-            // Get the profile URL - assuming there's a profile link in the sidebar we can reference
-            const profileLink = document.querySelector('a[href*="profile"]');
-            if (profileLink) {
-                window.location.href = profileLink.getAttribute('href');
-            }
-        });
-    }
-    
-    // Make avatar clickable too
-    if (userAvatar) {
-        userAvatar.style.cursor = 'pointer';
-        userAvatar.title = 'Go to Profile';
-        userAvatar.addEventListener('click', function(e) {
-            // Get the profile URL
-            const profileLink = document.querySelector('a[href*="profile"]');
-            if (profileLink) {
-                window.location.href = profileLink.getAttribute('href');
-            }
-        });
-    }
-    
-    // Handle resize events
-    window.addEventListener('resize', function() {
-        const savedState = sessionStorage.getItem('sidebarState');
-        const savedMode = sessionStorage.getItem('sidebarMode');
-        
-        if (window.innerWidth >= 992) {
-            // For desktop, respect saved state if it exists
-            if (savedState === 'open') {
-                sidebar.classList.add('show');
-                
-                // Apply correct margin based on sidebar mode
-                if (savedMode === 'mini') {
-                    sidebar.classList.add('mini');
+
+        // Collapse sidebar to mini mode
+        function collapseToMini() {
+            if (!sidebar.classList.contains('mini')) {
+                sidebar.classList.add('mini');
+
+                // Update margin classes
+                if (sidebar.classList.contains('show')) {
                     mainContent.classList.add('sidebar-mini-open');
                     mainContent.classList.remove('sidebar-open');
-                } else {
-                    sidebar.classList.remove('mini');
-                    mainContent.classList.add('sidebar-open');
-                    mainContent.classList.remove('sidebar-mini-open');
                 }
-                
-                if (sidebarToggle) sidebarToggle.classList.add('active');
-            } else if (savedState === 'closed') {
+
+                // Store mode
+                sessionStorage.setItem('sidebarMode', 'mini');
+            }
+        }
+
+        // Expand sidebar from mini mode
+        function expandFromMini() {
+            if (sidebar.classList.contains('mini')) {
+                sidebar.classList.remove('mini');
+
+                // Update margin classes
+                if (sidebar.classList.contains('show')) {
+                    mainContent.classList.remove('sidebar-mini-open');
+                    mainContent.classList.add('sidebar-open');
+                }
+
+                // Store mode
+                sessionStorage.setItem('sidebarMode', 'full');
+            }
+        }
+
+        // Handle sidebar submenu toggles in mini mode
+        function setupMiniModeSubmenuHandlers() {
+            const submenuToggles = document.querySelectorAll('.sidebar .nav-section > a');
+
+            submenuToggles.forEach(toggle => {
+                toggle.addEventListener('click', function (e) {
+                    // If in mini mode and this is a submenu toggle link
+                    if (sidebar.classList.contains('mini') && toggle.getAttribute('data-bs-toggle') === 'collapse') {
+                        e.preventDefault(); // Prevent default Bootstrap behavior
+                        e.stopPropagation(); // Stop event propagation
+                        expandFromMini(); // Expand sidebar
+
+                        // After expanding, trigger the submenu toggle
+                        setTimeout(() => {
+                            const targetId = toggle.getAttribute('href');
+                            const target = document.querySelector(targetId);
+                            if (target) {
+                                // Bootstrap 5 collapse functionality
+                                new bootstrap.Collapse(target, { toggle: true });
+                            }
+                        }, 300); // Wait for transition to complete
+
+                        return false;
+                    }
+                });
+            });
+        }
+
+        // Add click handler to main content area to collapse sidebar to mini mode
+        function setupContentClickHandler() {
+            mainContent.addEventListener('click', function (e) {
+                // Don't trigger if clicking within a form, dropdown or modal
+                if (e.target.closest('form') || e.target.closest('.dropdown-menu') || e.target.closest('.modal')) {
+                    return;
+                }
+
+                // Ensure sidebar is open and not already in mini mode
+                if (sidebar.classList.contains('show') && !sidebar.classList.contains('mini')) {
+                    collapseToMini();
+                }
+            });
+        }
+
+        // Add visual hover effect to user section
+        function setupUserSectionHoverEffects() {
+            if (!userDetails || !userAvatar) return;
+
+            function addHoverEffect() {
+                userDetails.classList.add('user-hover');
+                // Apply subtle highlight effect
+                userDetails.style.transition = 'background-color 0.2s';
+
+                userDetails.addEventListener('mouseenter', function () {
+                    this.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                    this.style.borderRadius = '4px';
+                });
+
+                userDetails.addEventListener('mouseleave', function () {
+                    this.style.backgroundColor = 'transparent';
+                });
+
+                // Also add hover for avatar for consistency
+                userAvatar.style.transition = 'transform 0.2s';
+
+                userAvatar.addEventListener('mouseenter', function () {
+                    this.style.transform = 'scale(1.1)';
+                });
+
+                userAvatar.addEventListener('mouseleave', function () {
+                    this.style.transform = 'scale(1)';
+                });
+            }
+
+            addHoverEffect();
+        }
+
+        // Add event listeners
+        if (sidebarToggle && sidebar) {
+            sidebarToggle.addEventListener('click', toggleSidebar);
+        }
+
+        // Collapse sidebar to mini mode
+        if (collapseSidebarBtn) {
+            collapseSidebarBtn.addEventListener('click', collapseToMini);
+        }
+
+        // Expand sidebar from mini mode
+        if (expandSidebarBtn) {
+            expandSidebarBtn.addEventListener('click', expandFromMini);
+        }
+
+        // Close sidebar when clicking backdrop
+        if (sidebarBackdrop) {
+            sidebarBackdrop.addEventListener('click', closeSidebar);
+        }
+
+        // Set up mini mode menu behavior
+        setupMiniModeSubmenuHandlers();
+
+        // Set up main content click handler
+        //setupContentClickHandler();
+
+        // Set up user section hover effects
+        setupUserSectionHoverEffects();
+
+        // Make user details section clickable for profile
+        if (userDetails) {
+            userDetails.style.cursor = 'pointer';
+            userDetails.title = 'Go to Profile';
+            userDetails.addEventListener('click', function (e) {
+                // Get the profile URL - assuming there's a profile link in the sidebar we can reference
+                const profileLink = document.querySelector('a[href*="profile"]');
+                if (profileLink) {
+                    window.location.href = profileLink.getAttribute('href');
+                }
+            });
+        }
+
+        // Make avatar clickable too
+        if (userAvatar) {
+            userAvatar.style.cursor = 'pointer';
+            userAvatar.title = 'Go to Profile';
+            userAvatar.addEventListener('click', function (e) {
+                // Get the profile URL
+                const profileLink = document.querySelector('a[href*="profile"]');
+                if (profileLink) {
+                    window.location.href = profileLink.getAttribute('href');
+                }
+            });
+        }
+
+        // Handle resize events
+        window.addEventListener('resize', function () {
+            const savedState = sessionStorage.getItem('sidebarState');
+            const savedMode = sessionStorage.getItem('sidebarMode');
+
+            if (window.innerWidth >= 992) {
+                // For desktop, respect saved state if it exists
+                if (savedState === 'open') {
+                    sidebar.classList.add('show');
+
+                    // Apply correct margin based on sidebar mode
+                    if (savedMode === 'mini') {
+                        sidebar.classList.add('mini');
+                        mainContent.classList.add('sidebar-mini-open');
+                        mainContent.classList.remove('sidebar-open');
+                    } else {
+                        sidebar.classList.remove('mini');
+                        mainContent.classList.add('sidebar-open');
+                        mainContent.classList.remove('sidebar-mini-open');
+                    }
+
+                    if (sidebarToggle) sidebarToggle.classList.add('active');
+                } else if (savedState === 'closed') {
+                    sidebar.classList.remove('show');
+                    mainContent.classList.remove('sidebar-open');
+                    mainContent.classList.remove('sidebar-mini-open');
+                    if (sidebarToggle) sidebarToggle.classList.remove('active');
+                } else {
+                    // Default to open on first load
+                    sidebar.classList.add('show');
+
+                    // Apply correct margin based on sidebar mode
+                    if (savedMode === 'mini') {
+                        sidebar.classList.add('mini');
+                        mainContent.classList.add('sidebar-mini-open');
+                    } else {
+                        mainContent.classList.add('sidebar-open');
+                    }
+
+                    if (sidebarToggle) sidebarToggle.classList.add('active');
+                    sessionStorage.setItem('sidebarState', 'open');
+                }
+                if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
+            } else {
+                // On mobile, always hide sidebar
                 sidebar.classList.remove('show');
                 mainContent.classList.remove('sidebar-open');
                 mainContent.classList.remove('sidebar-mini-open');
+                if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
                 if (sidebarToggle) sidebarToggle.classList.remove('active');
-            } else {
-                // Default to open on first load
-                sidebar.classList.add('show');
-                
-                // Apply correct margin based on sidebar mode
-                if (savedMode === 'mini') {
-                    sidebar.classList.add('mini');
-                    mainContent.classList.add('sidebar-mini-open');
-                } else {
-                    mainContent.classList.add('sidebar-open');
-                }
-                
-                if (sidebarToggle) sidebarToggle.classList.add('active');
-                sessionStorage.setItem('sidebarState', 'open');
             }
-            if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
-        } else {
-            // On mobile, always hide sidebar
-            sidebar.classList.remove('show');
-            mainContent.classList.remove('sidebar-open');
-            mainContent.classList.remove('sidebar-mini-open');
-            if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
-            if (sidebarToggle) sidebarToggle.classList.remove('active');
-        }
-    });
-    
-    // Trigger resize event once     to set initial state
-    window.dispatchEvent(new Event('resize'));
+        });
+
+        // Trigger resize event once     to set initial state
+        window.dispatchEvent(new Event('resize'));
 });
 
     </script>
     {% block scripts %}{% endblock %}
 </body>
+
 </html>

@@ -283,6 +283,7 @@ function setupAddTransactionFormListeners() {
     const personalExpenseCheck = document.getElementById('personal_expense');
     if (personalExpenseCheck) {
         personalExpenseCheck.addEventListener('change', togglePersonalExpense);
+        togglePersonalExpense()
     }
     
     // Split method change handler
@@ -421,7 +422,10 @@ function togglePersonalExpense() {
     
     if (personalExpenseCheck.checked) {
         // This is a personal expense - simplify the form
-        if (splitMethodContainer) splitMethodContainer.style.opacity = '0.5';
+        if (splitMethodContainer) {
+            splitMethodContainer.style.opacity = '0.5';
+            splitMethodContainer.disabled = true;
+        }
         if (customSplitContainer) customSplitContainer.style.display = 'none';
         
         // Clear any existing split_with selections
@@ -442,7 +446,10 @@ function togglePersonalExpense() {
         }
     } else {
         // This is a shared expense - enable the split options
-        if (splitMethodContainer) splitMethodContainer.style.opacity = '1';
+        if (splitMethodContainer) {
+            splitMethodContainer.style.opacity = '1';
+            splitMethodContainer.disabled = false;
+        }
         
         if (splitWithSelect) {
             splitWithSelect.disabled = false;
@@ -829,4 +836,3 @@ window.toggleSplitOptions = toggleSplitOptions;
 window.updateSplitWithOptions = updateSplitWithOptions;
 window.updateSplitValues = updateSplitValues;
 window.setupSplitInputListeners = setupSplitInputListeners;
-

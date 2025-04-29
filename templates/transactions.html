@@ -6,25 +6,23 @@
 <!-- Add any page-specific CSS here -->
 <link rel="stylesheet" href="{{ url_for('static', filename='css/transaction-module.css') }}">
 <style>
-    
-
     .split-categories-detail {
         max-height: 250px;
         overflow-y: auto;
     }
-    
+
     .category-split-container .split-toggle {
         cursor: pointer;
     }
-    
+
     .split-row {
         transition: all 0.3s ease;
     }
-    
+
     tr.deleting {
         background-color: rgba(220, 53, 69, 0.1);
     }
-    
+
     .slide-panel {
         position: fixed;
         top: 0;
@@ -39,11 +37,11 @@
         display: flex;
         flex-direction: column;
     }
-    
+
     .slide-panel.active {
         right: 0;
     }
-    
+
     .slide-panel-header {
         padding: 1rem;
         border-bottom: 1px solid #343a40;
@@ -51,13 +49,13 @@
         justify-content: space-between;
         align-items: center;
     }
-    
+
     .slide-panel-content {
         flex-grow: 1;
         overflow-y: auto;
         padding: 1rem;
     }
-    
+
     .slide-panel-overlay {
         position: fixed;
         top: 0;
@@ -70,12 +68,12 @@
         visibility: hidden;
         transition: opacity 0.3s ease-out;
     }
-    
+
     .slide-panel-overlay.active {
         opacity: 1;
         visibility: visible;
     }
-    
+
     .custom-multiselect-wrapper {
         max-height: 200px;
         overflow-y: auto;
@@ -83,22 +81,23 @@
         border-radius: 0.25rem;
         background-color: #2d2d2d;
     }
-    
+
     .custom-multiselect-item {
         padding: 0.5rem 1rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         cursor: pointer;
     }
-    
+
     .hidden {
         opacity: 0;
         transition: opacity 0.3s ease;
     }
-    
+
     .visible {
         opacity: 1;
         transition: opacity 0.3s ease;
     }
+
     /* Ultra-specific rule to force white text */
     .list-group-item .text-white,
     .list-group-item span[style*="color"],
@@ -107,11 +106,10 @@
         -webkit-text-fill-color: white !important;
         display: inline-block;
     }
-    
-    .category-name-text {
-    color: white !important;
-}
 
+    .category-name-text {
+        color: white !important;
+    }
 </style>
 {% endblock %}
 
@@ -132,7 +130,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Filters Card -->
     <div class="card mb-4">
         <div class="card-header">
@@ -151,7 +149,8 @@
                     </div>
                     <div class="col-md-4 mb-3">
                         <label class="form-label">Transaction Type</label>
-                        <select class="form-select bg-dark text-light" id="transactionTypeFilter" name="transactionType">
+                        <select class="form-select bg-dark text-light" id="transactionTypeFilter"
+                            name="transactionType">
                             <option value="all">All Types</option>
                             <option value="expense">Expenses</option>
                             <option value="income">Income</option>
@@ -164,13 +163,13 @@
                             <option value="all">All Categories</option>
                             <option value="none">Uncategorized</option>
                             {% for category in categories %}
-                                {% if not category.parent_id %}
-                                    <optgroup label="{{ category.name }}">
-                                        {% for subcat in category.subcategories %}
-                                            <option value="{{ subcat.id }}">{{ subcat.name }}</option>
-                                        {% endfor %}
-                                    </optgroup>
-                                {% endif %}
+                            {% if not category.parent_id %}
+                            <optgroup label="{{ category.name }}">
+                                {% for subcat in category.subcategories %}
+                                <option value="{{ subcat.id }}">{{ subcat.name }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
                             {% endfor %}
                         </select>
                     </div>
@@ -178,16 +177,32 @@
                 <div class="row">
                     <div class="col-md-4 mb-3">
                         <label class="form-label">Description</label>
-                        <input type="text" class="form-control bg-dark text-light" id="descriptionFilter" placeholder="Search description...">
+                        <input type="text" class="form-control bg-dark text-light" id="descriptionFilter"
+                            placeholder="Search description...">
                     </div>
                     <div class="col-md-4 mb-3">
                         <label class="form-label">Amount Range</label>
                         <div class="input-group">
-                            <input type="number" class="form-control bg-dark text-light" id="minAmount" placeholder="Min" step="0.01">
+                            <input type="number" class="form-control bg-dark text-light" id="minAmount"
+                                placeholder="Min" step="0.01">
                             <span class="input-group-text bg-dark text-light">to</span>
-                            <input type="number" class="form-control bg-dark text-light" id="maxAmount" placeholder="Max" step="0.01">
+                            <input type="number" class="form-control bg-dark text-light" id="maxAmount"
+                                placeholder="Max" step="0.01">
                         </div>
                     </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Accounts</label>
+                        <select class="form-select bg-dark text-light" id="accountFilter" name="accountId">
+                            <option value="all">All Accounts</option>
+                            {% if accounts %}
+                            {% for account in accounts %}
+                            <option value="{{ account.id }}">{{ account.name }}</option>
+                            {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
                     <div class="col-md-4 d-flex align-items-end">
                         <div class="btn-group w-100">
                             <button type="button" class="btn btn-primary" id="applyFiltersBtn">
@@ -209,16 +224,14 @@
     <!-- Transactions Table -->
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Transaction History <span class="badge bg-secondary ms-2" id="resultCount">{{ expenses|length }} transactions</span></h5>
+            <h5 class="mb-0">Transaction History <span class="badge bg-secondary ms-2" id="resultCount">{{
+                    expenses|length }} transactions</span></h5>
             <div class="input-group" style="width: 300px;">
                 <span class="input-group-text bg-dark text-light border-secondary">
                     <i class="fas fa-search"></i>
                 </span>
-                <input type="text" 
-                       id="globalSearchInput" 
-                       class="form-control bg-dark text-light" 
-                       placeholder="Search transactions..."
-                       autocomplete="off">
+                <input type="text" id="globalSearchInput" class="form-control bg-dark text-light"
+                    placeholder="Search transactions..." autocomplete="off">
                 <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn" style="display:none;">
                     <i class="fas fa-times"></i>
                 </button>
@@ -241,111 +254,120 @@
                     </thead>
                     <tbody>
                         {% if expenses %}
-                            {% for expense in expenses %}
-                                {% set splits = expense_splits[expense.id] %}
-                                <tr data-expense-id="{{ expense.id }}" 
-                                    data-transaction-type="{{ expense.transaction_type|default('expense') }}"
-                                    data-category-id="{% if expense.category_id %}{{ expense.category_id }}{% else %}none{% endif %}">
-                                    <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
-                                    <td>
-                                        {% if expense.is_income %}
-                                            <span class="badge bg-success">Income</span>
-                                        {% elif expense.is_transfer %}
-                                            <span class="badge bg-info">Transfer</span>
-                                        {% else %}
-                                            <span class="badge bg-danger">Expense</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ expense.description }}</td>
-                                    <td>
-                                        {% if expense.is_income %}
-                                            <span class="text-success">+{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</span>
-                                        {% elif expense.is_expense %}
-                                            <span class="text-danger">-{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</span>
-                                        {% else %}
-                                            <span class="text-info">{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount) }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if expense.account %}
-                                            {{ expense.account.name }}
-                                            {% if expense.is_transfer and expense.destination_account %}
-                                                → {{ expense.destination_account.name }}
-                                            {% endif %}
-                                        {% else %}
-                                            {{ expense.card_used }}
-                                        {% endif %}
-                                    </td>
-                                    <td class="category-cell">
-                                        {% if expense.has_category_splits %}
-                                            <!-- Show split indicator for category splits -->
-                                            <div class="category-split-container" data-has-splits="true" data-expense-id="{{ expense.id }}">
-                                                <span class="badge bg-info" title="Multiple categories">
-                                                    <i class="fas fa-layer-group"></i> Split
-                                                </span>
-                                                <span class="split-toggle" data-expense-id="{{ expense.id }}">
-                                                    <i class="fas fa-chevron-down ms-1"></i>
-                                                </span>
-                                                <div class="split-categories-detail mt-2" id="split-categories-{{ expense.id }}" style="display: none;">
-                                                    <div class="loading">Loading splits...</div>
-                                                </div>
+                        {% for expense in expenses %}
+                        {% set splits = expense_splits[expense.id] %}
+                        <tr data-expense-id="{{ expense.id }}"
+                            data-transaction-type="{{ expense.transaction_type|default('expense') }}"
+                            data-category-id="{% if expense.category_id %}{{ expense.category_id }}{% else %}none{% endif %}"
+                            data-account-source-id="{% if expense.account_id %}{{ expense.account_id }}{% else %}none{% endif %}"
+                            data-account-dest-id="{% if expense.destination_account_id %}{{ expense.destination_account_id }}{% else %}none{% endif %}">
+                            <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                            <td>
+                                {% if expense.is_income %}
+                                <span class="badge bg-success">Income</span>
+                                {% elif expense.is_transfer %}
+                                <span class="badge bg-info">Transfer</span>
+                                {% else %}
+                                <span class="badge bg-danger">Expense</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ expense.description }}</td>
+                            <td>
+                                {% if expense.is_income %}
+                                <span class="text-success">+{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount)
+                                    }}</span>
+                                {% elif expense.is_expense %}
+                                <span class="text-danger">-{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount)
+                                    }}</span>
+                                {% else %}
+                                <span class="text-info">{{ base_currency.symbol }}{{ "%.2f"|format(expense.amount)
+                                    }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if expense.account %}
+                                {{ expense.account.name }}
+                                {% if expense.is_transfer and expense.destination_account %}
+                                → {{ expense.destination_account.name }}
+                                {% endif %}
+                                {% else %}
+                                {{ expense.card_used }}
+                                {% endif %}
+                            </td>
+                            <td class="category-cell">
+                                {% if expense.has_category_splits %}
+                                <!-- Show split indicator for category splits -->
+                                <div class="category-split-container" data-has-splits="true"
+                                    data-expense-id="{{ expense.id }}">
+                                    <span class="badge bg-info" title="Multiple categories">
+                                        <i class="fas fa-layer-group"></i> Split
+                                    </span>
+                                    <span class="split-toggle" data-expense-id="{{ expense.id }}">
+                                        <i class="fas fa-chevron-down ms-1"></i>
+                                    </span>
+                                    <div class="split-categories-detail mt-2" id="split-categories-{{ expense.id }}"
+                                        style="display: none;">
+                                        <div class="loading">Loading splits...</div>
+                                    </div>
+                                </div>
+                                {% elif expense.category %}
+                                <span class="badge" style="background-color: {{ expense.category.color }};">
+                                    <i class="fas {{ expense.category.icon }}"></i>
+                                    {{ expense.category.name }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    {% if expense.is_expense %}
+                                    <button class="btn btn-sm btn-outline-secondary view-split-btn"
+                                        data-expense-id="{{ expense.id }}">
+                                        <i class="fas fa-users"></i>
+                                    </button>
+                                    {% endif %}
+                                    <button class="btn btn-sm btn-outline-primary edit-expense-btn"
+                                        data-expense-id="{{ expense.id }}">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger delete-expense-btn"
+                                        data-expense-id="{{ expense.id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Split details (hidden by default) -->
+                                <div class="split-details mt-2" id="split-{{ expense.id }}" style="display: none;">
+                                    <div class="card bg-dark border-secondary">
+                                        <div class="card-body p-2">
+                                            <div class="mb-1">Split: {{ expense.split_method }}</div>
+
+                                            {% if splits.payer.amount > 0 %}
+                                            <div class="mb-1">
+                                                <span class="badge bg-primary">{{ splits.payer.name }}</span>
+                                                <span class="badge bg-success">{{ base_currency.symbol }}{{
+                                                    "%.2f"|format(splits.payer.amount) }}</span>
                                             </div>
-                                        {% elif expense.category %}
-                                            <span class="badge" style="background-color: {{ expense.category.color }};">
-                                                <i class="fas {{ expense.category.icon }}"></i>
-                                                {{ expense.category.name }}
-                                            </span>
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <div class="btn-group">
-                                            {% if expense.is_expense %}
-                                                <button class="btn btn-sm btn-outline-secondary view-split-btn" 
-                                                        data-expense-id="{{ expense.id }}">
-                                                    <i class="fas fa-users"></i>
-                                                </button>
                                             {% endif %}
-                                            <button class="btn btn-sm btn-outline-primary edit-expense-btn" 
-                                                    data-expense-id="{{ expense.id }}">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger delete-expense-btn" 
-                                                    data-expense-id="{{ expense.id }}">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
-                                        
-                                        <!-- Split details (hidden by default) -->
-                                        <div class="split-details mt-2" id="split-{{ expense.id }}" style="display: none;">
-                                            <div class="card bg-dark border-secondary">
-                                                <div class="card-body p-2">
-                                                    <div class="mb-1">Split: {{ expense.split_method }}</div>
-                                                    
-                                                    {% if splits.payer.amount > 0 %}
-                                                        <div class="mb-1">
-                                                            <span class="badge bg-primary">{{ splits.payer.name }}</span>
-                                                            <span class="badge bg-success">{{ base_currency.symbol }}{{ "%.2f"|format(splits.payer.amount) }}</span>
-                                                        </div>
-                                                    {% endif %}
-                                                    
-                                                    {% for split in splits.splits %}
-                                                        <div class="mb-1">
-                                                            <span class="badge bg-secondary">{{ split.name }}</span>
-                                                            <span class="badge bg-success">{{ base_currency.symbol }}{{ "%.2f"|format(split.amount) }}</span>
-                                                        </div>
-                                                    {% endfor %}
-                                                </div>
+
+                                            {% for split in splits.splits %}
+                                            <div class="mb-1">
+                                                <span class="badge bg-secondary">{{ split.name }}</span>
+                                                <span class="badge bg-success">{{ base_currency.symbol }}{{
+                                                    "%.2f"|format(split.amount) }}</span>
                                             </div>
+                                            {% endfor %}
                                         </div>
-                                    </td>
-                                </tr>
-                            {% endfor %}
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
                         {% else %}
-                            <tr>
-                                <td colspan="7" class="text-center">No transactions found</td>
-                            </tr>
+                        <tr>
+                            <td colspan="7" class="text-center">No transactions found</td>
+                        </tr>
                         {% endif %}
                     </tbody>
                 </table>
@@ -353,17 +375,13 @@
                 <!-- Hidden template for category data -->
                 <div id="category-data" style="display: none;">
                     {% for category in categories %}
-                        <div data-category-id="{{ category.id }}" 
-                            data-category-name="{{ category.name }}"
-                            data-category-color="{{ category.color }}"
-                            data-category-icon="{{ category.icon }}"></div>
-                        
-                        {% for subcategory in category.subcategories %}
-                            <div data-category-id="{{ subcategory.id }}" 
-                                data-category-name="{{ subcategory.name }}"
-                                data-category-color="{{ subcategory.color }}"
-                                data-category-icon="{{ subcategory.icon }}"></div>
-                        {% endfor %}
+                    <div data-category-id="{{ category.id }}" data-category-name="{{ category.name }}"
+                        data-category-color="{{ category.color }}" data-category-icon="{{ category.icon }}"></div>
+
+                    {% for subcategory in category.subcategories %}
+                    <div data-category-id="{{ subcategory.id }}" data-category-name="{{ subcategory.name }}"
+                        data-category-color="{{ subcategory.color }}" data-category-icon="{{ subcategory.icon }}"></div>
+                    {% endfor %}
                     {% endfor %}
                 </div>
             </div>
@@ -377,7 +395,8 @@
         <div class="modal-content bg-dark text-light">
             <div class="modal-header">
                 <h5 class="modal-title">Confirm Deletion</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <p>Are you sure you want to delete this transaction? This action cannot be undone.</p>
@@ -407,37 +426,37 @@
 <script src="{{ url_for('static', filename='js/transaction_module.js') }}"></script>
 <!-- Add this script at the end of your HTML, after all other scripts -->
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Log what functions are available in TransactionModule
-      if (window.TransactionModule) {
-        console.log("TransactionModule functions available:", Object.keys(TransactionModule));
-      } else {
-        console.log("TransactionModule not found");
-      }
-      
-      // Create direct link between edit buttons and panel opening
-      document.querySelectorAll('.edit-expense-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-          const expenseId = this.getAttribute('data-expense-id');
-          
-          
-          // Try accessing through TransactionModule
-          if (window.TransactionModule) {
-            if (typeof TransactionModule.openEditTransactionPanel === 'function') {
-             
-              TransactionModule.openEditTransactionPanel(expenseId);
-            } else if (typeof TransactionModule.openEditForm === 'function') {
-        
-              TransactionModule.openEditForm(expenseId);
-            } else {
-              console.log("Function names available:", Object.keys(TransactionModule));
-            }
-          } else {
-            console.error("TransactionModule not available");
-          }
+    document.addEventListener('DOMContentLoaded', function () {
+        // Log what functions are available in TransactionModule
+        if (window.TransactionModule) {
+            console.log("TransactionModule functions available:", Object.keys(TransactionModule));
+        } else {
+            console.log("TransactionModule not found");
+        }
+
+        // Create direct link between edit buttons and panel opening
+        document.querySelectorAll('.edit-expense-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const expenseId = this.getAttribute('data-expense-id');
+
+
+                // Try accessing through TransactionModule
+                if (window.TransactionModule) {
+                    if (typeof TransactionModule.openEditTransactionPanel === 'function') {
+
+                        TransactionModule.openEditTransactionPanel(expenseId);
+                    } else if (typeof TransactionModule.openEditForm === 'function') {
+
+                        TransactionModule.openEditForm(expenseId);
+                    } else {
+                        console.log("Function names available:", Object.keys(TransactionModule));
+                    }
+                } else {
+                    console.error("TransactionModule not available");
+                }
+            });
         });
-      });
     });
-  </script>
+</script>
 
 {% endblock %}

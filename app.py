@@ -6146,6 +6146,9 @@ def transactions():
         )
     ).order_by(Expense.date.desc()).all()
     
+    # Get all user accounts
+    accounts = Account.query.filter_by(user_id=current_user.id).all()
+    
     users = User.query.all()
     
     # Pre-calculate all expense splits to avoid repeated calculations
@@ -6256,7 +6259,8 @@ def transactions():
                         unique_cards=unique_cards,
                         users=users,
                         base_currency=base_currency,
-                        currencies=currencies)
+                        currencies=currencies,
+                        accounts=accounts)
 
 
 

@@ -415,6 +415,7 @@ function applyFilters() {
     const endDate = document.getElementById('endDate')?.value;
     const transactionType = document.getElementById('transactionTypeFilter')?.value || 'all';
     const categoryId = document.getElementById('categoryFilter')?.value || 'all';
+    const accountId = document.getElementById('accountFilter')?.value || 'all';
     const description = (document.getElementById('descriptionFilter')?.value || '').toLowerCase();
     const minAmount = document.getElementById('minAmount')?.value;
     const maxAmount = document.getElementById('maxAmount')?.value;
@@ -430,6 +431,8 @@ function applyFilters() {
         const rowType = row.querySelector('.badge')?.textContent.toLowerCase() || '';
         const rowDescription = row.cells[2].textContent.trim().toLowerCase();
         const rowCategory = row.getAttribute('data-category-id') || 'none';
+        const rowSourceAccount = row.getAttribute('data-account-source-id') || 'none';
+        const rowDestAccount = row.getAttribute('data-account-dest-id') || 'none';
         
         // Extract amount from the amount cell (removing currency symbol and formatting)
         const amountText = row.cells[3].textContent.trim();
@@ -455,6 +458,12 @@ function applyFilters() {
         } else if (categoryId !== 'all') {
             // Show only the selected category
             if (rowCategory !== categoryId) visible = false;
+        }
+
+        // account filter
+        if (accountId !== 'all') {
+            // Show only the selected account
+            if (rowSourceAccount !== accountId && rowDestAccount !== accountId) visible = false;
         }
         
         // Description filter
