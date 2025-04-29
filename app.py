@@ -2435,7 +2435,7 @@ def send_welcome_email(user):
     Send a welcome email to a newly registered user
     """
     try:
-        subject = "Welcome to Dollar Dollar Bill Y'all!"
+        subject = "Welcome to Real Real Y'all!"
         
         # Create welcome email body
         body_html = f"""
@@ -2453,7 +2453,7 @@ def send_welcome_email(user):
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>Welcome to Dollar Dollar Bill Y'all!</h1>
+                    <h1>Welcome to Real Real Y'all!</h1>
                 </div>
                 <div class="content">
                     <h2>Hi {user.name},</h2>
@@ -2480,7 +2480,7 @@ def send_welcome_email(user):
         
         # Simple text version for clients that don't support HTML
         body_text = f"""
-        Welcome to Dollar Dollar Bill Y'all!
+        Welcome to Real Real Y'all!
         
         Hi {user.name},
         
@@ -2521,7 +2521,7 @@ def send_group_invitation_email(user, group, inviter):
     Send an email notification when a user is added to a group
     """
     try:
-        subject = f"You've been added to {group.name} on Dollar Dollar Bill Y'all"
+        subject = f"You've been added to {group.name} on Real Real Y'all"
         
         # Create invitation email body
         body_html = f"""
@@ -2567,7 +2567,7 @@ def send_group_invitation_email(user, group, inviter):
         
         # Simple text version for clients that don't support HTML
         body_text = f"""
-        Group Invitation - Dollar Dollar Bill Y'all
+        Group Invitation - Real Real Y'all
         
         Hi {user.name},
         

@@ -11,7 +11,7 @@ def detect_recurring_transactions(user_id, lookback_days=60, min_occurrences=2):
     # Get the current app and its database models
     from flask import current_app
     db = current_app.extensions['sqlalchemy'].db
-    Expense = db.session.get_bind().execute("SELECT 1").dialect.name
+    # Expense = db.session.get_bind().execute("SELECT 1").dialect.name
     
     # Use raw SQL query to avoid SQLAlchemy model dependencies
     from sqlalchemy import text

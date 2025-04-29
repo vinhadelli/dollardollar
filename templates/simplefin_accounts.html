@@ -3,16 +3,17 @@
 {% block content %}
 <div class="container">
     <h1 class="mb-4">Connect SimpleFin Accounts</h1>
-    
+
     <div class="card mb-4">
         <div class="card-header">
             <h5 class="mb-0">Review and Customize Accounts</h5>
         </div>
         <div class="card-body">
-            <p>The following accounts are available from your financial institutions. You can customize account names and types before importing:</p>
+            <p>The following accounts are available from your financial institutions. You can customize account names
+                and types before importing:</p>
             <div class="alert alert-warning mb-3">
                 <i class="fas fa-exclamation-triangle me-2"></i>
-                <strong>Note:</strong> Account names should be 150 characters or less. 
+                <strong>Note:</strong> Account names should be 150 characters or less.
             </div>
             <form method="POST" action="{{ url_for('simplefin_add_accounts') }}">
                 <div class="table-responsive">
@@ -31,26 +32,31 @@
                             <tr>
                                 <td>
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="account_ids" value="{{ account.id }}" id="account-{{ loop.index }}" checked>
+                                        <input class="form-check-input" type="checkbox" name="account_ids"
+                                            value="{{ account.id }}" id="account-{{ loop.index }}" checked>
                                         <label class="form-check-label" for="account-{{ loop.index }}"></label>
                                     </div>
                                 </td>
                                 <td>{{ account.institution }}</td>
                                 <td>
                                     <!-- Editable account name -->
-                                    <input type="text" class="form-control bg-dark text-light" 
-                                           name="account_name_{{ account.id }}" 
-                                           value="{{ account.name }}"
-                                           placeholder="Account Name">
+                                    <input type="text" class="form-control bg-dark text-light"
+                                        name="account_name_{{ account.id }}" value="{{ account.name }}"
+                                        placeholder="Account Name">
                                 </td>
                                 <td>
                                     <!-- Editable account type -->
                                     <select class="form-select bg-dark text-light" name="account_type_{{ account.id }}">
-                                        <option value="checking" {% if account.type == 'checking' %}selected{% endif %}>Checking</option>
-                                        <option value="savings" {% if account.type == 'savings' %}selected{% endif %}>Savings</option>
-                                        <option value="credit" {% if account.type == 'credit' %}selected{% endif %}>Credit Card</option>
-                                        <option value="investment" {% if account.type == 'investment' %}selected{% endif %}>Investment</option>
-                                        <option value="loan" {% if account.type == 'loan' %}selected{% endif %}>Loan</option>
+                                        <option value="checking" {% if account.type=='checking' %}selected{% endif %}>
+                                            Checking</option>
+                                        <option value="savings" {% if account.type=='savings' %}selected{% endif %}>
+                                            Savings</option>
+                                        <option value="credit" {% if account.type=='credit' %}selected{% endif %}>Credit
+                                            Card</option>
+                                        <option value="investment" {% if account.type=='investment' %}selected{% endif
+                                            %}>Investment</option>
+                                        <option value="loan" {% if account.type=='loan' %}selected{% endif %}>Loan
+                                        </option>
                                     </select>
                                 </td>
                                 <td>{{ account.currency_code }} {{ "%.2f"|format(account.balance) }}</td>
@@ -59,12 +65,13 @@
                         </tbody>
                     </table>
                 </div>
-                
+
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle me-2"></i>
-                    By connecting these accounts, Dollar Dollar Bill Y'all will import transactions and account balances. Your bank credentials remain secure through SimpleFin and are never shared with us.
+                    By connecting these accounts, Real Real Y'all will import transactions and account balances. Your
+                    bank credentials remain secure through SimpleFin and are never shared with us.
                 </div>
-                
+
                 <div class="d-flex justify-content-between">
                     <a href="{{ url_for('advanced') }}" class="btn btn-secondary">
                         <i class="fas fa-arrow-left me-1"></i>Cancel
